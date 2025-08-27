@@ -1,0 +1,15 @@
+[package]
+name = "icfpc2025-api-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors"] }
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+uuid = { version = "1.0", features = ["serde", "v4"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "mysql", "chrono", "uuid"] }
