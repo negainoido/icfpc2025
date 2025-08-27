@@ -1,0 +1,6 @@
+(ADD 2134 (MUL (APP (APP (\v1 -> (APP (\v2 -> (APP v1 (APP v2 v2))) (\v2 -> (APP v1 (APP v2 v2))))) (\v3 -> (\v4 -> 
+if (EQ v4 0) then
+    1
+else
+    (ADD 1 (APP v3 (SUB v4 1)))
+))) 9345873499) 1))
