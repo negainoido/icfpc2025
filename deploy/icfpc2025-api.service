@@ -1,0 +1,31 @@
+[Unit]
+Description=ICFPC 2025 API Server
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=garasubo
+WorkingDirectory=/opt/icfpc2025/api-server
+ExecStart=/opt/icfpc2025/api-server/icfpc2025-api-server
+EnvironmentFile=/opt/icfpc2025/api-server/.env
+Restart=always
+RestartSec=3
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/icfpc2025/api-server
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=icfpc2025-api
+
+[Install]
+WantedBy=multi-user.target
