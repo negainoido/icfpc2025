@@ -5,7 +5,7 @@ Wants=mysql.service
 
 [Service]
 Type=simple
-User=garasubo
+User=webapp
 WorkingDirectory=/opt/icfpc2025/api-server
 ExecStart=/opt/icfpc2025/api-server/icfpc2025-api-server
 EnvironmentFile=/opt/icfpc2025/api-server/.env

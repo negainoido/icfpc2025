@@ -6,10 +6,8 @@ set -euxo pipefail
 cd "$(dirname "$0")/.."
 
 # Configuration
-GCP_PROJECT="negainoido"
-GCP_ZONE="us-west1-b"
-GCP_INSTANCE="instance-20250824-043241"
 DEPLOY_USER="$USER"
+SERVER="${SERVER:-negainoido}"
 
 echo "🚀 Starting deployment to GCP VM..."
 
@@ -29,43 +27,56 @@ cd ..
 # Transfer files to GCP VM
 echo "📤 Transferring files to GCP VM..."
 
-# Create directories on VM
-gcloud compute ssh --zone "$GCP_ZONE" "$GCP_INSTANCE" --project "$GCP_PROJECT" --command "
+# Create directories and webapp user on VM
+ssh "$SERVER" "
+    # Create webapp system user if it doesn't exist
+    if ! id webapp &>/dev/null; then
+        sudo useradd --system --no-create-home --shell /usr/sbin/nologin webapp
+    fi
+    mkdir ~/{api-server,webapp}
+    
+    # Create directories
     sudo mkdir -p /opt/icfpc2025/{api-server,webapp}
-    sudo chown -R $DEPLOY_USER:$DEPLOY_USER /opt/icfpc2025
+    sudo chown -R webapp:webapp /opt/icfpc2025
 "
 
 # Transfer API Server binary
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" \
-    api-server/target/release/icfpc2025-api-server $GCP_INSTANCE:/opt/icfpc2025/api-server/
+scp api-server/target/release/icfpc2025-api-server "$SERVER":~/api-server/
 
-# Transfer API Server resources
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" --recurse \
-    api-server/resources/ $GCP_INSTANCE:/opt/icfpc2025/api-server/
+# Transfer API Server resources using rsync for efficiency
+ssh "$SERVER" "mkdir -p ~/api-server"
+rsync -avz --delete api-server/resources/ "$SERVER":~/api-server/resources/
 
-# Transfer WebApp build
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" --recurse \
-    webapp/dist/ $GCP_INSTANCE:/opt/icfpc2025/webapp/
+# Transfer WebApp build using rsync for efficiency
+ssh "$SERVER" "mkdir -p ~/webapp"
+rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+    webapp/dist/ "$SERVER":~/webapp/dist/
 
 # Transfer configuration files
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" \
-    ./deploy/nginx.conf $GCP_INSTANCE:~/nginx.conf
+scp ./deploy/nginx.conf "$SERVER":~/nginx.conf
 
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" \
-    icfpc2025-api.service $GCP_INSTANCE:~/icfpc2025-api.service
+scp ./deploy/icfpc2025-api.service "$SERVER":~/icfpc2025-api.service
 
-gcloud compute scp --zone "$GCP_ZONE" --project "$GCP_PROJECT" \
-    ./deploy/.env.production $GCP_INSTANCE:/opt/icfpc2025/api-server/.env
+scp ./deploy/.env.production "$SERVER":~/api-server/.env
 
 # Setup services on VM
 echo "🔧 Setting up services on VM..."
-gcloud compute ssh --zone "$GCP_ZONE" "$GCP_INSTANCE" --project "$GCP_PROJECT" --command "
+ssh "$SERVER" "
+    # Move resources
+    sudo rsync -avr ~/api-server /opt/icfpc2025/
+    sudo rsync -avr ~/webapp /opt/icfpc2025/
+
+    # Ensure proper ownership of all transferred files
+    sudo mkdir -p /opt/icfpc2025
+    sudo chown -R webapp:webapp /opt/icfpc2025
+
+
     # Make binary executable
     chmod +x /opt/icfpc2025/api-server/icfpc2025-api-server
     
     # Setup nginx
-    sudo cp ~/nginx.conf /etc/nginx/sites-available/icfpc2025
-    sudo ln -sf /etc/nginx/sites-available/icfpc2025 /etc/nginx/sites-enabled/
+    sudo cp ~/nginx.conf /etc/nginx/sites-available/icfpc2025.conf
+    sudo ln -sf /etc/nginx/sites-available/icfpc2025.conf /etc/nginx/sites-enabled/
     sudo rm -f /etc/nginx/sites-enabled/default
     sudo nginx -t && sudo systemctl reload nginx
     
@@ -83,4 +94,3 @@ gcloud compute ssh --zone "$GCP_ZONE" "$GCP_INSTANCE" --project "$GCP_PROJECT" -
 "
 
 echo "🎉 Deployment complete!"
-echo "🌐 Your application should be available at http://$(gcloud compute instances describe $GCP_INSTANCE --zone=$GCP_ZONE --project=$GCP_PROJECT --format='get(networkInterfaces[0].accessConfigs[0].natIP)')"
