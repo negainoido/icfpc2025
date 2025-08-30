@@ -1,1 +1,0 @@
-(APP (\v0 -> (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 (APP v0 1))))))))))))))))))))))) (\v0 -> (ADD (ADD v0 v0) (ADD v0 v0))))

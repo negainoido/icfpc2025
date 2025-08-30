@@ -5,8 +5,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: icfpc2025
-      MYSQL_USER: developer
-      MYSQL_PASSWORD: devpassword
+      MYSQL_USER: negainoido
+      MYSQL_PASSWORD: negainoido
     ports:
       - "3306:3306"
     volumes:
