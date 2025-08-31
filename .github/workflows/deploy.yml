@@ -1,0 +1,144 @@
+name: Deploy to GCP VM
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    # Setup Node.js for webapp
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: webapp/package-lock.json
+
+    # Setup Rust for api-server
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    # Build and test webapp
+    - name: Install webapp dependencies
+      run: npm install
+      working-directory: ./webapp
+
+    - name: Lint webapp
+      run: npm run lint
+      working-directory: ./webapp
+
+    - name: Test webapp
+      run: npm run test
+      working-directory: ./webapp
+
+    - name: Build webapp
+      run: npm run build
+      working-directory: ./webapp
+
+    # Build and test api-server
+    - name: Build api-server
+      run: cargo build --release --verbose
+      working-directory: ./api-server
+
+    - name: Test api-server
+      run: cargo test --verbose
+      working-directory: ./api-server
+
+    # Upload build artifacts
+    - name: Upload webapp build
+      uses: actions/upload-artifact@v4
+      with:
+        name: webapp-dist
+        path: webapp/dist/
+
+    - name: Upload api-server binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-server-binary
+        path: api-server/target/release/icfpc2025-api-server
+
+    - name: Upload api-server resources
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-server-resources
+        path: api-server/resources/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    # Download build artifacts
+    - name: Download webapp build
+      uses: actions/download-artifact@v4
+      with:
+        name: webapp-dist
+        path: webapp/dist/
+
+    - name: Download api-server binary
+      uses: actions/download-artifact@v4
+      with:
+        name: api-server-binary
+        path: api-server/target/release/
+
+    - name: Download api-server resources
+      uses: actions/download-artifact@v4
+      with:
+        name: api-server-resources
+        path: api-server/resources/
+
+    # Setup SSH
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+    # Make binary executable
+    - name: Make binary executable
+      run: chmod +x api-server/target/release/icfpc2025-api-server
+
+    # Setup VM
+    - name: Setup VM
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      run: |
+        # Transfer and run VM setup script
+        scp ./deploy/setup-vm.sh $DEPLOY_USER@$DEPLOY_HOST:~/setup-vm.sh
+        ssh $DEPLOY_USER@$DEPLOY_HOST "chmod +x ~/setup-vm.sh && ~/setup-vm.sh"
+
+    # Transfer files to GCP VM
+    - name: Transfer files to GCP VM
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      run: |
+        # Make transfer script executable and run it
+        chmod +x ./deploy/transfer-files.sh
+        ./deploy/transfer-files.sh $DEPLOY_USER@$DEPLOY_HOST
+
+    # Deploy services
+    - name: Deploy services
+      env:
+        DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      run: |
+        # Transfer and run deployment script
+        scp ./deploy/deploy-services.sh $DEPLOY_USER@$DEPLOY_HOST:~/deploy-services.sh
+        ssh $DEPLOY_USER@$DEPLOY_HOST "chmod +x ~/deploy-services.sh && ~/deploy-services.sh"

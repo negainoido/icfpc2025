@@ -16,3 +16,30 @@ gcloud compute ssh --zone "us-west1-b" "instance-20250824-043241" --project "neg
 ```
 ./deploy.sh
 ```
+
+## github action
+
+`.github/workflows/deploy.yml` により、mainブランチへのpushまたは手動実行でGCP VMへの自動デプロイが可能です。
+
+### 必要なGitHub Secrets設定
+
+リポジトリの Settings > Secrets and variables > Actions で以下のシークレットを設定してください：
+
+#### `DEPLOY_SSH_PRIVATE_KEY`
+GCP VMにSSH接続するための秘密鍵（ed25519形式）
+
+```bash
+# 秘密鍵の生成例（ローカル）
+ssh-keygen -t ed25519 -f ~/.ssh/gcp_deploy_key
+# 公開鍵をGCP VMの~/.ssh/authorized_keysに追加
+# 秘密鍵の内容をGitHub Secretsに設定
+cat ~/.ssh/gcp_deploy_key
+```
+
+#### `DEPLOY_HOST` 
+デプロイ先のホスト名またはIPアドレス
+
+
+#### `DEPLOY_USER`
+GCP VM上のデプロイ用ユーザー名。sudo可能でかつhome directoryが存在するものを指定してください
+
