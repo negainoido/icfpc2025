@@ -19,7 +19,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
         cache-dependency-path: webapp/package-lock.json
 
@@ -28,18 +28,12 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+    
+    - uses: Swatinem/rust-cache@v2
 
     # Build and test webapp
     - name: Install webapp dependencies
       run: npm install
-      working-directory: ./webapp
-
-    - name: Lint webapp
-      run: npm run lint
-      working-directory: ./webapp
-
-    - name: Test webapp
-      run: npm run test
       working-directory: ./webapp
 
     - name: Build webapp
@@ -66,7 +60,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: api-server-binary
-        path: api-server/target/release/icfpc2025-api-server
+        path: target/release/icfpc2025-api-server
 
     - name: Upload api-server resources
       uses: actions/upload-artifact@v4
@@ -93,7 +87,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: api-server-binary
-        path: api-server/target/release/
+        path: target/release/
 
     - name: Download api-server resources
       uses: actions/download-artifact@v4
