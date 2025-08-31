@@ -18,7 +18,7 @@ echo "📤 Transferring files to GCP VM..."
 
 # Transfer API Server binary
 echo "Transferring API Server binary..."
-scp "$PROJECT_ROOT/api-server/target/release/icfpc2025-api-server" "$SERVER":~/api-server/
+scp "$PROJECT_ROOT/target/release/icfpc2025-api-server" "$SERVER":~/api-server/
 
 # Transfer API Server resources using rsync for efficiency
 echo "Transferring API Server resources..."

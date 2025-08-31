@@ -28,6 +28,8 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+    
+    - uses: Swatinem/rust-cache@v2
 
     # Build and test webapp
     - name: Install webapp dependencies
@@ -58,7 +60,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: api-server-binary
-        path: api-server/target/release/icfpc2025-api-server
+        path: target/release/icfpc2025-api-server
 
     - name: Upload api-server resources
       uses: actions/upload-artifact@v4
@@ -85,7 +87,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: api-server-binary
-        path: api-server/target/release/
+        path: target/release/
 
     - name: Download api-server resources
       uses: actions/download-artifact@v4
