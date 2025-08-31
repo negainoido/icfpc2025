@@ -105,7 +105,7 @@ jobs:
 
     # Make binary executable
     - name: Make binary executable
-      run: chmod +x api-server/target/release/icfpc2025-api-server
+      run: chmod +x target/release/icfpc2025-api-server
 
     # Setup VM
     - name: Setup VM
