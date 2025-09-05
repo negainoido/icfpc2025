@@ -68,8 +68,16 @@ impl Solver {
             
             let (results, _) = self.api.explore(vec![plan1.clone(), plan2.clone()]).await?;
             
-            // Compare the resulting label sequences
-            let equal = results[0] == results[1];
+            // Skip the path portion and compare only the random walk labels
+            let path1_len = path1.len();
+            let path2_len = path2.len();
+            
+            // Extract only the random walk portion from each result
+            let walk1 = &results[0][path1_len..];
+            let walk2 = &results[1][path2_len..];
+            
+            // Compare the random walk sequences
+            let equal = walk1 == walk2;
             println!("  Attempt {}/{}: Comparing room {} and room {}: equal = {}", 
                      attempt + 1, MAX_TRIES, v1, v2, equal);
             
@@ -119,7 +127,7 @@ impl Solver {
                         continue;
                     }
                     
-                    // Look for existing rooms with the same label
+                    // Look for existing rooms with the same label and check equivalence
                     let mut found_existing = false;
                     let existing_rooms: Vec<usize> = self.graph.rooms
                         .iter()
@@ -127,24 +135,34 @@ impl Solver {
                         .map(|(id, _)| *id)
                         .collect();
                     
-                    // For simplicity: rooms with the same label are considered the same
-                    // (This works for the probatio problem structure)
-                    if !existing_rooms.is_empty() {
-                        let target_room = existing_rooms[0];
-                        println!("    Door {} -> existing room {} (same label {})", 
-                                door_num, target_room, label);
-                        self.graph.connect_rooms(current_room, door_num, target_room, 0);
-                        found_existing = true;
+                    // First create a temporary room to test equivalence
+                    let temp_room_id = self.graph.add_room(label);
+                    self.graph.path_to_room.insert(temp_room_id, neighbor_path.clone());
+                    
+                    // Check if this room is equivalent to any existing room with same label
+                    for &existing_room in &existing_rooms {
+                        println!("    Checking if door {} is equivalent to existing room {} (both label {})", 
+                                door_num, existing_room, label);
+                        
+                        if self.are_equal(temp_room_id, existing_room).await.unwrap_or(false) {
+                            println!("    Door {} -> existing room {} (equivalent, label {})", 
+                                    door_num, existing_room, label);
+                            self.graph.connect_rooms(current_room, door_num, existing_room, 0);
+                            found_existing = true;
+                            
+                            // Remove the temporary room
+                            self.graph.rooms.remove(&temp_room_id);
+                            self.graph.path_to_room.remove(&temp_room_id);
+                            break;
+                        }
                     }
                     
                     if !found_existing {
-                        // Create new room
-                        let new_room_id = self.graph.add_room(label);
-                        self.graph.path_to_room.insert(new_room_id, neighbor_path.clone());
-                        self.graph.connect_rooms(current_room, door_num, new_room_id, 0);
-                        self.frontier.push_back(new_room_id);
+                        // Keep the new room
                         println!("    Door {} -> NEW room {} (label {})", 
-                                door_num, new_room_id, label);
+                                door_num, temp_room_id, label);
+                        self.graph.connect_rooms(current_room, door_num, temp_room_id, 0);
+                        self.frontier.push_back(temp_room_id);
                     }
                 }
                 
