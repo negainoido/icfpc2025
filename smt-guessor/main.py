@@ -6,7 +6,7 @@ ICFP 2025 Ædificium: SMT-based map reconstruction
 Input JSON schema (example):
 {
   "plans": ["0325", "510"],           # route plan strings (digits 0-5 or 1-6)
-  "results": [[2,1,3,0], [1,0,2]],      # 2-bit labels per step (0..3), same lengths as plans
+  "results": [[0,2,1,3,0], [0,1,0]],    # labels include the starting room; length = len(plan)+1
   "N": 64,                               # (optional) number of rooms; if omitted, --minN/--maxN sweep
   "startingRoom": 0                      # (optional) default 0
 }
@@ -25,8 +25,8 @@ Notes:
 - SMT encoding uses a Port datatype and two functions:
     delta : Port -> Port  (involution on ports)
     label : Int  -> (_ BitVec 2)
-- Traces assume the label is observed *after* entering the next room:
-    label(x[i][j+1]) == results[i][j]
+- Traces include the starting-room label and then one label per move:
+    for j=0..L, label(x[i][j]) == results[i][j]  (L = len(plan))
 - Requires: `pip install z3-solver`
 """
 from __future__ import annotations
@@ -80,9 +80,9 @@ def parse_input(
         raise ValueError("plans and results must have the same length")
     plans = [normalize_plan(p) for p in plans_s]
     for i, (p, r) in enumerate(zip(plans, results)):
-        if len(p) != len(r):
+        if len(r) != len(p) + 1:
             raise ValueError(
-                f"plan/results length mismatch at index {i}: {len(p)} vs {len(r)}"
+                f"results must include starting label: expected {len(p)+1}, got {len(r)} at index {i}"
             )
         for val in r:
             if not (0 <= int(val) <= 3):
@@ -130,7 +130,6 @@ def solve_with_N(
     # Trace constraints
     for i, (plan, outs) in enumerate(zip(plans, results)):
         L = len(plan)
-        xs = [IntVal(0)] * (L + 1)  # placeholders to keep indices
         # create Int variables x_{i,j}
         from z3 import Int
 
@@ -139,16 +138,15 @@ def solve_with_N(
         s.add(xs[0] == IntVal(starting_room))
         s.add(inQ(xs[0], N))
         # steps
-        for j, (c, a) in enumerate(zip(plan, outs)):
-            # domain constraints on state
+        for j, c in enumerate(plan):
             s.add(inQ(xs[j], N))
-            # next state via delta
             p = mkP(xs[j], IntVal(c))
             next_room = room_of(delta(p))
             s.add(xs[j + 1] == next_room)
             s.add(inQ(xs[j + 1], N))
-            # label after entering next room
-            s.add(label(xs[j + 1]) == BitVecVal(int(a), 2))
+        # labels: include starting room and each subsequent state
+        for j in range(L + 1):
+            s.add(label(xs[j]) == BitVecVal(int(outs[j]), 2))
 
     # Solve
     if s.check() != sat:
