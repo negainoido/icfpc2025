@@ -1,2 +1,2 @@
 [workspace]
-members = ["api-server", "sum-cli"]
+members = ["api-server"]
