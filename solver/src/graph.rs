@@ -43,20 +43,32 @@ impl LibraryGraph {
             return Err(anyhow!("No explorations provided"));
         }
         
+        println!("Building graph from {} explorations", explorations.len());
+        
         // Build a state machine from the explorations
         let mut state_map: HashMap<Vec<i32>, usize> = HashMap::new();
         let mut graph = Self::new(explorations[0].1[0]);
         state_map.insert(vec![explorations[0].1[0]], 0);
         
         for (plan, labels) in explorations {
+            if labels.is_empty() {
+                continue;
+            }
+            
             let mut current_room = 0;
             let mut visited_path = vec![labels[0]];
             
             for (i, &label) in labels.iter().enumerate().skip(1) {
                 visited_path.push(label);
-                let door = plan.chars().nth(i - 1)
-                    .and_then(|c| c.to_digit(10))
-                    .ok_or_else(|| anyhow!("Invalid door character in plan at position {}", i - 1))? as usize;
+                
+                if i - 1 >= plan.len() {
+                    break;
+                }
+                
+                let door = match plan.chars().nth(i - 1).and_then(|c| c.to_digit(10)) {
+                    Some(d) => d as usize,
+                    None => continue,
+                };
                 
                 if !state_map.contains_key(&visited_path) {
                     // New room discovered
@@ -70,17 +82,22 @@ impl LibraryGraph {
                     graph.rooms.push(new_room);
                     
                     // Connect rooms
-                    graph.connect_rooms(current_room, door, new_room_id)?;
+                    if let Err(e) = graph.connect_rooms(current_room, door, new_room_id) {
+                        println!("Warning: Failed to connect rooms: {}", e);
+                    }
                     current_room = new_room_id;
                 } else {
                     // Known room
                     let next_room = state_map[&visited_path];
-                    graph.connect_rooms(current_room, door, next_room)?;
+                    if let Err(e) = graph.connect_rooms(current_room, door, next_room) {
+                        println!("Warning: Failed to connect rooms: {}", e);
+                    }
                     current_room = next_room;
                 }
             }
         }
         
+        println!("Graph built with {} rooms", graph.rooms.len());
         Ok(graph)
     }
     
