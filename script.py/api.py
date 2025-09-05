@@ -85,6 +85,10 @@ def explore(plans: tuple):
     for _, (plan, observations) in enumerate(zip(plans, result["results"])):
         click.echo(f"  プラン '{plan}': {observations}")
 
+    json_output = {"plans": list(plans), "results": result["results"]}
+    click.echo("\n--- smt-guessor friendly output ---")
+    click.echo(json.dumps(json_output, indent=2, ensure_ascii=False))
+
 
 @cli.command()
 @click.argument("map_file", type=click.File("r"))
