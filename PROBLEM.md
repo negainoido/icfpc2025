@@ -57,7 +57,7 @@ https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/
 **実際のレスポンス例:**
 ```json
 {
-  "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ"
+  "id": "a7f8d9c2-b4e1-4c8a-9f2d-1e3b5a7c9d4f"
 }
 ```
 
@@ -272,7 +272,6 @@ curl -X POST https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/guess \
 
 各APIエンドポイントは以下のHTTPステータスコードを返す可能性があります：
 
-- `200 OK`: 成功
 - `200 OK`: 成功
 - `400 Bad Request`: 無効なチームID、不正なルートプラン形式（0-5以外の数字）など
 - `404 Not Found`: リソースが見つからない
