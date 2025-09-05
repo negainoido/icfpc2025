@@ -32,6 +32,7 @@ Notes:
 from __future__ import annotations
 import json
 import argparse
+import sys
 from typing import List, Tuple, Dict, Any, Optional
 
 from z3 import (
@@ -97,9 +98,13 @@ def parse_input(
 
 
 def solve_with_N(
-    N: int, plans: List[List[int]], results: List[List[int]], starting_room: int = 0
-) -> Tuple[Dict[int, int], Dict[Tuple[int, int], Tuple[int, int]]]:
-    """Return (labels, delta_map) where
+    N: int,
+    plans: List[List[int]],
+    results: List[List[int]],
+    starting_room: int = 0,
+    check_unique: bool = False,
+) -> Tuple[Dict[int, int], Dict[Tuple[int, int], Tuple[int, int]], Optional[bool]]:
+    """Return (labels, delta_map, is_unique) where
        labels[q] -> int in 0..3,  delta_map[(q,c)] -> (q2,e).
     Raises AssertionError if UNSAT.
     """
@@ -156,6 +161,20 @@ def solve_with_N(
         )
     m = s.model()
 
+    is_unique = None
+    if check_unique:
+        s.push()
+        blocking_clauses = []
+        for q in range(N):
+            blocking_clauses.append(label(IntVal(q)) != m.eval(label(IntVal(q))))
+        for q in range(N):
+            for c in range(6):
+                p = mkP(IntVal(q), IntVal(c))
+                blocking_clauses.append(delta(p) != m.eval(delta(p)))
+        s.add(Or(blocking_clauses))
+        is_unique = s.check() != sat
+        s.pop()
+
     # Extract label map
     labels: Dict[int, int] = {}
     for q in range(N):
@@ -172,7 +191,7 @@ def solve_with_N(
             e = m.eval(door_of(pr), model_completion=True).as_long()
             delta_map[(q, c)] = (int(q2), int(e))
 
-    return labels, delta_map
+    return labels, delta_map, is_unique
 
 
 def build_map_json(
@@ -206,15 +225,27 @@ def build_map_json(
 # ----------------------------- driver -----------------------------
 
 
-def try_solve(plans, results, starting, N_opt: Optional[int], minN: int, maxN: int):
+def try_solve(
+    plans,
+    results,
+    starting,
+    N_opt: Optional[int],
+    minN: int,
+    maxN: int,
+    check_unique: bool = False,
+):
     if N_opt is not None:
-        labels, dmap = solve_with_N(N_opt, plans, results, starting)
-        return N_opt, labels, dmap
+        labels, dmap, is_unique = solve_with_N(
+            N_opt, plans, results, starting, check_unique
+        )
+        return N_opt, labels, dmap, is_unique
     # sweep N upward to find a SAT model
     for N in range(minN, maxN + 1):
         try:
-            labels, dmap = solve_with_N(N, plans, results, starting)
-            return N, labels, dmap
+            labels, dmap, is_unique = solve_with_N(
+                N, plans, results, starting, check_unique
+            )
+            return N, labels, dmap, is_unique
         except AssertionError:
             continue
     raise AssertionError(
@@ -233,7 +264,12 @@ def main():
     )
     ap.add_argument("--minN", type=int, default=1, help="Min N to try if sweeping")
     ap.add_argument("--maxN", type=int, default=128, help="Max N to try if sweeping")
-    ap.add_argument("--verbose", type=int, default=0, help="Set Z3 solver verbosity level (default: 0)")
+    ap.add_argument(
+        "--verbose", type=int, default=0, help="Set Z3 solver verbosity level (default: 0)"
+    )
+    ap.add_argument(
+        "--check-unique", action="store_true", help="Check if the found solution is unique"
+    )
     args = ap.parse_args()
 
     if args.verbose > 0:
@@ -243,17 +279,27 @@ def main():
         data = json.load(f)
     plans, results, N_in, starting = parse_input(data)
 
-    N, labels, dmap = try_solve(
-        plans, results, starting, args.N or N_in, args.minN, args.maxN
+    N, labels, dmap, is_unique = try_solve(
+        plans, results, starting, args.N or N_in, args.minN, args.maxN, args.check_unique
     )
     mjson = build_map_json(N, labels, dmap, starting)
 
+    if is_unique is not None:
+        print(
+            f"Solution uniqueness: {'UNIQUE' if is_unique else 'NOT UNIQUE'}",
+            file=sys.stderr,
+        )
+
+    output_data = {
+        "rooms": mjson["rooms"],
+        "startingRoom": mjson["startingRoom"],
+        "connections": mjson["connections"],
+    }
+    if is_unique is not None:
+        output_data["is_unique"] = is_unique
+
     out = json.dumps(
-        {
-            "rooms": mjson["rooms"],
-            "startingRoom": mjson["startingRoom"],
-            "connections": mjson["connections"],
-        },
+        output_data,
         ensure_ascii=False,
         indent=2,
     )
