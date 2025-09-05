@@ -1,6 +1,8 @@
 mod api;
 mod graph;
 mod solver;
+mod test;
+mod random_test;
 
 use anyhow::Result;
 use clap::Parser;
@@ -77,6 +79,9 @@ async fn main() -> Result<()> {
     // Run exploration
     println!("\n=== Starting Exploration ===\n");
     solver.explore(problem_size).await?;
+    
+    // Discover return doors
+    solver.discover_return_doors().await?;
 
     // Output the graph
     solver.output_graph();
