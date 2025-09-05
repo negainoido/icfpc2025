@@ -4,7 +4,7 @@
 
 ### GET /api/solutions
 
-solutionsテーブルの全てのレコードを取得します。レコードは作成時刻の降順でソートされます。
+solutionsテーブルの各問題ごとの上位20件のレコードを取得します。
 
 #### レスポンス
 
@@ -25,6 +25,43 @@ solutionsテーブルの全てのレコードを取得します。レコード�
   ],
   "message": "Solutions retrieved successfully"
 }
+```
+
+**サーバーエラー (500 Internal Server Error):**
+```
+HTTP 500 Internal Server Error
+```
+
+### GET /api/solutions/{id}
+
+指定されたIDのsolutionレコードを取得します。
+
+#### パラメータ
+
+- `id` (path parameter, required): solution ID
+
+#### レスポンス
+
+**成功時 (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "problem_id": 25,
+    "problem_type": "spaceship",
+    "status": "solved",
+    "solver": "algorithm_v1",
+    "score": 150,
+    "ts": "2025-08-09T12:34:56Z"
+  },
+  "message": "Solution retrieved successfully"
+}
+```
+
+**レコードが存在しない場合 (404 Not Found):**
+```
+HTTP 404 Not Found
 ```
 
 **サーバーエラー (500 Internal Server Error):**

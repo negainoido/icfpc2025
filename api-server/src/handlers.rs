@@ -2,13 +2,13 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
-    Extension,
 };
-use serde_json::json;
 use sqlx::MySqlPool;
 use std::fs;
 
-use crate::models::{ApiResponse, CreateUserRequest, UpdateUserRequest, User, SpaceshipFileResponse, Solution, CreateSolutionRequest};
+use crate::models::{
+    ApiResponse, CreateSolutionRequest, Solution, SpaceshipFileResponse,
+};
 
 pub async fn get_spaceship_file(
     Path(filename): Path<String>,
@@ -19,7 +19,7 @@ pub async fn get_spaceship_file(
     }
 
     let file_path = format!("resources/spaceship/{}.txt", filename);
-    
+
     match fs::read_to_string(&file_path) {
         Ok(content) => Ok(Json(ApiResponse {
             success: true,
@@ -29,17 +29,29 @@ pub async fn get_spaceship_file(
             }),
             message: Some("File retrieved successfully".to_string()),
         })),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            Err(StatusCode::NOT_FOUND)
-        },
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Err(StatusCode::NOT_FOUND),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
-pub async fn get_solutions(State(pool): State<MySqlPool>) -> Result<Json<ApiResponse<Vec<Solution>>>, StatusCode> {
-    match sqlx::query_as::<_, Solution>("SELECT * FROM solutions ORDER BY ts DESC")
-        .fetch_all(&pool)
-        .await
+pub async fn get_solutions(
+    State(pool): State<MySqlPool>,
+) -> Result<Json<ApiResponse<Vec<Solution>>>, StatusCode> {
+    match sqlx::query_as::<_, Solution>(
+        "
+        SELECT id, problem_id, problem_type, solver, status, score, ts
+        FROM (
+            SELECT
+                id, problem_id, problem_type, solver, status, score, ts,
+                ROW_NUMBER() OVER(PARTITION BY problem_type, problem_id ORDER BY score DESC) as rn
+            FROM solutions
+            WHERE status = 'submitted'
+        ) t
+        WHERE t.rn <= 20;
+    ",
+    )
+    .fetch_all(&pool)
+    .await
     {
         Ok(solutions) => Ok(Json(ApiResponse {
             success: true,
@@ -74,18 +86,20 @@ pub async fn create_solution(
     Json(payload): Json<CreateSolutionRequest>,
 ) -> Result<Json<ApiResponse<Solution>>, StatusCode> {
     match sqlx::query(
-        "INSERT INTO solutions (problem_id, problem_type, status, solver, score) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO solutions (problem_id, problem_type, status, solver, score, content) VALUES (?, ?, ?, ?, ?, ?)"
     )
     .bind(&payload.problem_id)
     .bind(&payload.problem_type)
     .bind(&payload.status)
     .bind(&payload.solver)
     .bind(&payload.score)
+    .bind(&payload.content)
     .execute(&pool)
     .await
     {
         Ok(result) => {
             let id = result.last_insert_id() as i32;
+            
             match sqlx::query_as::<_, Solution>("SELECT * FROM solutions WHERE id = ?")
                 .bind(id)
                 .fetch_one(&pool)

@@ -12,8 +12,8 @@ mod database;
 mod handlers;
 mod models;
 
-use handlers::{get_spaceship_file, get_solutions, get_solution, create_solution};
 use database::create_pool;
+use handlers::{create_solution, get_solution, get_solutions, get_spaceship_file};
 
 #[tokio::main]
 async fn main() {
