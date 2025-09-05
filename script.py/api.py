@@ -43,7 +43,19 @@ def select(problem_name: str):
     """問題を選択する
 
     TEAM_ID: /registerで取得したチームIDを環境変数で渡す
-    PROBLEM_NAME: 選択する問題名（例: probatio）
+    PROBLEM_NAME: 選択する問題名
+
+    利用可能な問題:
+
+    \b
+      Problem     Size
+      ----------- ----
+      probatio       3
+      primus         6
+      secundus      12
+      tertius       18
+      quartus       24
+      quintus       30
     """
     data = {"id": TEAM_ID, "problemName": problem_name}
 
@@ -61,7 +73,9 @@ def explore(plans: tuple):
     TEAM_ID: /registerで取得したチームID
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
 
-    例: python main.py explore "0" "12" "345"
+    \b
+    例:
+      python api.py explore "0" "12" "345"
     """
     data = {"id": TEAM_ID, "plans": list(plans)}
 
@@ -82,15 +96,16 @@ def guess(map_file):
     TEAM_ID: /registerで取得したチームID
     MAP_FILE: 地図データのJSONファイル
 
+    \b
     地図ファイルの形式:
-    {
-      "rooms": [0, 1, 2, ...],
-      "startingRoom": 0,
-      "connections": [
-        {"from": {"room": 0, "door": 0}, "to": {"room": 1, "door": 3}},
-        ...
-      ]
-    }
+      {
+        "rooms": [0, 1, 2, ...],
+        "startingRoom": 0,
+        "connections": [
+          {"from": {"room": 0, "door": 0}, "to": {"room": 1, "door": 3}},
+          ...
+        ]
+      }
     """
     try:
         map_data = json.load(map_file)
@@ -141,7 +156,9 @@ def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
 
     TEAM_ID: /registerで取得したチームID
 
-    例: python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"
+    \b
+    例:
+      python api.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"
     """
     if not rooms:
         click.echo(
