@@ -7,10 +7,13 @@ register以外のすべてのプロトコルエンドポイント（select, expl
 import json
 import sys
 from typing import Any, Dict
+import os
 
 import click
 import requests
 
+TEAM_ID = os.environ.get("TEAM_ID")
+assert TEAM_ID, "環境変数TEAM_IDを設定して"
 BASE_URL = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
 
 
@@ -19,7 +22,9 @@ def make_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{BASE_URL}{endpoint}"
 
     try:
+        print(url,data)
         response = requests.post(url, json=data)
+        print(response)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -34,15 +39,14 @@ def cli():
 
 
 @cli.command()
-@click.argument("team_id")
 @click.argument("problem_name")
-def select(team_id: str, problem_name: str):
+def select(problem_name: str):
     """問題を選択する
 
-    TEAM_ID: /registerで取得したチームID
+    TEAM_ID: /registerで取得したチームIDを環境変数で渡す
     PROBLEM_NAME: 選択する問題名（例: probatio）
     """
-    data = {"id": team_id, "problemName": problem_name}
+    data = {"id": TEAM_ID, "problemName": problem_name}
 
     click.echo(f"問題 '{problem_name}' を選択中...")
     result = make_request("/select", data)
@@ -51,17 +55,16 @@ def select(team_id: str, problem_name: str):
 
 
 @cli.command()
-@click.argument("team_id")
 @click.argument("plans", nargs=-1, required=True)
-def explore(team_id: str, plans: tuple):
+def explore(plans: tuple):
     """エディフィキウムを探検する
 
     TEAM_ID: /registerで取得したチームID
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
 
-    例: python main.py explore YOUR_ID "0" "12" "345"
+    例: python main.py explore "0" "12" "345"
     """
-    data = {"id": team_id, "plans": list(plans)}
+    data = {"id": TEAM_ID, "plans": list(plans)}
 
     click.echo(f"{len(plans)}個のルートプランで探検中...")
     result = make_request("/explore", data)
@@ -73,9 +76,8 @@ def explore(team_id: str, plans: tuple):
 
 
 @cli.command()
-@click.argument("team_id")
 @click.argument("map_file", type=click.File("r"))
-def guess(team_id: str, map_file):
+def guess(map_file):
     """地図を提出する
 
     TEAM_ID: /registerで取得したチームID
@@ -106,7 +108,7 @@ def guess(team_id: str, map_file):
             )
             sys.exit(1)
 
-    data = {"id": team_id, "map": map_data}
+    data = {"id": TEAM_ID, "map": map_data}
 
     click.echo("地図を提出中...")
     result = make_request("/guess", data)
@@ -119,7 +121,6 @@ def guess(team_id: str, map_file):
 
 
 @cli.command()
-@click.argument("team_id")
 @click.option(
     "--rooms", "-r", multiple=True, type=int, help="部屋のラベル（2ビット整数）"
 )
@@ -136,12 +137,12 @@ def guess(team_id: str, map_file):
     multiple=True,
     help="接続の指定（形式: from_room,from_door,to_room,to_door）",
 )
-def guess_inline(team_id: str, rooms: tuple, starting_room: int, connection: tuple):
+def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
     """コマンドラインで直接地図を指定して提出する
 
     TEAM_ID: /registerで取得したチームID
 
-    例: python main.py guess-inline YOUR_ID -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"
+    例: python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"
     """
     if not rooms:
         click.echo(
@@ -173,7 +174,7 @@ def guess_inline(team_id: str, rooms: tuple, starting_room: int, connection: tup
         "connections": connections,
     }
 
-    data = {"id": team_id, "map": map_data}
+    data = {"id": TEAM_ID, "map": map_data}
 
     click.echo("地図を提出中...")
     result = make_request("/guess", data)
@@ -190,18 +191,19 @@ def example():
     """使用例を表示する"""
     click.echo("=== ICFPコンテスト2025 エディフィキウムツール 使用例 ===\n")
 
+    click.echo("0. 環境変数は TEAM_ID に設定する")
     click.echo("1. 問題を選択:")
-    click.echo("   python main.py select YOUR_TEAM_ID probatio\n")
+    click.echo("   python main.py select probatio\n")
 
     click.echo("2. 探検を実行:")
-    click.echo('   python main.py explore YOUR_TEAM_ID "0" "12" "345"\n')
+    click.echo('   python main.py explore "0" "12" "345"\n')
 
     click.echo("3. 地図ファイルから提出:")
-    click.echo("   python main.py guess YOUR_TEAM_ID map.json\n")
+    click.echo("   python main.py guess map.json\n")
 
     click.echo("4. コマンドラインから直接提出:")
     click.echo(
-        '   python main.py guess-inline YOUR_TEAM_ID -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
+        '   python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
     )
 
     click.echo("地図ファイル（map.json）の例:")
