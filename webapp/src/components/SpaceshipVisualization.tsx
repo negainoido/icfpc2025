@@ -17,7 +17,10 @@ const SpaceshipVisualization: React.FC<SpaceshipVisualizationProps> = ({
   height = 600,
 }) => {
   const [hoveredPoint, setHoveredPoint] = useState<Point2D | null>(null);
-  const [screenPosition, setScreenPosition] = useState<{ x: number; y: number } | null>(null);
+  const [screenPosition, setScreenPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const layers = [
     new ScatterplotLayer({
       id: 'spaceship-points',
@@ -51,21 +54,21 @@ const SpaceshipVisualization: React.FC<SpaceshipVisualizationProps> = ({
       };
     }
 
-    const xValues = points.map(p => p.x);
-    const yValues = points.map(p => p.y);
-    
+    const xValues = points.map((p) => p.x);
+    const yValues = points.map((p) => p.y);
+
     const minX = Math.min(...xValues);
     const maxX = Math.max(...xValues);
     const minY = Math.min(...yValues);
     const maxY = Math.max(...yValues);
-    
+
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    
+
     const rangeX = maxX - minX;
     const rangeY = maxY - minY;
     const maxRange = Math.max(rangeX, rangeY);
-    
+
     let zoom = 1;
     if (maxRange > 0) {
       zoom = Math.log2(Math.min(width, height) / (maxRange * 2)) - 1;
@@ -80,12 +83,14 @@ const SpaceshipVisualization: React.FC<SpaceshipVisualizationProps> = ({
   };
 
   return (
-    <div style={{ width, height, position: 'relative', border: '1px solid #ccc' }}>
+    <div
+      style={{ width, height, position: 'relative', border: '1px solid #ccc' }}
+    >
       <DeckGL
         width={width}
         height={height}
-        views={[new OrthographicView({id: 'orthographic'})]}
-        initialViewState={{orthographic: getInitialViewState()}}
+        views={[new OrthographicView({ id: 'orthographic' })]}
+        initialViewState={{ orthographic: getInitialViewState() }}
         controller={true}
         layers={layers}
         getCursor={() => 'crosshair'}
@@ -105,7 +110,10 @@ const SpaceshipVisualization: React.FC<SpaceshipVisualizationProps> = ({
       >
         Points: {points.length}
       </div>
-      <CoordinateDisplay hoveredPoint={hoveredPoint} screenPosition={screenPosition} />
+      <CoordinateDisplay
+        hoveredPoint={hoveredPoint}
+        screenPosition={screenPosition}
+      />
     </div>
   );
 };

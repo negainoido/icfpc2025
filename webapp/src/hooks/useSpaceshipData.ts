@@ -7,7 +7,9 @@ interface UseSpaceshipDataResult {
   error: string | null;
 }
 
-export const useSpaceshipData = (filename: string | null): UseSpaceshipDataResult => {
+export const useSpaceshipData = (
+  filename: string | null
+): UseSpaceshipDataResult => {
   const [points, setPoints] = useState<Point2D[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +27,13 @@ export const useSpaceshipData = (filename: string | null): UseSpaceshipDataResul
 
       try {
         const response = await fetch(`/api/spaceship/${filename}`);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data: SpaceshipApiResponse = await response.json();
-        
+
         if (!data.success) {
           throw new Error(data.message || 'API request failed');
         }
@@ -64,7 +66,7 @@ const parsePointData = (content: string): Point2D[] => {
     if (parts.length >= 2) {
       const x = parseFloat(parts[0]);
       const y = parseFloat(parts[1]);
-      
+
       if (!isNaN(x) && !isNaN(y)) {
         points.push({ x, y });
       }
