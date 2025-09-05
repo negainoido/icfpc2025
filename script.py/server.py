@@ -144,12 +144,8 @@ class Team:
 teams: Dict[str, Team] = {}
 
 
-def generate_random_problem(problem_name: str) -> Problem:
+def generate_random_problem(problem_name: str, size: int) -> Problem:
     """指定された問題名に基づいてランダムな問題を生成する"""
-    if problem_name not in PROBLEM_SIZES:
-        raise ValueError(f"Unknown problem: {problem_name}")
-
-    size = PROBLEM_SIZES[problem_name]
 
     # 各部屋にランダムな2ビットラベルを割り当て
     rooms = []
@@ -338,14 +334,20 @@ async def register(request: RegisterRequest):
 async def select(request: SelectRequest):
     """問題を選択し、ランダムな地図を生成する"""
     if request.problemName not in PROBLEM_SIZES:
-        raise HTTPException(status_code=400, detail="Unknown problem name")
+        try:
+            size = int(request.problemName)
+            assert size >= 1
+        except Exception:
+            raise HTTPException(status_code=400, detail="Unknown problem name")
+    else:
+        size = PROBLEM_SIZES[request.problemName]
 
     # 新しいチームとみなす
     team = Team(id=request.id, name="negainoido", pl="Rust", email="mail@mail")
     teams[request.id] = team
 
     # 新しい問題を生成
-    problem = generate_random_problem(request.problemName)
+    problem = generate_random_problem(request.problemName, size)
     team.current_problem = problem
     team.query_count = 0  # クエリカウントをリセット
 
