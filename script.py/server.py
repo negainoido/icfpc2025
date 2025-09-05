@@ -4,6 +4,7 @@ ICFPコンテスト2025 エディフィキウム図書館マッピング モッ�
 FastAPIを使用してすべてのプロトコルを実装
 """
 
+import logging
 import random
 import uuid
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger("uvicorn")
 app = FastAPI(title="エディフィキウム図書館マッピング API", version="1.0.0")
 
 
@@ -175,8 +177,13 @@ def generate_random_problem(problem_name: str) -> Problem:
     for i, room in enumerate(rooms):
         print(f"  部屋{i}: ラベル{room.label}")
     print("\nJSON形式グラフ:")
-    print(generate_json_graph(problem))
+    json_graph = generate_json_graph(problem)
+    print(json_graph)
     print("=" * 50)
+
+    # JSON形式の地図を /tmp/map.json に保存
+    with open("/tmp/map.json", "w", encoding="utf-8") as f:
+        f.write(json_graph)
 
     return problem
 
@@ -184,33 +191,35 @@ def generate_random_problem(problem_name: str) -> Problem:
 def generate_json_graph(problem: Problem) -> str:
     """JSON形式でグラフを生成する（guess形式と同じ）"""
     import json
-    
+
     # 部屋のラベルを収集
     rooms = [room.label for room in problem.rooms]
-    
+
     # 接続情報を収集（重複を避けるため）
     connections = []
     processed_edges = set()
-    
+
     for room_id, room in enumerate(problem.rooms):
         for door_id, (target_room, target_door) in room.doors.items():
             # 無向グラフなので、重複を避けるため順序付きペアで管理
             edge_key = tuple(sorted([(room_id, door_id), (target_room, target_door)]))
-            
+
             if edge_key not in processed_edges:
-                connections.append({
-                    "from": {"room": room_id, "door": door_id},
-                    "to": {"room": target_room, "door": target_door}
-                })
+                connections.append(
+                    {
+                        "from": {"room": room_id, "door": door_id},
+                        "to": {"room": target_room, "door": target_door},
+                    }
+                )
                 processed_edges.add(edge_key)
-    
+
     graph_data = {
         "rooms": rooms,
         "startingRoom": problem.starting_room,
-        "connections": connections
+        "connections": connections,
     }
-    
-    return json.dumps(graph_data, ensure_ascii=False, separators=(',', ':'))
+
+    return json.dumps(graph_data, ensure_ascii=False, separators=(",", ":"))
 
 
 def simulate_exploration(problem: Problem, plans: List[str]) -> List[List[int]]:
@@ -253,16 +262,19 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
     """提出された地図が問題の地図と等価かチェック"""
     # 部屋数が一致するかチェック
     if len(submitted_map.rooms) != len(problem.rooms):
+        logger.warning("部屋数が一致しない")
         return False
 
     # 開始部屋のラベルが一致するかチェック
     if submitted_map.startingRoom >= len(submitted_map.rooms):
+        logger.warning("開始部屋のラベルが不正")
         return False
 
     expected_start_label = problem.rooms[problem.starting_room].label
     submitted_start_label = submitted_map.rooms[submitted_map.startingRoom]
 
     if expected_start_label != submitted_start_label:
+        logger.warning("開始部屋のラベルが不一致")
         return False
 
     # 簡単な等価性チェック: 各ルートプランで同じ結果が得られるかテスト
@@ -280,22 +292,25 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
         "34",
         "45",
         "50",
+        "123",
         "0123",
         "1234",
         "2345",
         "3450",
         "4501",
         "5012",
+        "31415",
+        "010101232334454545",
     ]
 
     for plan in test_plans:
-        # 元の問題での結果
         original_results = simulate_exploration(problem, [plan])
-
-        # 提出された地図での結果をシミュレート
         submitted_results = simulate_submitted_map(submitted_map, [plan])
 
         if original_results != submitted_results:
+            logger.warning(f"プラン '{plan}' で結果が一致しない")
+            logger.warning(f"期待される結果: {original_results}")
+            logger.warning(f"提出された結果: {submitted_results}")
             return False
 
     return True
@@ -305,24 +320,28 @@ def simulate_submitted_map(map_data: MapData, plans: List[str]) -> List[List[int
     """提出された地図でルートプランをシミュレート"""
     results = []
 
-    # 接続情報を辞書に変換
+    # 接続情報を辞書に変換（無向グラフなので双方向に設定）
     connections = {}
     for conn in map_data.connections:
         from_room = conn.from_.room
         from_door = conn.from_.door
         to_room = conn.to.room
+        to_door = conn.to.door
 
+        # from -> to の接続
         if from_room not in connections:
             connections[from_room] = {}
         connections[from_room][from_door] = to_room
 
+        # to -> from の接続（無向グラフ）
+        if to_room not in connections:
+            connections[to_room] = {}
+        connections[to_room][to_door] = from_room
+
     for plan in plans:
         observations = []
         current_room = map_data.startingRoom
-
-        # 開始部屋のラベルを記録
-        if current_room < len(map_data.rooms):
-            observations.append(map_data.rooms[current_room])
+        observations.append(map_data.rooms[current_room])
 
         # 各ドアを通過
         for door_char in plan:
@@ -410,8 +429,8 @@ async def guess(request: GuessRequest):
     # 地図の正確性をチェック
     is_correct = maps_are_equivalent(team.current_problem, request.map)
 
-    # 問題を選択解除（正解・不正解に関わらず）
-    team.current_problem = None
+    # 本来は不正解であっても問題を選択解除
+    # team.current_problem = None
 
     return GuessResponse(correct=is_correct)
 
