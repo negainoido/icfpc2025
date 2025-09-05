@@ -243,7 +243,8 @@ impl MockGraph {
                 connections.insert((5, door), (door + 2) % 3);
             }
         } else {
-            // Use random generation for other problems
+            // Generate truly random connections for each room
+            // This makes it very unlikely that two rooms have identical connection patterns
             for room in 0..num_rooms {
                 for door in 0..6 {
                     let target = rng.gen_range(0..num_rooms);
