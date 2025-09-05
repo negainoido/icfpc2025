@@ -66,10 +66,18 @@ impl Solver {
                 walk_sequence.push_str(&door.to_string());
             }
             
-            // Execute the SAME walk from both vertices
+            // Get paths to reach each room
             let path1 = self.get_path_to_room(v1);
             let path2 = self.get_path_to_room(v2);
             
+            // Print comparison info
+            println!("      Attempt {}/{}:", attempt + 1, self.max_tries);
+            println!("        Room {} path: '{}'", v1, path1);
+            println!("        Room {} path: '{}'", v2, path2);
+            println!("        Random walk: '{}...' (length {})", 
+                     &walk_sequence[..walk_sequence.len().min(20)], walk_sequence.len());
+            
+            // Execute the SAME walk from both vertices
             let plan1 = format!("{}{}", path1, walk_sequence);
             let plan2 = format!("{}{}", path2, walk_sequence);
             
@@ -85,18 +93,29 @@ impl Solver {
             
             // Compare the random walk sequences
             let equal = walk1 == walk2;
-            println!("  Attempt {}/{}: Comparing room {} and room {}: equal = {}", 
-                     attempt + 1, self.max_tries, v1, v2, equal);
+            
+            // Print the actual label sequences (truncated for readability)
+            let display_len = 30.min(walk1.len());
+            println!("        Walk from room {}: {:?}{}",
+                     v1, 
+                     &walk1[..display_len],
+                     if walk1.len() > display_len { "..." } else { "" });
+            println!("        Walk from room {}: {:?}{}",
+                     v2,
+                     &walk2[..display_len],
+                     if walk2.len() > display_len { "..." } else { "" });
             
             if !equal {
                 // Found them different, return false immediately
-                println!("  Rooms {} and {} are DIFFERENT (found difference in attempt {})", v1, v2, attempt + 1);
+                println!("        Result: DIFFERENT");
                 return Ok(false);
+            } else {
+                println!("        Result: SAME");
             }
         }
         
         // All attempts showed they're equal, so they're likely the same room
-        println!("  Rooms {} and {} are EQUAL after {} attempts", v1, v2, self.max_tries);
+        println!("      Verdict: Rooms {} and {} are EQUAL", v1, v2);
         Ok(true)
     }
 

@@ -33,6 +33,14 @@ impl MockApiClient {
             graph: MockGraph::new_for_problem(problem),
         }
     }
+    
+    pub fn new_with_seed(problem: &str, seed: u64) -> Self {
+        Self {
+            problem_name: problem.to_string(),
+            query_count: 0,
+            graph: MockGraph::new_with_seed(problem, seed),
+        }
+    }
 
     pub fn check_solution(&self, submission: &serde_json::Value) -> Result<bool> {
         // Extract rooms and connections from submission
@@ -173,9 +181,13 @@ impl MockGraph {
     }
     
     fn new_for_problem(problem: &str) -> Self {
+        Self::new_with_seed(problem, 42)
+    }
+    
+    fn new_with_seed(problem: &str, seed: u64) -> Self {
         use rand::{Rng, SeedableRng};
-        // Use a fixed seed for consistent graph generation
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        // Use provided seed for graph generation
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         
         let paths = HashMap::new();
         let mut room_labels = HashMap::new();
@@ -211,33 +223,29 @@ impl MockGraph {
         }
         
         // Generate connections for each room's 6 doors
-        if num_rooms == 12 {
-            // For secundus, create a specific structure that ensures all 12 rooms are distinct
-            // Create 3 groups of 4 rooms (one for each label set)
-            for room in 0..num_rooms {
-                for door in 0..6 {
-                    // Create a structured pattern that ensures distinctness
-                    let target = match door {
-                        0 => (room + 1) % num_rooms,  // Next room in sequence
-                        1 => (room + num_rooms - 1) % num_rooms,  // Previous room
-                        2 => (room + 3) % num_rooms,  // Jump by 3
-                        3 => (room + 5) % num_rooms,  // Jump by 5
-                        4 => (room + 7) % num_rooms,  // Jump by 7
-                        5 => room,  // Self loop
-                        _ => 0,
-                    };
-                    connections.insert((room, door), target);
-                }
+        if problem == "test_duplicate" {
+            // Create a graph with known structure to test equivalence detection
+            // 6 rooms, but some should be equivalent
+            // Rooms 0,3 are identical (both connect to same targets in same way)
+            // Rooms 1,4 are identical
+            // Rooms 2,5 are identical
+            for door in 0..6 {
+                // Room 0 and 3 have identical connections
+                connections.insert((0, door), door % 3);
+                connections.insert((3, door), door % 3);
+                
+                // Room 1 and 4 have identical connections  
+                connections.insert((1, door), (door + 1) % 3);
+                connections.insert((4, door), (door + 1) % 3);
+                
+                // Room 2 and 5 have identical connections
+                connections.insert((2, door), (door + 2) % 3);
+                connections.insert((5, door), (door + 2) % 3);
             }
         } else {
-            // For other sizes, use random generation
+            // Use random generation for other problems
             for room in 0..num_rooms {
-                // Ensure each room has at least one outgoing connection to the next room
-                let next_room = (room + 1) % num_rooms;
-                connections.insert((room, 0), next_room);
-                
-                // Random connections for other doors
-                for door in 1..6 {
+                for door in 0..6 {
                     let target = rng.gen_range(0..num_rooms);
                     connections.insert((room, door), target);
                 }
