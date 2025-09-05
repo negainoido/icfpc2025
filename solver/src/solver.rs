@@ -10,16 +10,22 @@ pub struct Solver {
     pub frontier: VecDeque<usize>,
     pub explored: HashSet<usize>,
     walk_length: usize,
+    max_tries: usize,
 }
 
 impl Solver {
     pub fn new(api: Arc<dyn ApiClientTrait>, walk_length: usize) -> Self {
+        Self::new_with_max_tries(api, walk_length, 3)
+    }
+    
+    pub fn new_with_max_tries(api: Arc<dyn ApiClientTrait>, walk_length: usize, max_tries: usize) -> Self {
         Self {
             api,
             graph: Graph::new(),
             frontier: VecDeque::new(),
             explored: HashSet::new(),
             walk_length,
+            max_tries,
         }
     }
 
@@ -48,10 +54,10 @@ impl Solver {
     pub async fn are_equal(&self, v1: usize, v2: usize) -> Result<bool> {
         use rand::Rng;
         
-        // Try multiple random walks (up to 3 times) to increase detection probability
-        const MAX_TRIES: usize = 3;
+        // Try multiple random walks to verify equivalence
+        // Two rooms are equal only if ALL random walks produce the same labels
         
-        for attempt in 0..MAX_TRIES {
+        for attempt in 0..self.max_tries {
             // Generate a single random walk sequence
             let mut rng = rand::thread_rng();
             let mut walk_sequence = String::new();
@@ -80,17 +86,18 @@ impl Solver {
             // Compare the random walk sequences
             let equal = walk1 == walk2;
             println!("  Attempt {}/{}: Comparing room {} and room {}: equal = {}", 
-                     attempt + 1, MAX_TRIES, v1, v2, equal);
+                     attempt + 1, self.max_tries, v1, v2, equal);
             
-            if equal {
-                // Found them equal, return true immediately
-                return Ok(true);
+            if !equal {
+                // Found them different, return false immediately
+                println!("  Rooms {} and {} are DIFFERENT (found difference in attempt {})", v1, v2, attempt + 1);
+                return Ok(false);
             }
         }
         
-        // After all attempts, they're not equal
-        println!("  Rooms {} and {} are NOT equal after {} attempts", v1, v2, MAX_TRIES);
-        Ok(false)
+        // All attempts showed they're equal, so they're likely the same room
+        println!("  Rooms {} and {} are EQUAL after {} attempts", v1, v2, self.max_tries);
+        Ok(true)
     }
 
     pub async fn explore(&mut self, problem_size: usize) -> Result<()> {
@@ -147,7 +154,31 @@ impl Solver {
                         if self.are_equal(temp_room_id, existing_room).await.unwrap_or(false) {
                             println!("    Door {} -> existing room {} (equivalent, label {})", 
                                     door_num, existing_room, label);
-                            self.graph.connect_one_way(current_room, door_num, existing_room);
+                            
+                            // Check if the existing room already has a connection back to current_room
+                            // If so, establish a proper bidirectional connection
+                            let mut return_door = None;
+                            if let Some(target_room) = self.graph.rooms.get(&existing_room) {
+                                for (d, conn) in target_room.doors.iter().enumerate() {
+                                    if let Some((connected_room, _)) = conn {
+                                        if *connected_room == current_room {
+                                            return_door = Some(d);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if let Some(return_door_num) = return_door {
+                                // Establish bidirectional connection
+                                self.graph.connect_rooms(current_room, door_num, existing_room, return_door_num);
+                                println!("      Established bidirectional: Room {} door {} <-> Room {} door {}", 
+                                        current_room, door_num, existing_room, return_door_num);
+                            } else {
+                                // Just one-way for now, will be completed when the other room is explored
+                                self.graph.connect_one_way(current_room, door_num, existing_room);
+                            }
+                            
                             found_existing = true;
                             
                             // Remove the temporary room

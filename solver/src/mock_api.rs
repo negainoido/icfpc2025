@@ -23,10 +23,14 @@ struct MockGraph {
 
 impl MockApiClient {
     pub fn new() -> Self {
+        Self::new_with_problem("primus")
+    }
+    
+    pub fn new_with_problem(problem: &str) -> Self {
         Self {
-            problem_name: String::new(),
+            problem_name: problem.to_string(),
             query_count: 0,
-            graph: MockGraph::new(),
+            graph: MockGraph::new_for_problem(problem),
         }
     }
 
@@ -44,8 +48,16 @@ impl MockApiClient {
             .as_u64()
             .ok_or_else(|| anyhow::anyhow!("Invalid submission: missing startingRoom"))? as usize;
         
-        // The correct solution for primus has 6 unique rooms
-        let expected_room_count = 6;
+        // Expected room count based on problem
+        let expected_room_count = match self.problem_name.as_str() {
+            "probatio" => 3,
+            "primus" => 6,
+            "secundus" => 12,
+            "tertius" => 18,
+            "quartus" => 24,
+            "quintus" => 30,
+            _ => 6,
+        };
         
         if submitted_rooms.len() != expected_room_count {
             println!("[MOCK] Solution verification FAILED: Expected {} rooms, got {}", 
@@ -157,68 +169,80 @@ impl MockApiClient {
 
 impl MockGraph {
     fn new() -> Self {
+        Self::new_for_problem("primus")
+    }
+    
+    fn new_for_problem(problem: &str) -> Self {
+        use rand::{Rng, SeedableRng};
+        // Use a fixed seed for consistent graph generation
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        
         let paths = HashMap::new();
         let mut room_labels = HashMap::new();
         let mut connections = HashMap::new();
 
-        // Define the primus problem structure with 6 unique vertices
-        // Each room has a unique label (0-5)
+        let num_rooms = match problem {
+            "probatio" => 3,
+            "primus" => 6,
+            "secundus" => 12,
+            "tertius" => 18,
+            "quartus" => 24,
+            "quintus" => 30,
+            _ => 6, // Default to 6
+        };
         
-        // Room labels - 6 unique rooms
-        room_labels.insert(0, 0); // Starting room
-        room_labels.insert(1, 1); 
-        room_labels.insert(2, 2);
-        room_labels.insert(3, 3);
-        room_labels.insert(4, 4);
-        room_labels.insert(5, 5);
+        // Generate room labels
+        // For probatio: 3 rooms with unique labels (0-2)
+        // For primus: 6 rooms with unique labels (0-5)
+        // For larger problems: use 4 labels (0,1,2,3) cycling
+        let num_labels = match num_rooms {
+            3 => 3,   // probatio - all unique
+            6 => 6,   // primus - all unique
+            _ => 4,   // larger problems use 4 labels
+        };
         
-        // Starting room (0) connections
-        connections.insert((0, 0), 1); // door 0 -> room 1
-        connections.insert((0, 1), 2); // door 1 -> room 2
-        connections.insert((0, 2), 3); // door 2 -> room 3
-        connections.insert((0, 3), 4); // door 3 -> room 4
-        connections.insert((0, 4), 5); // door 4 -> room 5
-        connections.insert((0, 5), 0); // door 5 -> self loop
+        for i in 0..num_rooms {
+            let label = if num_rooms <= 6 {
+                i as u8  // Unique labels for small problems
+            } else {
+                (i % num_labels) as u8  // Cycle through labels for larger problems
+            };
+            room_labels.insert(i, label);
+        }
         
-        // Room 1 connections
-        connections.insert((1, 0), 0); // back to start
-        connections.insert((1, 1), 2); // to room 2
-        connections.insert((1, 2), 3); // to room 3
-        connections.insert((1, 3), 4); // to room 4
-        connections.insert((1, 4), 5); // to room 5
-        connections.insert((1, 5), 1); // self loop
-        
-        // Room 2 connections
-        connections.insert((2, 0), 0); // to room 0
-        connections.insert((2, 1), 1); // to room 1
-        connections.insert((2, 2), 3); // to room 3
-        connections.insert((2, 3), 4); // to room 4
-        connections.insert((2, 4), 5); // to room 5
-        connections.insert((2, 5), 2); // self loop
-        
-        // Room 3 connections
-        connections.insert((3, 0), 0); // to room 0
-        connections.insert((3, 1), 1); // to room 1
-        connections.insert((3, 2), 2); // to room 2
-        connections.insert((3, 3), 4); // to room 4
-        connections.insert((3, 4), 5); // to room 5
-        connections.insert((3, 5), 3); // self loop
-        
-        // Room 4 connections
-        connections.insert((4, 0), 0); // to room 0
-        connections.insert((4, 1), 1); // to room 1
-        connections.insert((4, 2), 2); // to room 2
-        connections.insert((4, 3), 3); // to room 3
-        connections.insert((4, 4), 5); // to room 5
-        connections.insert((4, 5), 4); // self loop
-        
-        // Room 5 connections
-        connections.insert((5, 0), 0); // to room 0
-        connections.insert((5, 1), 1); // to room 1
-        connections.insert((5, 2), 2); // to room 2
-        connections.insert((5, 3), 3); // to room 3
-        connections.insert((5, 4), 4); // to room 4
-        connections.insert((5, 5), 5); // self loop
+        // Generate connections for each room's 6 doors
+        if num_rooms == 12 {
+            // For secundus, create a specific structure that ensures all 12 rooms are distinct
+            // Create 3 groups of 4 rooms (one for each label set)
+            for room in 0..num_rooms {
+                for door in 0..6 {
+                    // Create a structured pattern that ensures distinctness
+                    let target = match door {
+                        0 => (room + 1) % num_rooms,  // Next room in sequence
+                        1 => (room + num_rooms - 1) % num_rooms,  // Previous room
+                        2 => (room + 3) % num_rooms,  // Jump by 3
+                        3 => (room + 5) % num_rooms,  // Jump by 5
+                        4 => (room + 7) % num_rooms,  // Jump by 7
+                        5 => room,  // Self loop
+                        _ => 0,
+                    };
+                    connections.insert((room, door), target);
+                }
+            }
+        } else {
+            // For other sizes, use random generation
+            for room in 0..num_rooms {
+                // Ensure each room has at least one outgoing connection to the next room
+                let next_room = (room + 1) % num_rooms;
+                connections.insert((room, 0), next_room);
+                
+                // Random connections for other doors
+                for door in 1..6 {
+                    let target = rng.gen_range(0..num_rooms);
+                    connections.insert((room, door), target);
+                }
+            }
+        }
         
         Self {
             paths,

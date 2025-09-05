@@ -31,9 +31,13 @@ struct Args {
     base_url: String,
 
 
-    /// Random walk length for equivalence checking
-    #[arg(long, default_value = "10")]
-    walk_length: usize,
+    /// Random walk length for equivalence checking (defaults to 18 * problem_size)
+    #[arg(long)]
+    walk_length: Option<usize>,
+    
+    /// Maximum number of random walk attempts for equivalence checking
+    #[arg(long, default_value = "3")]
+    max_tries: usize,
 
     /// Use mock API instead of real API
     #[arg(long)]
@@ -74,7 +78,7 @@ async fn main() -> Result<()> {
     // Create API client (mock or real based on flag)
     let api: Arc<dyn ApiClientTrait> = if args.mock {
         println!("Using MOCK API client");
-        Arc::new(MockApiClient::new())
+        Arc::new(MockApiClient::new_with_problem(&args.problem))
     } else {
         println!("Using REAL API client");
         Arc::new(ApiClient::new(args.base_url.clone(), team_id.clone()))
@@ -84,12 +88,16 @@ async fn main() -> Result<()> {
     println!("Selecting problem: {}", args.problem);
     api.select_problem(&args.problem).await?;
 
-    // Create solver
-    let mut solver = Solver::new(api, args.walk_length);
-
     // Get problem size
     let problem_size = get_problem_size(&args.problem);
     println!("Problem size: {} iterations", problem_size);
+    
+    // Calculate walk length as 18n (maximum allowed) or use provided value
+    let walk_length = args.walk_length.unwrap_or(18 * problem_size);
+    println!("Random walk length: {} (max: 18 * {} = {})", walk_length, problem_size, 18 * problem_size);
+
+    // Create solver with calculated walk length and max_tries
+    let mut solver = Solver::new_with_max_tries(api, walk_length, args.max_tries);
 
     // Run exploration
     println!("\n=== Starting Exploration ===\n");
@@ -113,7 +121,7 @@ async fn main() -> Result<()> {
     } else {
         println!("\n=== Mock mode: Checking solution ===");
         // Check solution with mock API
-        let mock_api = MockApiClient::new();
+        let mock_api = MockApiClient::new_with_problem(&args.problem);
         match mock_api.check_solution(&submission_map) {
             Ok(correct) => {
                 if correct {
