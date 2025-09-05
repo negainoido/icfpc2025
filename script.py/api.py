@@ -87,7 +87,7 @@ def explore(plans: tuple):
 
     json_output = {"plans": list(plans), "results": result["results"]}
     click.echo("\n--- smt-guessor friendly output ---")
-    click.echo(json.dumps(json_output, indent=2, ensure_ascii=False))
+    click.echo(json.dumps(json_output, ensure_ascii=False))
 
 
 @cli.command()
