@@ -21,7 +21,7 @@ API を素直に叩くだけ
 TEAM_ID=*** uv run ./api.py --help
 
 # ローカルサーバを叩く
-TEAM_ID=*** api_HOST=http://localhost:8000 uv run ./api.py --help
+TEAM_ID=*** API_HOST=http://localhost:8000 uv run ./api.py --help
 ```
 
 ## server.py
