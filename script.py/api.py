@@ -22,9 +22,7 @@ def make_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{BASE_URL}{endpoint}"
 
     try:
-        print(url,data)
         response = requests.post(url, json=data)
-        print(response)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
