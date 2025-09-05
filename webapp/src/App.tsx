@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import './App.css'
 import SpaceshipPage from './pages/SpaceshipPage'
+import SolutionsPage from './pages/SolutionsPage'
 
 function App() {
   return (
@@ -10,8 +11,11 @@ function App() {
           <Link to="/" style={{ marginRight: '20px', textDecoration: 'none' }}>
             Home
           </Link>
-          <Link to="/spaceship" style={{ textDecoration: 'none' }}>
+          <Link to="/spaceship" style={{ marginRight: '20px', textDecoration: 'none' }}>
             Spaceship Visualization
+          </Link>
+          <Link to="/solutions" style={{ textDecoration: 'none' }}>
+            Solutions
           </Link>
         </nav>
         
@@ -19,6 +23,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/spaceship" element={<SpaceshipPage />} />
           <Route path="/spaceship/:problemNumber" element={<SpaceshipPage />} />
+          <Route path="/solutions" element={<SolutionsPage />} />
         </Routes>
       </div>
     </Router>
@@ -40,10 +45,24 @@ function HomePage() {
             color: 'white', 
             textDecoration: 'none',
             borderRadius: '4px',
-            display: 'inline-block'
+            display: 'inline-block',
+            marginRight: '20px'
           }}
         >
           View Spaceship Visualization
+        </Link>
+        <Link 
+          to="/solutions" 
+          style={{ 
+            padding: '12px 24px', 
+            background: '#28a745', 
+            color: 'white', 
+            textDecoration: 'none',
+            borderRadius: '4px',
+            display: 'inline-block'
+          }}
+        >
+          View Solutions
         </Link>
       </div>
     </div>

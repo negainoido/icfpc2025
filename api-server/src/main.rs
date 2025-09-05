@@ -12,8 +12,8 @@ mod database;
 mod handlers;
 mod models;
 
-use handlers::{get_spaceship_file, get_solutions, create_solution};
 use database::create_pool;
+use handlers::{create_solution, get_solution, get_solutions, get_spaceship_file};
 
 #[tokio::main]
 async fn main() {
@@ -31,6 +31,7 @@ async fn main() {
         .route("/api/health", get(health_check))
         .route("/api/spaceship/:filename", get(get_spaceship_file))
         .route("/api/solutions", get(get_solutions).post(create_solution))
+        .route("/api/solutions/:id", get(get_solution))
         .with_state(pool)
         .layer(cors);
 
