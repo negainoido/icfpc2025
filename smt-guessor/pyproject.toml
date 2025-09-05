@@ -1,0 +1,10 @@
+[project]
+name = "smt-guessor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "matplotlib>=3.9.4",
+    "z3-solver>=4.15.3.0",
+]
