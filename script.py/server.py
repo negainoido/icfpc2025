@@ -279,29 +279,16 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
 
     # 簡単な等価性チェック: 各ルートプランで同じ結果が得られるかテスト
     # より厳密な実装では、グラフ同型性をチェックする必要がある
-    test_plans = [
-        "0",
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "01",
-        "12",
-        "23",
-        "34",
-        "45",
-        "50",
-        "123",
-        "0123",
-        "1234",
-        "2345",
-        "3450",
-        "4501",
-        "5012",
-        "31415",
-        "010101232334454545",
-    ]
+    n = len(problem.rooms)
+    test_plans = []
+
+    # 長さ n, 2*n, 3*n のそれぞれでランダム生成
+    for length_multiplier in [1, 2, 3]:
+        plan_length = n * length_multiplier
+        for _ in range(20):
+            # ランダムなドア番号（0-5）を生成
+            plan = "".join(str(random.randint(0, 5)) for _ in range(plan_length))
+            test_plans.append(plan)
 
     for plan in test_plans:
         original_results = simulate_exploration(problem, [plan])
@@ -405,6 +392,13 @@ async def explore(request: ExploreRequest):
 
     if team.current_problem is None:
         raise HTTPException(status_code=400, detail="No problem selected")
+
+    # プランの長さは最大 3*n (v1.2)
+    n = len(team.current_problem.rooms)
+    max_plan_length = 3 * n
+    for plan in request.plans:
+        if len(plan) > max_plan_length:
+            raise HTTPException(status_code=400, detail=f"Plan length {len(plan)} exceeds maximum {max_plan_length}")
 
     # ルートプランを実行
     results = simulate_exploration(team.current_problem, request.plans)
