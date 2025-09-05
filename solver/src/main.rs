@@ -11,9 +11,9 @@ use api::ApiClient;
 #[command(name = "ICFPC 2025 Solver")]
 #[command(about = "Solver for ICFPC 2025 library exploration problem", long_about = None)]
 struct Args {
-    /// Team ID (can be set with TEAM_ID environment variable)
+    /// Team ID (defaults to TEAM_ID environment variable if not provided)
     #[arg(short, long)]
-    team_id: String,
+    team_id: Option<String>,
 
     /// Problem name
     #[arg(short, long)]
@@ -23,9 +23,6 @@ struct Args {
     #[arg(long, default_value = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com")]
     base_url: String,
 
-    /// Submit the solution after exploration
-    #[arg(long)]
-    submit: bool,
 
     /// Random walk length for equivalence checking
     #[arg(long, default_value = "10")]
@@ -52,14 +49,19 @@ fn get_problem_size(problem_name: &str) -> usize {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    // Get team ID from args or environment variable
+    let team_id = args.team_id.unwrap_or_else(|| {
+        std::env::var("TEAM_ID").expect("TEAM_ID not provided via --team-id or TEAM_ID environment variable")
+    });
+
     println!("=== ICFPC 2025 Solver ===");
-    println!("Team ID: {}", args.team_id);
+    println!("Team ID: {}", team_id);
     println!("Problem: {}", args.problem);
     println!("Base URL: {}", args.base_url);
     println!();
 
     // Create API client
-    let api = ApiClient::new(args.base_url.clone(), args.team_id.clone());
+    let api = ApiClient::new(args.base_url.clone(), team_id.clone());
 
     // Select the problem
     println!("Selecting problem: {}", args.problem);
@@ -84,12 +86,8 @@ async fn main() -> Result<()> {
     println!("\n=== Submission Map ===");
     println!("{}", serde_json::to_string_pretty(&submission_map)?);
 
-    if args.submit {
-        println!("\n=== Submitting Solution ===");
-        submit_solution(&args.base_url, &args.team_id, submission_map).await?;
-    } else {
-        println!("\nTo submit the solution, run with --submit flag");
-    }
+    println!("\n=== Submitting Solution ===");
+    submit_solution(&args.base_url, &team_id, submission_map).await?;
 
     Ok(())
 }
