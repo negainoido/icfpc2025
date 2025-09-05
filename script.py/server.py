@@ -102,6 +102,31 @@ class Problem:
     rooms: List[Room]
     starting_room: int = 0
 
+    @classmethod
+    def from_map_data(cls, map_data: "MapData") -> "Problem":
+        """MapDataからProblemを作成する"""
+        # 部屋を作成
+        rooms = []
+        for label in map_data.rooms:
+            room = Room(label=label, doors={})
+            rooms.append(room)
+
+        # 接続情報を設定（無向グラフなので双方向に設定）
+        for conn in map_data.connections:
+            from_room = conn.from_.room
+            from_door = conn.from_.door
+            to_room = conn.to.room
+            to_door = conn.to.door
+
+            # from -> to の接続
+            rooms[from_room].doors[from_door] = (to_room, to_door)
+            # to -> from の接続（無向グラフ）
+            rooms[to_room].doors[to_door] = (from_room, from_door)
+
+        return cls(
+            name="submitted_map", rooms=rooms, starting_room=map_data.startingRoom
+        )
+
 
 @dataclass
 class Team:
@@ -134,38 +159,26 @@ def generate_random_problem(problem_name: str) -> Problem:
         rooms.append(room)
 
     # 無向グラフになるように接続を生成
-    # 既に接続されているエッジを追跡するセット
-    connected_edges = set()
-
-    # 各部屋の各ドア（0-5）にランダムな接続を生成
+    # 未接続の(room, door)ペアを管理
+    unconnected_vertices = set()
     for room_id in range(size):
         for door_id in range(6):  # ドア0-5
-            # 既に接続が設定されている場合はスキップ
-            if (room_id, door_id) in connected_edges:
-                continue
+            unconnected_vertices.add((room_id, door_id))
 
-            # ランダムな接続先を選択
-            target_room = random.randint(0, size - 1)
-            target_door = random.randint(0, 5)
+    # 未接続のペアから2つ選んで接続
+    while len(unconnected_vertices) > 0:
+        vertex1 = random.choice(list(unconnected_vertices))
+        vertex2 = random.choice(list(unconnected_vertices))
+        unconnected_vertices.remove(vertex1)
+        if vertex1 != vertex2:
+            unconnected_vertices.remove(vertex2)
 
-            # 既に接続されている場合は別の接続先を探す
-            max_attempts = 50  # 無限ループを避けるため
-            attempts = 0
-            while (
-                target_room,
-                target_door,
-            ) in connected_edges and attempts < max_attempts:
-                target_room = random.randint(0, size - 1)
-                target_door = random.randint(0, 5)
-                attempts += 1
+        room1, door1 = vertex1
+        room2, door2 = vertex2
 
-            # 無向エッジを作成（双方向に接続）
-            rooms[room_id].doors[door_id] = (target_room, target_door)
-            rooms[target_room].doors[target_door] = (room_id, door_id)
-
-            # 接続済みエッジとして記録
-            connected_edges.add((room_id, door_id))
-            connected_edges.add((target_room, target_door))
+        # 無向エッジを作成（双方向に接続）
+        rooms[room1].doors[door1] = (room2, door2)
+        rooms[room2].doors[door2] = (room1, door1)
 
     problem = Problem(name=problem_name, rooms=rooms, starting_room=0)
 
@@ -279,29 +292,16 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
 
     # 簡単な等価性チェック: 各ルートプランで同じ結果が得られるかテスト
     # より厳密な実装では、グラフ同型性をチェックする必要がある
-    test_plans = [
-        "0",
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "01",
-        "12",
-        "23",
-        "34",
-        "45",
-        "50",
-        "123",
-        "0123",
-        "1234",
-        "2345",
-        "3450",
-        "4501",
-        "5012",
-        "31415",
-        "010101232334454545",
-    ]
+    n = len(problem.rooms)
+    test_plans = []
+
+    # 長さ n, 2*n, 3*n のそれぞれでランダム生成
+    for length_multiplier in [1, 2, 3]:
+        plan_length = n * length_multiplier
+        for _ in range(20):
+            # ランダムなドア番号（0-5）を生成
+            plan = "".join(str(random.randint(0, 5)) for _ in range(plan_length))
+            test_plans.append(plan)
 
     for plan in test_plans:
         original_results = simulate_exploration(problem, [plan])
@@ -318,51 +318,8 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
 
 def simulate_submitted_map(map_data: MapData, plans: List[str]) -> List[List[int]]:
     """提出された地図でルートプランをシミュレート"""
-    results = []
-
-    # 接続情報を辞書に変換（無向グラフなので双方向に設定）
-    connections = {}
-    for conn in map_data.connections:
-        from_room = conn.from_.room
-        from_door = conn.from_.door
-        to_room = conn.to.room
-        to_door = conn.to.door
-
-        # from -> to の接続
-        if from_room not in connections:
-            connections[from_room] = {}
-        connections[from_room][from_door] = to_room
-
-        # to -> from の接続（無向グラフ）
-        if to_room not in connections:
-            connections[to_room] = {}
-        connections[to_room][to_door] = from_room
-
-    for plan in plans:
-        observations = []
-        current_room = map_data.startingRoom
-        observations.append(map_data.rooms[current_room])
-
-        # 各ドアを通過
-        for door_char in plan:
-            try:
-                door_id = int(door_char)
-                if door_id < 0 or door_id > 5:
-                    continue
-
-                # 接続があるかチェック
-                if current_room in connections and door_id in connections[current_room]:
-                    next_room = connections[current_room][door_id]
-                    if next_room < len(map_data.rooms):
-                        current_room = next_room
-                        observations.append(map_data.rooms[current_room])
-
-            except ValueError:
-                continue
-
-        results.append(observations)
-
-    return results
+    problem = Problem.from_map_data(map_data)
+    return simulate_exploration(problem, plans)
 
 
 @app.post("/register", response_model=RegisterResponse)
@@ -405,6 +362,16 @@ async def explore(request: ExploreRequest):
 
     if team.current_problem is None:
         raise HTTPException(status_code=400, detail="No problem selected")
+
+    # プランの長さは最大 3*n (v1.2)
+    n = len(team.current_problem.rooms)
+    max_plan_length = 3 * n
+    for plan in request.plans:
+        if len(plan) > max_plan_length:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Plan length {len(plan)} exceeds maximum {max_plan_length}",
+            )
 
     # ルートプランを実行
     results = simulate_exploration(team.current_problem, request.plans)
