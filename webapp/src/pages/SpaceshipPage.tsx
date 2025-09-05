@@ -6,7 +6,9 @@ import SpaceshipVisualization from '../components/SpaceshipVisualization';
 const SpaceshipPage: React.FC = () => {
   const { problemNumber } = useParams<{ problemNumber: string }>();
   const navigate = useNavigate();
-  const [selectedFile, setSelectedFile] = useState<string>(problemNumber ? `problem${problemNumber}` : 'problem1');
+  const [selectedFile, setSelectedFile] = useState<string>(
+    problemNumber ? `problem${problemNumber}` : 'problem1'
+  );
   const { points, loading, error } = useSpaceshipData(selectedFile);
 
   useEffect(() => {
@@ -20,7 +22,7 @@ const SpaceshipPage: React.FC = () => {
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1>Spaceship Point Cloud Visualization</h1>
-      
+
       <div style={{ marginBottom: '20px' }}>
         <label htmlFor="file-select" style={{ marginRight: '10px' }}>
           Problem File:
@@ -50,36 +52,42 @@ const SpaceshipPage: React.FC = () => {
       </div>
 
       {loading && (
-        <div style={{ 
-          padding: '20px', 
-          textAlign: 'center',
-          background: '#f0f0f0',
-          borderRadius: '4px',
-          marginBottom: '20px'
-        }}>
+        <div
+          style={{
+            padding: '20px',
+            textAlign: 'center',
+            background: '#f0f0f0',
+            borderRadius: '4px',
+            marginBottom: '20px',
+          }}
+        >
           Loading...
         </div>
       )}
 
       {error && (
-        <div style={{ 
-          padding: '20px', 
-          background: '#ffebee',
-          color: '#c62828',
-          borderRadius: '4px',
-          marginBottom: '20px'
-        }}>
+        <div
+          style={{
+            padding: '20px',
+            background: '#ffebee',
+            color: '#c62828',
+            borderRadius: '4px',
+            marginBottom: '20px',
+          }}
+        >
           Error: {error}
         </div>
       )}
 
       {!loading && !error && points.length > 0 && (
         <div>
-          <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>
+          <div
+            style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}
+          >
             Showing {points.length} points from {selectedFile}.txt
           </div>
-          <SpaceshipVisualization 
-            points={points} 
+          <SpaceshipVisualization
+            points={points}
             width={Math.min(window.innerWidth - 40, 1000)}
             height={600}
           />
@@ -87,13 +95,15 @@ const SpaceshipPage: React.FC = () => {
       )}
 
       {!loading && !error && points.length === 0 && selectedFile && (
-        <div style={{ 
-          padding: '20px', 
-          textAlign: 'center',
-          background: '#fff3e0',
-          color: '#e65100',
-          borderRadius: '4px'
-        }}>
+        <div
+          style={{
+            padding: '20px',
+            textAlign: 'center',
+            background: '#fff3e0',
+            color: '#e65100',
+            borderRadius: '4px',
+          }}
+        >
           No points found in the selected file.
         </div>
       )}

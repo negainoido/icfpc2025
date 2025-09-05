@@ -29,7 +29,7 @@ const SolutionsList: React.FC = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const result: ApiResponse<Solution[]> = await response.json();
-        
+
         if (result.success && result.data) {
           setSolutions(result.data);
         } else {
@@ -51,7 +51,7 @@ const SolutionsList: React.FC = () => {
 
   const getStatusColor = (status: string | null) => {
     if (!status) return '#666';
-    
+
     switch (status.toLowerCase()) {
       case 'success':
       case 'solved':
@@ -68,62 +68,141 @@ const SolutionsList: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Loading solutions...</div>;
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        Loading solutions...
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={{ padding: '20px', color: '#dc3545', textAlign: 'center' }}>Error: {error}</div>;
+    return (
+      <div style={{ padding: '20px', color: '#dc3545', textAlign: 'center' }}>
+        Error: {error}
+      </div>
+    );
   }
 
   return (
     <div style={{ padding: '20px' }}>
       <h2 style={{ marginBottom: '20px' }}>Solutions ({solutions.length})</h2>
-      
+
       {solutions.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#666' }}>No solutions found</div>
+        <div style={{ textAlign: 'center', color: '#666' }}>
+          No solutions found
+        </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ 
-            width: '100%', 
-            borderCollapse: 'collapse',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            }}
+          >
             <thead>
               <tr style={{ backgroundColor: '#f8f9fa' }}>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>ID</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Problem ID</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Type</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Status</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Solver</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Score</th>
-                <th style={{ padding: '12px', textAlign: 'left', borderBottom: '1px solid #dee2e6' }}>Timestamp</th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  ID
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Problem ID
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Type
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Status
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Solver
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Score
+                </th>
+                <th
+                  style={{
+                    padding: '12px',
+                    textAlign: 'left',
+                    borderBottom: '1px solid #dee2e6',
+                  }}
+                >
+                  Timestamp
+                </th>
               </tr>
             </thead>
             <tbody>
               {solutions.map((solution) => (
-                <tr key={solution.id} style={{ 
-                  borderBottom: '1px solid #dee2e6',
-                  '&:hover': { backgroundColor: '#f8f9fa' }
-                }}>
+                <tr
+                  key={solution.id}
+                  style={{
+                    borderBottom: '1px solid #dee2e6',
+                    '&:hover': { backgroundColor: '#f8f9fa' },
+                  }}
+                >
                   <td style={{ padding: '12px' }}>{solution.id}</td>
                   <td style={{ padding: '12px' }}>{solution.problem_id}</td>
-                  <td style={{ padding: '12px' }}>{solution.problem_type || '-'}</td>
                   <td style={{ padding: '12px' }}>
-                    <span style={{ 
-                      color: getStatusColor(solution.status),
-                      fontWeight: 'bold'
-                    }}>
+                    {solution.problem_type || '-'}
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    <span
+                      style={{
+                        color: getStatusColor(solution.status),
+                        fontWeight: 'bold',
+                      }}
+                    >
                       {solution.status || '-'}
                     </span>
                   </td>
                   <td style={{ padding: '12px' }}>{solution.solver}</td>
                   <td style={{ padding: '12px' }}>
-                    {solution.score !== null ? solution.score.toLocaleString() : '-'}
+                    {solution.score !== null
+                      ? solution.score.toLocaleString()
+                      : '-'}
                   </td>
-                  <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                  <td
+                    style={{ padding: '12px', fontSize: '14px', color: '#666' }}
+                  >
                     {formatTimestamp(solution.ts)}
                   </td>
                 </tr>

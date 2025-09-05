@@ -49,9 +49,13 @@ const CoordinateDisplay: React.FC<CoordinateDisplayProps> = ({
         minWidth: '180px',
       }}
     >
-      <div>Point: ({hoveredPoint.x}, {hoveredPoint.y})</div>
+      <div>
+        Point: ({hoveredPoint.x}, {hoveredPoint.y})
+      </div>
       {screenPosition && (
-        <div>Screen: ({screenPosition.x}, {screenPosition.y})</div>
+        <div>
+          Screen: ({screenPosition.x}, {screenPosition.y})
+        </div>
       )}
     </div>
   );
