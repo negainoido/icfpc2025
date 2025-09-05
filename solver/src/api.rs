@@ -1,5 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
+use crate::api_trait::ApiClientTrait;
 
 #[derive(Debug, Clone)]
 pub struct ApiClient {
@@ -108,5 +110,16 @@ impl ApiClient {
             println!("  Result {}: {:?}", i + 1, result);
         }
         Ok((explore_response.results, explore_response.query_count))
+    }
+}
+
+#[async_trait]
+impl ApiClientTrait for ApiClient {
+    async fn select_problem(&self, problem_name: &str) -> Result<()> {
+        self.select_problem(problem_name).await
+    }
+
+    async fn explore(&self, plans: Vec<String>) -> Result<(Vec<Vec<u8>>, u32)> {
+        self.explore(plans).await
     }
 }

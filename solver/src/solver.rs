@@ -1,10 +1,11 @@
-use crate::api::ApiClient;
+use crate::api_trait::ApiClientTrait;
 use crate::graph::Graph;
 use anyhow::Result;
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 
 pub struct Solver {
-    api: ApiClient,
+    api: Arc<dyn ApiClientTrait>,
     pub graph: Graph,
     pub frontier: VecDeque<usize>,
     pub explored: HashSet<usize>,
@@ -12,7 +13,7 @@ pub struct Solver {
 }
 
 impl Solver {
-    pub fn new(api: ApiClient, walk_length: usize) -> Self {
+    pub fn new(api: Arc<dyn ApiClientTrait>, walk_length: usize) -> Self {
         Self {
             api,
             graph: Graph::new(),
@@ -118,13 +119,12 @@ impl Solver {
                 for (door_num, &label) in neighbor_labels.iter().enumerate() {
                     let neighbor_path = format!("{}{}", current_path, door_num);
                     
-                    // Check if we already have a room at this path
-                    if let Some(existing_room_id) = self.graph.find_room_by_path(&neighbor_path) {
-                        println!("    Door {} -> existing room {} (already mapped)", 
-                                door_num, existing_room_id);
-                        // Connect the door
-                        self.graph.connect_rooms(current_room, door_num, existing_room_id, 0);
-                        continue;
+                    // Check if this door is already connected from the current room
+                    if let Some(room) = self.graph.rooms.get(&current_room) {
+                        if room.doors[door_num].is_some() {
+                            println!("    Door {} -> already connected", door_num);
+                            continue;
+                        }
                     }
                     
                     // Look for existing rooms with the same label and check equivalence
@@ -147,7 +147,7 @@ impl Solver {
                         if self.are_equal(temp_room_id, existing_room).await.unwrap_or(false) {
                             println!("    Door {} -> existing room {} (equivalent, label {})", 
                                     door_num, existing_room, label);
-                            self.graph.connect_rooms(current_room, door_num, existing_room, 0);
+                            self.graph.connect_one_way(current_room, door_num, existing_room);
                             found_existing = true;
                             
                             // Remove the temporary room
@@ -161,7 +161,7 @@ impl Solver {
                         // Keep the new room
                         println!("    Door {} -> NEW room {} (label {})", 
                                 door_num, temp_room_id, label);
-                        self.graph.connect_rooms(current_room, door_num, temp_room_id, 0);
+                        self.graph.connect_one_way(current_room, door_num, temp_room_id);
                         self.frontier.push_back(temp_room_id);
                     }
                 }
@@ -200,43 +200,34 @@ impl Solver {
         
         // For each connection, find the return door
         for (from_room, from_door, to_room) in connections_to_check {
-            let from_path = self.get_path_to_room(from_room);
-            let forward_path = format!("{}{}", from_path, from_door);
-            
-            // Explore from the target room to find which door leads back
             let to_path = self.get_path_to_room(to_room);
             
-            // If we don't have a path to the target room, use the forward path
-            let actual_to_path = if to_path.is_empty() && to_room != 0 {
-                forward_path.clone()
-            } else {
-                to_path
-            };
-            
-            // Try each door from the target room to see which leads back to from_room
+            // Explore all doors from the target room
             let mut plans = Vec::new();
             for door in 0..6 {
-                plans.push(format!("{}{}", actual_to_path, door));
+                plans.push(format!("{}{}", to_path, door));
             }
             
             let (results, _) = self.api.explore(plans).await?;
             
             // Find which door leads back to from_room
+            // We need to check if the final room reached is equivalent to from_room
             for (door, result) in results.iter().enumerate() {
-                // Check if this path leads back to from_room
-                // We can check by comparing the label sequence
-                if let Some(&last_label) = result.last() {
-                    if let Some(from_room_obj) = self.graph.rooms.get(&from_room) {
-                        if last_label == from_room_obj.label {
-                            // This might be the return door, verify by checking connectivity
-                            // For simplicity, assume the first door with matching label is correct
-                            self.graph.connect_rooms(from_room, from_door, to_room, door);
-                            println!("  Room {} door {} <-> Room {} door {}", 
-                                    from_room, from_door, to_room, door);
-                            break;
-                        }
-                    }
+                // Create a temp room for this path result
+                let temp_room_id = self.graph.rooms.len() + 100 + door;
+                let test_path = format!("{}{}", to_path, door);
+                self.graph.path_to_room.insert(temp_room_id, test_path);
+                
+                // Check if this leads back to from_room using are_equal
+                if self.are_equal(temp_room_id, from_room).await.unwrap_or(false) {
+                    self.graph.connect_rooms(from_room, from_door, to_room, door);
+                    println!("  Room {} door {} <-> Room {} door {}", 
+                            from_room, from_door, to_room, door);
+                    self.graph.path_to_room.remove(&temp_room_id);
+                    break;
                 }
+                
+                self.graph.path_to_room.remove(&temp_room_id);
             }
         }
         

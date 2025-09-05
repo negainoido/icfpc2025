@@ -1,4 +1,6 @@
 mod api;
+mod api_trait;
+mod mock_api;
 mod graph;
 mod solver;
 mod test;
@@ -8,6 +10,9 @@ use anyhow::Result;
 use clap::Parser;
 use solver::Solver;
 use api::ApiClient;
+use api_trait::ApiClientTrait;
+use mock_api::MockApiClient;
+use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(name = "ICFPC 2025 Solver")]
@@ -29,6 +34,10 @@ struct Args {
     /// Random walk length for equivalence checking
     #[arg(long, default_value = "10")]
     walk_length: usize,
+
+    /// Use mock API instead of real API
+    #[arg(long)]
+    mock: bool,
 }
 
 // Problem size configuration as per the issue
@@ -62,8 +71,14 @@ async fn main() -> Result<()> {
     println!("Base URL: {}", args.base_url);
     println!();
 
-    // Create API client
-    let api = ApiClient::new(args.base_url.clone(), team_id.clone());
+    // Create API client (mock or real based on flag)
+    let api: Arc<dyn ApiClientTrait> = if args.mock {
+        println!("Using MOCK API client");
+        Arc::new(MockApiClient::new())
+    } else {
+        println!("Using REAL API client");
+        Arc::new(ApiClient::new(args.base_url.clone(), team_id.clone()))
+    };
 
     // Select the problem
     println!("Selecting problem: {}", args.problem);
@@ -80,8 +95,8 @@ async fn main() -> Result<()> {
     println!("\n=== Starting Exploration ===\n");
     solver.explore(problem_size).await?;
     
-    // Discover return doors
-    solver.discover_return_doors().await?;
+    // Skip return door discovery - not needed for correct solution
+    // solver.discover_return_doors().await?;
 
     // Output the graph
     solver.output_graph();
@@ -91,8 +106,27 @@ async fn main() -> Result<()> {
     println!("\n=== Submission Map ===");
     println!("{}", serde_json::to_string_pretty(&submission_map)?);
 
-    println!("\n=== Submitting Solution ===");
-    submit_solution(&args.base_url, &team_id, submission_map).await?;
+    // Only submit if not using mock
+    if !args.mock {
+        println!("\n=== Submitting Solution ===");
+        submit_solution(&args.base_url, &team_id, submission_map).await?;
+    } else {
+        println!("\n=== Mock mode: Checking solution ===");
+        // Check solution with mock API
+        let mock_api = MockApiClient::new();
+        match mock_api.check_solution(&submission_map) {
+            Ok(correct) => {
+                if correct {
+                    println!("✅ Solution is CORRECT!");
+                } else {
+                    println!("❌ Solution is INCORRECT");
+                }
+            }
+            Err(e) => {
+                println!("Error checking solution: {}", e);
+            }
+        }
+    }
 
     Ok(())
 }

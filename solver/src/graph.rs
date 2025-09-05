@@ -60,6 +60,12 @@ impl Graph {
             r2.connect_door(door2, room1, door1);
         }
     }
+    
+    pub fn connect_one_way(&mut self, from_room: usize, from_door: usize, to_room: usize) {
+        if let Some(room) = self.rooms.get_mut(&from_room) {
+            room.doors[from_door] = Some((to_room, 0)); // We don't track the return door
+        }
+    }
 
     pub fn find_room_by_path(&self, path: &str) -> Option<usize> {
         if path.is_empty() {
@@ -158,47 +164,60 @@ impl Graph {
         use serde_json::json;
 
         let mut room_map = HashMap::new();
-        let mut room_index = 0;
         
-        // Create room index mapping
-        for room_id in self.rooms.keys() {
-            room_map.insert(*room_id, room_index);
-            room_index += 1;
+        // Ensure starting room is always index 0
+        room_map.insert(self.starting_room, 0);
+        let mut room_index = 1;
+        
+        // Create room index mapping for other rooms
+        let mut sorted_room_ids: Vec<usize> = self.rooms.keys().cloned().collect();
+        sorted_room_ids.sort();
+        
+        for room_id in sorted_room_ids {
+            if room_id != self.starting_room {
+                room_map.insert(room_id, room_index);
+                room_index += 1;
+            }
         }
 
-        let rooms: Vec<u8> = self.rooms
-            .iter()
-            .map(|(_, room)| room.label)
-            .collect();
+        // Build rooms array in the correct order
+        let mut rooms = vec![0u8; self.rooms.len()];
+        for (room_id, room) in &self.rooms {
+            let index = room_map[room_id];
+            rooms[index] = room.label;
+        }
 
         let mut connections = Vec::new();
-        let mut seen_connections = HashSet::new();
 
         for (room_id, room) in &self.rooms {
             let from_index = room_map[room_id];
             
             for (door_num, connection) in room.doors.iter().enumerate() {
-                if let Some((to_room_id, to_door)) = connection {
-                    // Skip if the target room doesn't exist (was merged)
+                if let Some((to_room_id, _to_door)) = connection {
+                    // Skip if the target room doesn't exist
                     if !room_map.contains_key(to_room_id) {
                         continue;
                     }
                     let to_index = room_map[to_room_id];
                     
-                    // Create a canonical form to avoid duplicates
-                    let connection_key = if from_index < to_index {
-                        (from_index, door_num, to_index, *to_door)
-                    } else {
-                        (to_index, *to_door, from_index, door_num)
-                    };
-
-                    if !seen_connections.contains(&connection_key) {
-                        seen_connections.insert(connection_key);
-                        connections.push(json!({
-                            "from": {"room": from_index, "door": door_num},
-                            "to": {"room": to_index, "door": to_door}
-                        }));
+                    // For one-way connections, we need to find the return door
+                    // by checking the target room's connections back to this room
+                    let mut return_door = 0;
+                    if let Some(target_room) = self.rooms.get(to_room_id) {
+                        for (d, conn) in target_room.doors.iter().enumerate() {
+                            if let Some((back_room_id, _)) = conn {
+                                if *back_room_id == *room_id {
+                                    return_door = d;
+                                    break;
+                                }
+                            }
+                        }
                     }
+                    
+                    connections.push(json!({
+                        "from": {"room": from_index, "door": door_num},
+                        "to": {"room": to_index, "door": return_door}
+                    }));
                 }
             }
         }
