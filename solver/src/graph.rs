@@ -179,6 +179,10 @@ impl Graph {
             
             for (door_num, connection) in room.doors.iter().enumerate() {
                 if let Some((to_room_id, to_door)) = connection {
+                    // Skip if the target room doesn't exist (was merged)
+                    if !room_map.contains_key(to_room_id) {
+                        continue;
+                    }
                     let to_index = room_map[to_room_id];
                     
                     // Create a canonical form to avoid duplicates

@@ -92,66 +92,66 @@ impl Solver {
                 let neighbor_labels = self.gather_neighbor(current_path.clone()).await?;
                 println!("Found neighbors with labels: {:?}", neighbor_labels);
 
-                let mut new_rooms = Vec::new();
-
                 // Process each neighbor
                 for (door_num, &label) in neighbor_labels.iter().enumerate() {
                     let neighbor_path = format!("{}{}", current_path, door_num);
                     
                     // Check if we already have a room at this path
                     if let Some(existing_room_id) = self.graph.find_room_by_path(&neighbor_path) {
-                        // Room already exists in graph
-                        new_rooms.push(existing_room_id);
-                    } else {
+                        // Room already exists in graph, just ensure connection
+                        println!("Door {} leads to existing room {} at path '{}'", door_num, existing_room_id, neighbor_path);
+                        // Connection already exists from initial creation
+                        continue;
+                    }
+                    
+                    // Check if this neighbor is equal to any existing room with the same label
+                    let mut found_match = false;
+                    let existing_rooms_with_label: Vec<usize> = self.graph.rooms
+                        .iter()
+                        .filter(|(_, room)| room.label == label)
+                        .map(|(id, _)| *id)
+                        .collect();
+                    
+                    for existing_room_id in existing_rooms_with_label {
+                        println!("Checking if neighbor at door {} is room {} (both have label {})",
+                                 door_num, existing_room_id, label);
+                        
+                        // Create a temporary room to test equivalence
+                        let temp_room_id = self.graph.add_room(label);
+                        self.graph.path_to_room.insert(temp_room_id, neighbor_path.clone());
+                        
+                        if self.are_equal(temp_room_id, existing_room_id).await? {
+                            println!("Door {} leads to existing room {}", door_num, existing_room_id);
+                            // Connect to the existing room, finding the correct return door
+                            self.graph.connect_rooms(current_room, door_num, existing_room_id, 0);
+                            found_match = true;
+                            
+                            // Remove the temporary room
+                            self.graph.rooms.remove(&temp_room_id);
+                            self.graph.path_to_room.remove(&temp_room_id);
+                            break;
+                        } else {
+                            // Remove the temporary room
+                            self.graph.rooms.remove(&temp_room_id);
+                            self.graph.path_to_room.remove(&temp_room_id);
+                        }
+                    }
+                    
+                    if !found_match {
                         // Create new room
                         let new_room_id = self.graph.add_room(label);
                         self.graph.path_to_room.insert(new_room_id, neighbor_path.clone());
-                        self.graph.connect_rooms(current_room, door_num, new_room_id, 0); // Will update return door later
-                        new_rooms.push(new_room_id);
+                        self.graph.connect_rooms(current_room, door_num, new_room_id, 0);
+                        
+                        // Add to frontier if not explored
+                        if !self.explored.contains(&new_room_id) {
+                            self.frontier.push_back(new_room_id);
+                        }
+                        
                         println!("Created new room {} with label {} at path '{}'", new_room_id, label, neighbor_path);
                     }
                 }
 
-                // Check for equivalent rooms - compare new rooms with ALL existing rooms
-                println!("Checking for equivalent rooms...");
-                let mut merged = HashSet::new();
-                
-                // For each new room, check if it's equivalent to any existing room with the same label
-                for &new_room_id in &new_rooms {
-                    if merged.contains(&new_room_id) {
-                        continue;
-                    }
-                    
-                    let new_room_label = self.graph.rooms[&new_room_id].label;
-                    
-                    // Check against all existing rooms with the same label
-                    let existing_rooms: Vec<usize> = self.graph.rooms
-                        .iter()
-                        .filter(|(id, room)| **id != new_room_id && room.label == new_room_label)
-                        .map(|(id, _)| *id)
-                        .collect();
-                    
-                    for existing_room_id in existing_rooms {
-                        if !merged.contains(&new_room_id) {
-                            println!("Checking if room {} and room {} are equivalent (both have label {})",
-                                     new_room_id, existing_room_id, new_room_label);
-                            
-                            if self.are_equal(new_room_id, existing_room_id).await? {
-                                println!("Rooms {} and {} are equivalent, merging", new_room_id, existing_room_id);
-                                self.graph.merge_rooms(existing_room_id, new_room_id);
-                                merged.insert(new_room_id);
-                                break; // No need to check further once merged
-                            }
-                        }
-                    }
-                }
-
-                // Add unmerged, unexplored rooms to frontier
-                for room in new_rooms {
-                    if !merged.contains(&room) && !self.explored.contains(&room) {
-                        self.frontier.push_back(room);
-                    }
-                }
 
                 self.explored.insert(current_room);
                 
@@ -163,10 +163,52 @@ impl Solver {
             }
         }
 
-        // Skip discovering return doors for now - it's too expensive
-        // println!("\nDiscovering return doors...");
-        // self.discover_return_doors().await?;
+        // Discover return doors - simplified version
+        println!("\nDiscovering return doors...");
+        self.discover_simple_return_doors().await?;
 
+        Ok(())
+    }
+
+    async fn discover_simple_return_doors(&mut self) -> Result<()> {
+        // For probatio (3 rooms), we need to discover the correct return doors
+        // We'll test each connection to find the correct return door
+        let room_ids: Vec<usize> = self.graph.rooms.keys().cloned().collect();
+        
+        for room_id in room_ids {
+            let room = self.graph.rooms[&room_id].clone();
+            
+            for (door, connection) in room.doors.iter().enumerate() {
+                if let Some((target_room_id, _current_return_door)) = connection {
+                    // We have a connection but need to find the correct return door
+                    // Test each door of the target room to see which one leads back
+                    let target_path = self.get_path_to_room(*target_room_id);
+                    
+                    for return_door in 0..6 {
+                        let test_path = format!("{}{}", target_path, return_door);
+                        let (results, _) = self.api.explore(vec![test_path.clone()]).await?;
+                        
+                        if let Some(result) = results.get(0) {
+                            if result.len() >= 2 {
+                                let final_label = result[result.len() - 1];
+                                // Check if this leads back to our original room
+                                if final_label == room.label {
+                                    // This might be the return door - verify by checking path length
+                                    if result.len() == target_path.len() + 2 {
+                                        // Correct return door found
+                                        self.graph.connect_rooms(room_id, door, *target_room_id, return_door);
+                                        println!("Connected room {} door {} <-> room {} door {}", 
+                                                room_id, door, target_room_id, return_door);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         Ok(())
     }
 
