@@ -49,6 +49,7 @@ from z3 import (
     Datatype,
     simplify,
     sat,
+    set_option,
 )
 
 # ----------------------------- helpers -----------------------------
@@ -232,7 +233,11 @@ def main():
     )
     ap.add_argument("--minN", type=int, default=1, help="Min N to try if sweeping")
     ap.add_argument("--maxN", type=int, default=128, help="Max N to try if sweeping")
+    ap.add_argument("--verbose", type=int, default=0, help="Set Z3 solver verbosity level (default: 0)")
     args = ap.parse_args()
+
+    if args.verbose > 0:
+        set_option(verbose=args.verbose)
 
     with open(args.json, "r", encoding="utf-8") as f:
         data = json.load(f)
