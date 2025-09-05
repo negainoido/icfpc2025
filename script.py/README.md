@@ -36,3 +36,16 @@ uv run ./server.py
 `/select` するときに任意の `team_id` を受け付けて自動で登録する.
 重複しないようにだけ注意.
 
+problemName は本来の
+
+```
+probatio: 3,
+primus: 6,
+secundus: 12,
+tertius: 18,
+quartus: 24,
+quintus: 30,
+```
+
+以外に直接 1 以上の整数を問題名としてもよい.
+このときその数を部屋数として問題を作る.
