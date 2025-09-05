@@ -42,7 +42,6 @@ def cli():
 def select(problem_name: str):
     """問題を選択する
 
-    TEAM_ID: /registerで取得したチームIDを環境変数で渡す
     PROBLEM_NAME: 選択する問題名
 
     利用可能な問題:
@@ -70,7 +69,6 @@ def select(problem_name: str):
 def explore(plans: tuple):
     """エディフィキウムを探検する
 
-    TEAM_ID: /registerで取得したチームID
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
 
     \b
@@ -93,7 +91,6 @@ def explore(plans: tuple):
 def guess(map_file):
     """地図を提出する
 
-    TEAM_ID: /registerで取得したチームID
     MAP_FILE: 地図データのJSONファイル
 
     \b
@@ -153,8 +150,6 @@ def guess(map_file):
 )
 def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
     """コマンドラインで直接地図を指定して提出する
-
-    TEAM_ID: /registerで取得したチームID
 
     \b
     例:
