@@ -1,4 +1,9 @@
-import json, math
+import json
+import math
+import os
+import glob
+from typing import List, Optional, Tuple
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import RegularPolygon, FancyArrowPatch, Arc
 
@@ -82,10 +87,14 @@ def layout_positions(N, radius=4.0):
     return pos
 
 
-def visualize_map(map_json, output=None, figsize=(8, 8)):
+def draw_map_on_axes(ax, map_json):
+    """Draw a map JSON on a provided Axes, clearing it first.
+
+    Returns a tuple of (fig, ax) for convenience.
+    """
+    ax.clear()
     N, rooms, conns, start = normalize_map(map_json)
     pos = layout_positions(N, radius=max(4.0, 2.0 + 0.6 * N))
-    fig, ax = plt.subplots(figsize=figsize)
 
     r_hex = 1.0
     door_anchor = {}  # (room, door) -> (x,y,angle)
@@ -123,10 +132,158 @@ def visualize_map(map_json, output=None, figsize=(8, 8)):
     ax.set_axis_off()
     ax.relim()
     ax.autoscale_view()
+    return ax.figure, ax
 
+
+def visualize_map(map_json, output=None, figsize=(8, 8)):
+    fig, ax = plt.subplots(figsize=figsize)
+    draw_map_on_axes(ax, map_json)
     if output:
         plt.savefig(output, bbox_inches="tight", dpi=220)
     return fig, ax
+
+
+def list_sequence_files(pattern: str) -> List[str]:
+    """Return a lexicographically sorted list of files for a glob pattern."""
+    files = glob.glob(pattern)
+    files.sort()
+    return files
+
+
+def load_json(path: str):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def interactive_browse(files: List[str], figsize: Tuple[float, float] = (8, 8)):
+    """Open a window and allow stepping through frames with arrow keys.
+
+    Keys: left/right (or 'p'/'n'), space=next, home/end, 'q' to close.
+    """
+    if not files:
+        raise ValueError("No input files to browse.")
+    fig, ax = plt.subplots(figsize=figsize)
+    state = {"idx": 0}
+
+    def render():
+        i = state["idx"]
+        m = load_json(files[i])
+        draw_map_on_axes(ax, m)
+        fig.suptitle(f"{i+1}/{len(files)}: {os.path.basename(files[i])}")
+        fig.canvas.draw_idle()
+
+    def on_key(event):
+        key = (event.key or "").lower()
+        if key in ("right", " ", "n"):
+            state["idx"] = (state["idx"] + 1) % len(files)
+            render()
+        elif key in ("left", "p"):
+            state["idx"] = (state["idx"] - 1) % len(files)
+            render()
+        elif key == "home":
+            state["idx"] = 0
+            render()
+        elif key == "end":
+            state["idx"] = len(files) - 1
+            render()
+        elif key == "q":
+            plt.close(fig)
+
+    fig.canvas.mpl_connect("key_press_event", on_key)
+    render()
+    plt.show()
+
+
+def export_animation(
+    files: List[str],
+    output_path: str,
+    figsize: Tuple[float, float] = (8, 8),
+    fps: float = 2.0,
+    save_frames_dir: Optional[str] = None,
+):
+    """Export an animation from a sequence of map jsons.
+
+    Supports .gif natively. Attempts .apng if Pillow supports it; otherwise
+    falls back to saving per-frame PNGs when save_frames_dir is provided.
+    """
+    if not files:
+        raise ValueError("No input files to animate.")
+
+    # Prepare figure reused for each frame
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Optionally save frames individually
+    if save_frames_dir:
+        os.makedirs(save_frames_dir, exist_ok=True)
+
+    # Try PIL for animated outputs
+    pil_ok = False
+    try:
+        from PIL import Image
+        import numpy as np
+
+        pil_ok = True
+    except Exception:
+        Image = None  # type: ignore
+        np = None  # type: ignore
+
+    frames = []
+    for i, path in enumerate(files):
+        m = load_json(path)
+        draw_map_on_axes(ax, m)
+        fig.suptitle(f"{i+1}/{len(files)}: {os.path.basename(path)}")
+        # Save individual frame if requested
+        if save_frames_dir:
+            out_png = os.path.join(save_frames_dir, f"frame-{i:06d}.png")
+            fig.savefig(out_png, bbox_inches="tight", dpi=220)
+
+        if pil_ok:
+            fig.canvas.draw()
+            w, h = fig.canvas.get_width_height()
+            buf = fig.canvas.tostring_rgb()
+            arr = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 3))
+            frames.append(Image.fromarray(arr))
+
+    # Attempt to save animation if PIL available
+    ext = os.path.splitext(output_path)[1].lower()
+    if pil_ok and frames:
+        duration_ms = int(1000.0 / max(1e-9, fps))
+        if ext == ".gif":
+            frames[0].save(
+                output_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=duration_ms,
+                loop=0,
+                optimize=False,
+            )
+            return
+        elif ext in (".apng", ".png"):
+            try:
+                frames[0].save(
+                    output_path,
+                    save_all=True,
+                    append_images=frames[1:],
+                    duration=duration_ms,
+                    loop=0,
+                    optimize=False,
+                    format="PNG",
+                )
+                return
+            except Exception:
+                # Fall through to frame dump if not supported
+                pass
+
+    # If we get here, we couldn't write the requested animation directly
+    if not save_frames_dir:
+        raise RuntimeError(
+            "Animated export requires Pillow for .gif/.apng. "
+            "Rerun with --save-frames to get per-frame PNGs."
+        )
+
+    # Otherwise, frames were saved individually already.
+    print(
+        f"Saved {len(files)} frames under '{save_frames_dir}'. Combine externally if needed.")
 
 
 def main():
@@ -135,17 +292,56 @@ def main():
     ap = argparse.ArgumentParser(
         description="Curved visualization for ICFP 2025 Ædificium map"
     )
-    ap.add_argument("--input", required=True, help="map.json")
+    ap.add_argument("--input", help="Single map.json (backward compatible)")
+    ap.add_argument(
+        "--glob",
+        help="Glob for sequence, e.g. 'example/map-probatio-solver-*.json'",
+    )
     ap.add_argument(
         "--output", default=None, help="output image path (e.g., map_curvy.png)"
     )
+    ap.add_argument(
+        "--animate-output",
+        default=None,
+        help="Animation file path (.gif or .apng). Implies --glob",
+    )
+    ap.add_argument(
+        "--save-frames",
+        default=None,
+        help="Directory to save per-frame PNGs when animating",
+    )
+    ap.add_argument("--fps", type=float, default=2.0, help="Animation FPS")
     ap.add_argument("--figsize", default="8,8", help="figure size W,H")
     args = ap.parse_args()
+
+    W, H = [float(x) for x in args.figsize.split(",")]
+
+    if args.animate_output or args.glob:
+        if not args.glob:
+            raise SystemExit("--animate-output requires --glob to specify frames")
+        files = list_sequence_files(args.glob)
+        if not files:
+            raise SystemExit(f"No files matched glob: {args.glob}")
+        if args.animate_output:
+            export_animation(
+                files,
+                args.animate_output,
+                figsize=(W, H),
+                fps=args.fps,
+                save_frames_dir=args.save_frames,
+            )
+        else:
+            # Interactive stepping through frames
+            interactive_browse(files, figsize=(W, H))
+        return
+
+    # Single-file mode (default/backward-compatible)
+    if not args.input:
+        raise SystemExit("Either --input or --glob is required")
 
     with open(args.input, "r", encoding="utf-8") as f:
         m = json.load(f)
 
-    W, H = [float(x) for x in args.figsize.split(",")]
     visualize_map(m, output=args.output, figsize=(W, H))
     if not args.output:
         plt.show()
