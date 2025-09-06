@@ -86,16 +86,14 @@ def main():
     # Team selection
     all_teams = sorted(df["team_name"].unique())
 
-    # Default selection: top 10 teams + negainoido if not in top 10
-    if len(all_teams) <= 10:
-        default_teams = all_teams
-    else:
-        default_teams = all_teams[:10]
-        # Add negainoido if not already included
-        negainoido_teams = [team for team in all_teams if team.lower() == "negainoido"]
-        for team in negainoido_teams:
-            if team not in default_teams:
-                default_teams.append(team)
+    # Default selection: top 10 teams by score + negainoido if not in top 10
+    latest_timestamp = df["timestamp"].max()
+    latest_scores = df[df["timestamp"] == latest_timestamp].sort_values("score", ascending=False)
+    top_10_teams = latest_scores["team_name"].head(10).tolist()
+    
+    default_teams = top_10_teams
+    if "negainoido" not in default_teams:
+        default_teams.append("negainoido")
 
     selected_teams = st.multiselect(
         "Select teams to display", all_teams, default=default_teams
