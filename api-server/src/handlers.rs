@@ -4,9 +4,9 @@ use tracing::error;
 
 use crate::{
     database::{
-        abort_session, complete_session, create_session, get_active_session,
+        abort_session, complete_session, create_session_if_no_active, fail_session, get_active_session,
         get_active_session_by_user, get_all_sessions, get_api_logs_for_session, get_session_by_id,
-        has_active_session, log_api_request,
+        log_api_request,
     },
     icfpc_client::IcfpClient,
     models::{
@@ -73,18 +73,17 @@ pub async fn select(
     State(pool): State<MySqlPool>,
     Json(payload): Json<SelectRequest>,
 ) -> Result<Json<SelectResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if has_active_session(&pool).await.map_err(ApiError::from)? {
-        return Err(ApiError::SessionAlreadyActive.into());
-    }
+    // まずトランザクション内でセッションを作成（アクティブセッションがある場合は失敗）
+    let session = create_session_if_no_active(&pool, payload.user_name.as_deref())
+        .await
+        .map_err(ApiError::from)?;
 
     let icfp_client = IcfpClient::new()?;
     
+    // セッション作成成功後にICFPCのAPIを呼び出し
     match icfp_client.select(&payload).await {
         Ok(upstream_response) => {
-            let session = create_session(&pool, payload.user_name.as_deref())
-                .await
-                .map_err(ApiError::from)?;
-
+            // API呼び出し成功時のログを記録
             log_api_request(
                 &pool,
                 &session.session_id,
@@ -104,26 +103,30 @@ pub async fn select(
             Ok(Json(response))
         }
         Err(api_error) => {
-            // エラーの場合でも一時的なセッションを作成してログを記録
-            if let Ok(session) = create_session(&pool, payload.user_name.as_deref()).await {
-                let error_msg = format!("{}", api_error);
-                let status_code = match api_error {
-                    ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-                    ApiError::Http(_) => StatusCode::BAD_GATEWAY,
-                    ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
-                    ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
-                    ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-                };
-                let _ = log_api_request(
-                    &pool,
-                    &session.session_id,
-                    "select",
-                    Some(&serde_json::to_string(&payload).unwrap_or_default()),
-                    Some(&error_msg),
-                    Some(status_code.as_u16() as i32),
-                )
-                .await;
-            }
+            // ICFPC API呼び出し失敗時はセッションをfailedステータスに変更
+            let _ = fail_session(&pool, &session.session_id).await;
+            
+            // エラーログを記録
+            let error_msg = format!("{}", api_error);
+            let status_code = match api_error {
+                ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                ApiError::Http(_) => StatusCode::BAD_GATEWAY,
+                ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
+                ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
+                ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            };
+            
+            // エラーログを記録（セッションはfailedになっているので外部キー制約は問題なし）
+            let _ = log_api_request(
+                &pool,
+                &session.session_id,
+                "select",
+                Some(&serde_json::to_string(&payload).unwrap_or_default()),
+                Some(&error_msg),
+                Some(status_code.as_u16() as i32),
+            )
+            .await;
+            
             Err(api_error.into())
         }
     }

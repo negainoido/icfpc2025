@@ -87,6 +87,60 @@ pub async fn create_session(
     Ok(session)
 }
 
+pub async fn create_session_if_no_active(
+    pool: &MySqlPool,
+    user_name: Option<&str>,
+) -> Result<Session, ApiError> {
+    let mut tx = pool.begin().await?;
+    
+    // トランザクション内でアクティブセッションの存在をチェック
+    let active_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE status = 'active'")
+        .fetch_one(&mut *tx)
+        .await?;
+    
+    if active_count > 0 {
+        tx.rollback().await?;
+        return Err(ApiError::SessionAlreadyActive);
+    }
+    
+    // アクティブセッションが存在しない場合のみセッション作成
+    let session_id = Uuid::new_v4().to_string();
+    let result = sqlx::query("INSERT INTO sessions (session_id, user_name, status) VALUES (?, ?, 'active')")
+        .bind(&session_id)
+        .bind(user_name)
+        .execute(&mut *tx)
+        .await?;
+    
+    let id = result.last_insert_id() as i32;
+    let session = sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE id = ?")
+        .bind(id)
+        .fetch_one(&mut *tx)
+        .await?;
+    
+    tx.commit().await?;
+    Ok(session)
+}
+
+pub async fn delete_session(pool: &MySqlPool, session_id: &str) -> Result<(), ApiError> {
+    sqlx::query("DELETE FROM sessions WHERE session_id = ?")
+        .bind(session_id)
+        .execute(pool)
+        .await?;
+    
+    Ok(())
+}
+
+pub async fn fail_session(pool: &MySqlPool, session_id: &str) -> Result<(), ApiError> {
+    sqlx::query(
+        "UPDATE sessions SET status = 'failed', completed_at = NOW() WHERE session_id = ?"
+    )
+    .bind(session_id)
+    .execute(pool)
+    .await?;
+    
+    Ok(())
+}
+
 pub async fn get_active_session(pool: &MySqlPool) -> Result<Option<Session>, ApiError> {
     let session =
         sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE status = 'active' LIMIT 1")
