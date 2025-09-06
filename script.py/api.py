@@ -12,18 +12,48 @@ from typing import Any
 
 import click
 import requests
+from dotenv import load_dotenv
 
 
 class API:
-    def __init__(self, team_id: str, base_url: str):
-        self.team_id = team_id
-        self.base_url = base_url
+    def __init__(
+        self,
+        base_url: str | None,
+        team_id: str | None,
+        client_id: str | None,
+        client_secret: str | None,
+        session_id: str | None = None,
+    ):
+        """API client
+
+        Parameters
+        ----------
+        base_url
+            本番直接/ローカルモックサーバに必要
+        team_id
+            本番直接/ローカルモックサーバに必要
+        client_id
+            garasubo.com に必要
+        client_secret
+            garasubo.com に必要
+        session_id
+            garasubo.com で続きから始める場合に必要
+        """
+        self.base_url = base_url or "https://negainoido.garasubo.com/api"
+        self.team_id = team_id or "team-" + str(random.randint(100000, 999999))
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.session_id = session_id
 
     def make_request(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """APIリクエストを送信し、レスポンスを返す"""
         url = f"{self.base_url}{endpoint}"
         try:
-            response = requests.post(url, json=data)
+            headers = {
+                "CF-Access-Client-Id": self.client_id,
+                "CF-Access-Client-Secret": self.client_secret,
+            }
+            response = requests.post(url, json=data, headers=headers)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -32,25 +62,44 @@ class API:
 
     def select(self, problem_name: str) -> dict[str, Any]:
         data = {"id": self.team_id, "problemName": problem_name}
-        return self.make_request("/select", data)
+        result = self.make_request("/select", data)
+        if "session_id" in result:
+            self.session_id = result["session_id"]
+            print(f"SessionId: {self.session_id}")
+        return result
 
     def explore(self, plans: list[str]):
-        data = {"id": self.team_id, "plans": plans}
+        data = {"id": self.team_id, "session_id": self.session_id, "plans": plans}
+        print(data)
         result = self.make_request("/explore", data)
         return result
 
     def guess(self, map_data: dict[str, Any]) -> dict[str, Any]:
-        data = {"id": self.team_id, "map": map_data}
+        data = {"id": self.team_id, "session_id": self.session_id, "map": map_data}
         return self.make_request("/guess", data)
 
+    def set_session(self, session_id: str | None):
+        if session_id:
+            self.session_id = session_id
 
+
+load_dotenv()
 TEAM_ID = os.environ.get("TEAM_ID")
-assert TEAM_ID, "環境変数TEAM_IDを設定して"
-BASE_URL = os.environ.get(
-    "API_HOST", "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
-)
-print("Using HOST:", BASE_URL)
-api = API(TEAM_ID, BASE_URL)
+API_HOST = os.environ.get("API_HOST")
+CLIENT_ID = os.environ.get("CLIENT_ID")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+
+if API_HOST:
+    print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
+    api = API(API_HOST, TEAM_ID, None, None)
+elif CLIENT_ID and CLIENT_SECRET:
+    print(f"Using garasubo.com API access as {CLIENT_ID}")
+    api = API(None, None, CLIENT_ID, CLIENT_SECRET)
+else:
+    print(
+        "Error: Please set either TEAM_ID and API_HOST, or CLIENT_ID and CLIENT_SECRET"
+    )
+    sys.exit(1)
 
 
 @click.group()
@@ -84,8 +133,9 @@ def select(problem_name: str):
 
 
 @cli.command()
+@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("plans", nargs=-1, required=True)
-def explore(plans: tuple):
+def explore(session_id: str | None, plans: tuple):
     """エディフィキウムを探検する
 
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
@@ -94,6 +144,8 @@ def explore(plans: tuple):
     例:
       python api.py explore "0" "12" "345"
     """
+    api.set_session(session_id)
+
     click.echo(f"{len(plans)}個のルートプランで探検中...")
     result = api.explore(list(plans))
 
@@ -108,8 +160,11 @@ def explore(plans: tuple):
 
 
 @cli.command()
+@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("N", type=int)
-def solve(n: int):
+def solve(session_id: str | None, n: int):
+    api.set_session(session_id)
+
     graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
     salt = "".join([random.choice("012345") for _ in range(n * 8)])
@@ -210,8 +265,9 @@ def solve(n: int):
 
 
 @cli.command()
+@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("map_file", type=click.File("r"))
-def guess(map_file):
+def guess(session_id: str | None, map_file):
     """地図を提出する
 
     MAP_FILE: 地図データのJSONファイル
@@ -227,6 +283,8 @@ def guess(map_file):
         ]
       }
     """
+    api.set_session(session_id)
+
     try:
         map_data = json.load(map_file)
     except json.JSONDecodeError as e:
@@ -269,7 +327,10 @@ def guess(map_file):
     multiple=True,
     help="接続の指定（形式: from_room,from_door,to_room,to_door）",
 )
-def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
+@click.option("--session-id", "-S", type=str, default=None)
+def guess_inline(
+    rooms: tuple, starting_room: int, connection: tuple, session_id: str | None
+):
     """コマンドラインで直接地図を指定して提出する
 
     \b
@@ -281,6 +342,8 @@ def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
             "エラー: 少なくとも1つの部屋を指定してください（-r オプション）", err=True
         )
         sys.exit(1)
+
+    api.set_session(session_id)
 
     connections = []
     for conn_str in connection:
