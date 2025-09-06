@@ -1,5 +1,4 @@
 import {
-  ApiResponse,
   SelectRequest,
   SelectResponse,
   ExploreRequest,
@@ -22,18 +21,13 @@ class ApiError extends Error {
   }
 }
 
-async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
     throw new ApiError(`HTTP ${response.status}: ${errorText}`, response.status);
   }
 
-  const result: ApiResponse<T> = await response.json();
-  if (!result.success) {
-    throw new ApiError(result.message || 'API request failed');
-  }
-
-  return result;
+  return await response.json();
 }
 
 // APIサーバーは自分と同じドメインで常に動いている
@@ -50,8 +44,7 @@ export const api = {
       body: JSON.stringify(request),
     });
 
-    const result = await handleResponse<SelectResponse>(response);
-    return result.data!;
+    return await handleResponse<SelectResponse>(response);
   },
 
   async explore(request: ExploreRequest): Promise<ExploreResponse> {
@@ -63,8 +56,7 @@ export const api = {
       body: JSON.stringify(request),
     });
 
-    const result = await handleResponse<ExploreResponse>(response);
-    return result.data!;
+    return await handleResponse<ExploreResponse>(response);
   },
 
   async guess(request: GuessRequest): Promise<GuessResponse> {
@@ -76,8 +68,7 @@ export const api = {
       body: JSON.stringify(request),
     });
 
-    const result = await handleResponse<GuessResponse>(response);
-    return result.data!;
+    return await handleResponse<GuessResponse>(response);
   },
 
   async getSessions(): Promise<SessionsListResponse> {
@@ -85,8 +76,7 @@ export const api = {
       method: 'GET',
     });
 
-    const result = await handleResponse<SessionsListResponse>(response);
-    return result.data!;
+    return await handleResponse<SessionsListResponse>(response);
   },
 
   async getCurrentSession(): Promise<Session | null> {
@@ -94,8 +84,7 @@ export const api = {
       method: 'GET',
     });
 
-    const result = await handleResponse<Session | null>(response);
-    return result.data || null;
+    return await handleResponse<Session | null>(response);
   },
 
   async getSessionDetail(sessionId: string): Promise<SessionDetail> {
@@ -103,8 +92,7 @@ export const api = {
       method: 'GET',
     });
 
-    const result = await handleResponse<SessionDetail>(response);
-    return result.data!;
+    return await handleResponse<SessionDetail>(response);
   },
 
   async abortSession(sessionId: string): Promise<void> {

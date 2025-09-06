@@ -8,7 +8,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 
 以下の環境変数が必要です：
 - `ICFPC_AUTH_TOKEN`: ICFPC本家APIの認証トークン（`/register`で得られるID）
-- `ICFPC_API_BASE_URL`: ICFPC本家APIのベースURL（デフォルト: https://icfpcontest2025.github.io/api）
+- `ICFPC_API_BASE_URL`: ICFPC本家APIのベースURL（デフォルト: 'https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/'）
 - `DATABASE_URL`: MySQLデータベース接続URL
 
 ## データベース
