@@ -499,43 +499,5 @@ def session_abort(session_id: str):
         click.echo(f"❌ セッション {session_id[:8]}... の中止に失敗しました")
 
 
-@cli.command()
-def example():
-    """使用例を表示する"""
-    click.echo("=== ICFPコンテスト2025 エディフィキウムツール 使用例 ===\n")
-
-    click.echo("0. 環境変数は TEAM_ID に設定する")
-    click.echo("1. 問題を選択:")
-    click.echo("   python main.py select probatio\n")
-
-    click.echo("2. 探検を実行:")
-    click.echo('   python main.py explore "0" "12" "345"\n')
-
-    click.echo("3. 地図ファイルから提出:")
-    click.echo("   python main.py guess map.json\n")
-
-    click.echo("4. コマンドラインから直接提出:")
-    click.echo(
-        '   python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
-    )
-
-    click.echo("5. セッション管理:")
-    click.echo("   python main.py sessions          # 全セッション一覧")
-    click.echo("   python main.py current           # 現在のアクティブセッション")
-    click.echo("   python main.py session-detail <SESSION_ID>  # セッション詳細")
-    click.echo("   python main.py abort <SESSION_ID> # セッション中止\n")
-
-    click.echo("地図ファイル（map.json）の例:")
-    example_map = {
-        "rooms": [0, 1, 2],
-        "startingRoom": 0,
-        "connections": [
-            {"from": {"room": 0, "door": 0}, "to": {"room": 1, "door": 3}},
-            {"from": {"room": 1, "door": 1}, "to": {"room": 2, "door": 2}},
-        ],
-    }
-    click.echo(json.dumps(example_map, indent=2, ensure_ascii=False))
-
-
 if __name__ == "__main__":
     cli()
