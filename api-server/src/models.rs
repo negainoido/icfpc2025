@@ -19,12 +19,6 @@ pub enum ApiError {
     InvalidRequest(String),
 }
 
-#[derive(Debug, Serialize)]
-pub struct ApiResponse<T> {
-    pub success: bool,
-    pub data: Option<T>,
-    pub message: Option<String>,
-}
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Session {
@@ -157,20 +151,3 @@ pub struct SessionsListResponse {
     pub sessions: Vec<Session>,
 }
 
-impl<T> ApiResponse<T> {
-    pub fn success(data: T, message: Option<String>) -> Self {
-        Self {
-            success: true,
-            data: Some(data),
-            message,
-        }
-    }
-
-    pub fn error(message: String) -> ApiResponse<()> {
-        ApiResponse {
-            success: false,
-            data: None,
-            message: Some(message),
-        }
-    }
-}

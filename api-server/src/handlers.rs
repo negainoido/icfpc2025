@@ -9,7 +9,7 @@ use crate::{
     },
     icfpc_client::IcfpClient,
     models::{
-        ApiError, ApiResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
+        ApiError, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
         GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
         SessionDetail, SessionsListResponse,
     },
@@ -33,7 +33,7 @@ impl From<ApiError> for StatusCode {
 pub async fn select(
     State(pool): State<MySqlPool>,
     Json(payload): Json<SelectRequest>,
-) -> Result<Json<ApiResponse<SelectResponse>>, StatusCode> {
+) -> Result<Json<SelectResponse>, StatusCode> {
     if has_active_session(&pool).await.map_err(StatusCode::from)? {
         return Err(StatusCode::from(ApiError::SessionAlreadyActive));
     }
@@ -62,16 +62,13 @@ pub async fn select(
         problem_name: upstream_response.problem_name,
     };
 
-    Ok(Json(ApiResponse::success(
-        response,
-        Some("Session created and select request completed".to_string()),
-    )))
+    Ok(Json(response))
 }
 
 pub async fn explore(
     State(pool): State<MySqlPool>,
     Json(payload): Json<ExploreRequest>,
-) -> Result<Json<ApiResponse<ExploreResponse>>, StatusCode> {
+) -> Result<Json<ExploreResponse>, StatusCode> {
     let session = get_active_session(&pool)
         .await
         .map_err(StatusCode::from)?
@@ -113,16 +110,13 @@ pub async fn explore(
         query_count: upstream_response.query_count,
     };
 
-    Ok(Json(ApiResponse::success(
-        response,
-        Some("Explore request completed".to_string()),
-    )))
+    Ok(Json(response))
 }
 
 pub async fn guess(
     State(pool): State<MySqlPool>,
     Json(payload): Json<GuessRequest>,
-) -> Result<Json<ApiResponse<GuessResponse>>, StatusCode> {
+) -> Result<Json<GuessResponse>, StatusCode> {
     let session = get_active_session(&pool)
         .await
         .map_err(StatusCode::from)?
@@ -167,43 +161,31 @@ pub async fn guess(
         correct: upstream_response.correct,
     };
 
-    Ok(Json(ApiResponse::success(
-        response,
-        Some("Guess request completed and session terminated".to_string()),
-    )))
+    Ok(Json(response))
 }
 
 pub async fn get_sessions(
     State(pool): State<MySqlPool>,
-) -> Result<Json<ApiResponse<SessionsListResponse>>, StatusCode> {
+) -> Result<Json<SessionsListResponse>, StatusCode> {
     let sessions = get_all_sessions(&pool).await.map_err(StatusCode::from)?;
 
     let response = SessionsListResponse { sessions };
 
-    Ok(Json(ApiResponse::success(
-        response,
-        Some("Sessions retrieved successfully".to_string()),
-    )))
+    Ok(Json(response))
 }
 
 pub async fn get_current_session(
     State(pool): State<MySqlPool>,
-) -> Result<Json<ApiResponse<Option<Session>>>, StatusCode> {
+) -> Result<Json<Option<Session>>, StatusCode> {
     let session = get_active_session(&pool).await.map_err(StatusCode::from)?;
 
-    let message = if session.is_some() {
-        Some("Current session retrieved successfully".to_string())
-    } else {
-        Some("No active session".to_string())
-    };
-
-    Ok(Json(ApiResponse::success(session, message)))
+    Ok(Json(session))
 }
 
 pub async fn get_session_detail(
     State(pool): State<MySqlPool>,
     axum::extract::Path(session_id): axum::extract::Path<String>,
-) -> Result<Json<ApiResponse<SessionDetail>>, StatusCode> {
+) -> Result<Json<SessionDetail>, StatusCode> {
     let session = get_session_by_id(&pool, &session_id)
         .await
         .map_err(StatusCode::from)?
@@ -215,16 +197,13 @@ pub async fn get_session_detail(
 
     let response = SessionDetail { session, api_logs };
 
-    Ok(Json(ApiResponse::success(
-        response,
-        Some("Session detail retrieved successfully".to_string()),
-    )))
+    Ok(Json(response))
 }
 
 pub async fn abort_session_handler(
     State(pool): State<MySqlPool>,
     axum::extract::Path(session_id): axum::extract::Path<String>,
-) -> Result<Json<ApiResponse<()>>, StatusCode> {
+) -> Result<StatusCode, StatusCode> {
     let session = get_session_by_id(&pool, &session_id)
         .await
         .map_err(StatusCode::from)?
@@ -251,8 +230,5 @@ pub async fn abort_session_handler(
     .await
     .map_err(StatusCode::from)?;
 
-    Ok(Json(ApiResponse::success(
-        (),
-        Some("Session aborted successfully".to_string()),
-    )))
+    Ok(StatusCode::OK)
 }
