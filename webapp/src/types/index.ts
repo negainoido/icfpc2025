@@ -1,24 +1,66 @@
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  createdAt: string;
-}
-
 export interface ApiResponse<T> {
-  data: T;
-  message?: string;
   success: boolean;
+  data?: T;
+  message?: string;
 }
 
-export interface Point2D {
-  x: number;
-  y: number;
+// Session Management
+export interface Session {
+  id: number;
+  session_id: string;
+  status: string;
+  created_at: string;
+  completed_at?: string;
 }
 
-export interface SpaceshipFileData {
-  filename: string;
-  content: string;
+// Select API Types
+export interface SelectRequest {
+  id: string;
+  problemName: string;
 }
 
-export type SpaceshipApiResponse = ApiResponse<SpaceshipFileData>;
+export interface SelectResponse {
+  session_id: string;
+  problemName: string;
+}
+
+// Explore API Types
+export interface ExploreRequest {
+  session_id: string;
+  id: string;
+  plans: string[];
+}
+
+export interface ExploreResponse {
+  session_id: string;
+  results: number[][];
+  queryCount: number;
+}
+
+// Guess API Types
+export interface DoorLocation {
+  room: number;
+  door: number;
+}
+
+export interface Connection {
+  from: DoorLocation;
+  to: DoorLocation;
+}
+
+export interface Map {
+  rooms: number[];
+  startingRoom: number;
+  connections: Connection[];
+}
+
+export interface GuessRequest {
+  session_id: string;
+  id: string;
+  map: Map;
+}
+
+export interface GuessResponse {
+  session_id: string;
+  correct: boolean;
+}
