@@ -12,7 +12,6 @@ const SessionsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadSessions();
@@ -71,7 +70,6 @@ const SessionsPage = () => {
       await loadSessions();
       await loadCurrentSession();
       setError(null);
-      alert('セッションを正常に中止しました');
     } catch (err) {
       console.error('Failed to abort session:', err);
       setError('セッションの中止に失敗しました');
