@@ -168,14 +168,13 @@ def solve(session_id: str | None, n: int):
 
     graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
-    salt = "".join([random.choice("012345") for _ in range(n * 8)])
     salts = [
         str(i) + "".join([random.choice("012345") for _ in range(5)]) for i in range(2)
     ]
     results = api.explore(salts)
     labels2node: dict[tuple[Any, ...], int] = {}
     labels_key = []
-    for i in range(len(salts)):
+    for i, salt in enumerate(salts):
         labels_key.append(tuple(results["results"][i][-len(salt) - 1 :]))
 
     labels2node[tuple(labels_key)] = 0
