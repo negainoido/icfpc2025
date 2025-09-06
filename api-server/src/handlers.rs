@@ -13,7 +13,7 @@ use crate::{
     models::{
         ApiError, ErrorResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
         GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
-        SessionDetail, SessionsListResponse,
+        SessionDetail, SessionsListResponse, SessionExport, SessionInfo, ApiHistoryEntry,
     },
 };
 
@@ -395,6 +395,56 @@ pub async fn abort_session_handler(
     }
 
     Ok(StatusCode::OK)
+}
+
+pub async fn export_session(
+    State(pool): State<MySqlPool>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<SessionExport>, (StatusCode, Json<ErrorResponse>)> {
+    let session = get_session_by_id(&pool, &session_id)
+        .await
+        .map_err(ApiError::from)?
+        .ok_or_else(|| ApiError::SessionNotFound)?;
+
+    let api_logs = get_api_logs_for_session(&pool, &session_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    let session_info = SessionInfo {
+        session_id: session.session_id,
+        user_name: session.user_name,
+        status: session.status,
+        created_at: session.created_at,
+        completed_at: session.completed_at,
+    };
+
+    let api_history: Vec<ApiHistoryEntry> = api_logs
+        .into_iter()
+        .map(|log| {
+            let request = log.request_body.as_ref().and_then(|body| {
+                serde_json::from_str(body).ok()
+            });
+            
+            let response = log.response_body.as_ref().and_then(|body| {
+                serde_json::from_str(body).ok()
+            });
+
+            ApiHistoryEntry {
+                endpoint: log.endpoint,
+                timestamp: log.created_at,
+                request,
+                response,
+                status: log.response_status,
+            }
+        })
+        .collect();
+
+    let export = SessionExport {
+        session_info,
+        api_history,
+    };
+
+    Ok(Json(export))
 }
 
 async fn execute_pending_select(

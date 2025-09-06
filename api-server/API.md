@@ -197,6 +197,40 @@ null
 }
 ```
 
+### `GET /api/sessions/{session_id}/export`
+
+特定のセッションの全情報とAPIログ履歴をJSON形式でエクスポートする。
+
+**レスポンス:**
+```json
+{
+  "session_info": {
+    "session_id": "uuid-string",
+    "user_name": "ユーザー名（null可）",
+    "status": "completed",
+    "created_at": "2025-09-06T01:00:00Z",
+    "completed_at": "2025-09-06T01:30:00Z"
+  },
+  "api_history": [
+    {
+      "endpoint": "select",
+      "timestamp": "2025-09-06T01:00:00Z",
+      "request": {
+        "problemName": "example"
+      },
+      "response": {
+        "problemName": "example"
+      },
+      "status": 200
+    },
+    ...
+  ]
+}
+```
+
+**エラーケース:**
+- 404 Not Found: 指定されたセッションIDが見つからない場合
+
 ### `PUT /api/sessions/{session_id}/abort`
 
 アクティブなセッションを強制的に中止する。セッションのステータスが`failed`に変更され、`completed_at`が現在時刻に設定される。

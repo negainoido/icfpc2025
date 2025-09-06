@@ -117,6 +117,17 @@ export const api = {
 
     await handleResponse<void>(response);
   },
+
+  async exportSession(sessionId: string): Promise<any> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/sessions/${sessionId}/export`,
+      {
+        method: 'GET',
+      }
+    );
+
+    return await handleResponse<any>(response);
+  },
 };
 
 export { ApiError };

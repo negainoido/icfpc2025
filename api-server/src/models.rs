@@ -162,3 +162,28 @@ pub struct SessionDetail {
 pub struct SessionsListResponse {
     pub sessions: Vec<Session>,
 }
+
+// Session export types
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionExport {
+    pub session_info: SessionInfo,
+    pub api_history: Vec<ApiHistoryEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub session_id: String,
+    pub user_name: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiHistoryEntry {
+    pub endpoint: String,
+    pub timestamp: DateTime<Utc>,
+    pub request: Option<serde_json::Value>,
+    pub response: Option<serde_json::Value>,
+    pub status: Option<i32>,
+}
