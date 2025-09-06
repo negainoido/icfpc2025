@@ -4,6 +4,7 @@ use axum::{
     response::Json,
 };
 use sqlx::MySqlPool;
+use tracing::error;
 
 use crate::{
     database::{
@@ -15,13 +16,16 @@ use crate::{
 
 impl From<ApiError> for StatusCode {
     fn from(err: ApiError) -> Self {
-        match err {
+        let status_code = match err {
             ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             ApiError::Http(_) => StatusCode::BAD_GATEWAY,
             ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
             ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
             ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-        }
+        };
+        
+        error!("API Error: {} (Status: {})", err, status_code.as_u16());
+        status_code
     }
 }
 
