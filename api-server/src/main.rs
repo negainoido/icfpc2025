@@ -12,18 +12,21 @@ mod icfpc_client;
 mod models;
 
 use database::{create_pool, init_database};
-use handlers::{explore, guess, select, get_sessions, get_current_session, get_session_detail, abort_session_handler};
+use handlers::{
+    abort_session_handler, explore, get_current_session, get_session_detail, get_sessions, guess,
+    select,
+};
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
-    
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
     let pool = create_pool().await.expect("Failed to create database pool");
-    
+
     // Initialize the database schema
     init_database(&pool)
         .await
@@ -41,7 +44,10 @@ async fn main() {
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/current", get(get_current_session))
         .route("/api/sessions/:session_id", get(get_session_detail))
-        .route("/api/sessions/:session_id/abort", put(abort_session_handler))
+        .route(
+            "/api/sessions/:session_id/abort",
+            put(abort_session_handler),
+        )
         .with_state(pool)
         .layer(cors);
 

@@ -1,4 +1,4 @@
-use crate::models::{ApiError, Session, ApiLog};
+use crate::models::{ApiError, ApiLog, Session};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
 use uuid::Uuid;
@@ -59,48 +59,45 @@ pub async fn has_active_session(pool: &MySqlPool) -> Result<bool, ApiError> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE status = 'active'")
         .fetch_one(pool)
         .await?;
-    
+
     Ok(count > 0)
 }
 
 pub async fn create_session(pool: &MySqlPool) -> Result<Session, ApiError> {
     let session_id = Uuid::new_v4().to_string();
-    
-    let result = sqlx::query(
-        "INSERT INTO sessions (session_id, status) VALUES (?, 'active')"
-    )
-    .bind(&session_id)
-    .execute(pool)
-    .await?;
+
+    let result = sqlx::query("INSERT INTO sessions (session_id, status) VALUES (?, 'active')")
+        .bind(&session_id)
+        .execute(pool)
+        .await?;
 
     let id = result.last_insert_id() as i32;
-    
+
     let session = sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE id = ?")
         .bind(id)
         .fetch_one(pool)
         .await?;
-    
+
     Ok(session)
 }
 
 pub async fn get_active_session(pool: &MySqlPool) -> Result<Option<Session>, ApiError> {
-    let session = sqlx::query_as::<_, Session>(
-        "SELECT * FROM sessions WHERE status = 'active' LIMIT 1"
-    )
-    .fetch_optional(pool)
-    .await?;
-    
+    let session =
+        sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE status = 'active' LIMIT 1")
+            .fetch_optional(pool)
+            .await?;
+
     Ok(session)
 }
 
 pub async fn complete_session(pool: &MySqlPool, session_id: &str) -> Result<(), ApiError> {
     sqlx::query(
-        "UPDATE sessions SET status = 'completed', completed_at = NOW() WHERE session_id = ?"
+        "UPDATE sessions SET status = 'completed', completed_at = NOW() WHERE session_id = ?",
     )
     .bind(session_id)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
@@ -111,7 +108,7 @@ pub async fn abort_session(pool: &MySqlPool, session_id: &str) -> Result<(), Api
     .bind(session_id)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
@@ -133,38 +130,40 @@ pub async fn log_api_request(
     .bind(response_status)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
 pub async fn get_all_sessions(pool: &MySqlPool) -> Result<Vec<Session>, ApiError> {
-    let sessions = sqlx::query_as::<_, Session>(
-        "SELECT * FROM sessions ORDER BY created_at DESC"
-    )
-    .fetch_all(pool)
-    .await?;
-    
+    let sessions = sqlx::query_as::<_, Session>("SELECT * FROM sessions ORDER BY created_at DESC")
+        .fetch_all(pool)
+        .await?;
+
     Ok(sessions)
 }
 
-pub async fn get_session_by_id(pool: &MySqlPool, session_id: &str) -> Result<Option<Session>, ApiError> {
-    let session = sqlx::query_as::<_, Session>(
-        "SELECT * FROM sessions WHERE session_id = ?"
-    )
-    .bind(session_id)
-    .fetch_optional(pool)
-    .await?;
-    
+pub async fn get_session_by_id(
+    pool: &MySqlPool,
+    session_id: &str,
+) -> Result<Option<Session>, ApiError> {
+    let session = sqlx::query_as::<_, Session>("SELECT * FROM sessions WHERE session_id = ?")
+        .bind(session_id)
+        .fetch_optional(pool)
+        .await?;
+
     Ok(session)
 }
 
-pub async fn get_api_logs_for_session(pool: &MySqlPool, session_id: &str) -> Result<Vec<ApiLog>, ApiError> {
+pub async fn get_api_logs_for_session(
+    pool: &MySqlPool,
+    session_id: &str,
+) -> Result<Vec<ApiLog>, ApiError> {
     let logs = sqlx::query_as::<_, ApiLog>(
-        "SELECT * FROM api_logs WHERE session_id = ? ORDER BY created_at ASC"
+        "SELECT * FROM api_logs WHERE session_id = ? ORDER BY created_at ASC",
     )
     .bind(session_id)
     .fetch_all(pool)
     .await?;
-    
+
     Ok(logs)
 }

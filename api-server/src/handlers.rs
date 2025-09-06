@@ -1,18 +1,18 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use sqlx::MySqlPool;
 use tracing::error;
 
 use crate::{
     database::{
-        complete_session, create_session, get_active_session, has_active_session, log_api_request,
-        get_all_sessions, get_session_by_id, get_api_logs_for_session, abort_session,
+        abort_session, complete_session, create_session, get_active_session, get_all_sessions,
+        get_api_logs_for_session, get_session_by_id, has_active_session, log_api_request,
     },
     icfpc_client::IcfpClient,
-    models::{ApiError, ApiResponse, SelectRequest, SelectResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest, SessionDetail, SessionsListResponse, Session},
+    models::{
+        ApiError, ApiResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
+        GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
+        SessionDetail, SessionsListResponse,
+    },
 };
 
 impl From<ApiError> for StatusCode {
@@ -24,7 +24,7 @@ impl From<ApiError> for StatusCode {
             ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
             ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
         };
-        
+
         error!("API Error: {} (Status: {})", err, status_code.as_u16());
         status_code
     }
@@ -39,7 +39,10 @@ pub async fn select(
     }
 
     let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
-    let upstream_response = icfp_client.select(&payload).await.map_err(StatusCode::from)?;
+    let upstream_response = icfp_client
+        .select(&payload)
+        .await
+        .map_err(StatusCode::from)?;
 
     let session = create_session(&pool).await.map_err(StatusCode::from)?;
 
@@ -75,17 +78,19 @@ pub async fn explore(
         .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
 
     if session.session_id != payload.session_id {
-        return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session ID mismatch".to_string(),
+        )));
     }
 
     let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
-    
+
     let upstream_request = ExploreUpstreamRequest {
         id: icfp_client.get_team_id(),
         plans: payload.plans,
     };
     let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
-    
+
     let upstream_response = icfp_client
         .explore(&upstream_request)
         .await
@@ -124,17 +129,19 @@ pub async fn guess(
         .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
 
     if session.session_id != payload.session_id {
-        return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session ID mismatch".to_string(),
+        )));
     }
 
     let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
-    
+
     let upstream_request = GuessUpstreamRequest {
         id: icfp_client.get_team_id(),
         map: payload.map,
     };
     let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
-    
+
     let upstream_response = icfp_client
         .guess(&upstream_request)
         .await
@@ -224,10 +231,14 @@ pub async fn abort_session_handler(
         .ok_or_else(|| StatusCode::from(ApiError::SessionNotFound))?;
 
     if session.status != "active" {
-        return Err(StatusCode::from(ApiError::InvalidRequest("Session is not active".to_string())));
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session is not active".to_string(),
+        )));
     }
 
-    abort_session(&pool, &session_id).await.map_err(StatusCode::from)?;
+    abort_session(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,
