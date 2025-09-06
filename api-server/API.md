@@ -1,159 +1,193 @@
 # API Documentation
 
-## Solutions API
+ICFPCのサーバーに代理でリクエストを投げるAPI群
+本家のAPIについては以下のURLを参照すること
+https://icfpcontest2025.github.io/specs/task_from_tex.html
 
-### GET /api/solutions
+## 環境変数
 
-solutionsテーブルの各問題ごとの上位20件のレコードを取得します。
+以下の環境変数が必要です：
+- `ICFPC_AUTH_TOKEN`: ICFPC本家APIの認証トークン（`/register`で得られるID）
+- `ICFPC_API_BASE_URL`: ICFPC本家APIのベースURL（デフォルト: https://icfpcontest2025.github.io/api）
+- `DATABASE_URL`: MySQLデータベース接続URL
 
-#### レスポンス
+## データベース
 
-**成功時 (200 OK):**
+- `sessions`: セッション管理用テーブル
+- `api_logs`: APIリクエスト/レスポンスログ用テーブル
+
+## API エンドポイント
+
+### `POST /api/select`
+
+本家の`/select`に代理で投げるAPI。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
+そうでない場合は新たなセッション番号を発行した上で`/select`を投げ、セッションを進行中にする。
+
+**レスポンス:**
 ```json
 {
   "success": true,
-  "data": [
-    {
+  "data": {
+    "session_id": "生成されたUUID",
+    ...  // 本家APIからのレスポンス内容
+  },
+  "message": "Session created and select request completed"
+}
+```
+
+### `POST /api/explore`
+
+セッションID付きで本家の`/explore`を叩く。リクエストの内容とその本家からのレスポンスの内容はDBにも格納される。
+
+**リクエスト:**
+```json
+{
+  "session_id": "セッションID",
+  ...  // 本家APIへ送信するデータ
+}
+```
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    ...  // 本家APIからのレスポンス内容
+  },
+  "message": "Explore request completed"
+}
+```
+
+### `POST /api/guess`
+
+セッションID付きで本家の`/guess`を叩く。リクエストの内容とその本家からのレスポンス内容はDBにも格納される。
+このAPIを叩くとセッションは終了となる。
+
+**リクエスト:**
+```json
+{
+  "session_id": "セッションID",
+  ...  // 本家APIへ送信するデータ
+}
+```
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    ...  // 本家APIからのレスポンス内容
+  },
+  "message": "Guess request completed and session terminated"
+}
+```
+
+### `GET /api/sessions`
+
+全セッションの一覧を取得する。最新のものから順に返される。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "id": 1,
+        "session_id": "uuid-string",
+        "status": "completed",
+        "created_at": "2025-09-06T01:00:00Z",
+        "completed_at": "2025-09-06T01:30:00Z"
+      },
+      ...
+    ]
+  },
+  "message": "Sessions retrieved successfully"
+}
+```
+
+### `GET /api/sessions/current`
+
+現在のアクティブセッション情報を取得する。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "session_id": "uuid-string",
+    "status": "active",
+    "created_at": "2025-09-06T01:00:00Z",
+    "completed_at": null
+  },
+  "message": "Current session retrieved successfully"
+}
+```
+
+アクティブセッションが存在しない場合:
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "No active session"
+}
+```
+
+### `GET /api/sessions/{session_id}`
+
+特定のセッションの詳細情報とAPIログ履歴を取得する。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
       "id": 1,
-      "problem_id": 25,
-      "problem_type": "spaceship",
-      "status": "solved",
-      "solver": "algorithm_v1",
-      "score": 150,
-      "ts": "2025-08-09T12:34:56Z"
-    }
-  ],
-  "message": "Solutions retrieved successfully"
+      "session_id": "uuid-string",
+      "status": "completed",
+      "created_at": "2025-09-06T01:00:00Z",
+      "completed_at": "2025-09-06T01:30:00Z"
+    },
+    "api_logs": [
+      {
+        "id": 1,
+        "session_id": "uuid-string",
+        "endpoint": "select",
+        "request_body": "{\"problemName\":\"example\"}",
+        "response_body": "{\"problemName\":\"example\"}",
+        "response_status": 200,
+        "created_at": "2025-09-06T01:00:00Z"
+      },
+      ...
+    ]
+  },
+  "message": "Session detail retrieved successfully"
 }
 ```
 
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+### `PUT /api/sessions/{session_id}/abort`
 
-### GET /api/solutions/{id}
+アクティブなセッションを強制的に中止する。セッションのステータスが`failed`に変更され、`completed_at`が現在時刻に設定される。
 
-指定されたIDのsolutionレコードを取得します。
-
-#### パラメータ
-
-- `id` (path parameter, required): solution ID
-
-#### レスポンス
-
-**成功時 (200 OK):**
+**レスポンス（成功時）:**
 ```json
 {
   "success": true,
-  "data": {
-    "id": 1,
-    "problem_id": 25,
-    "problem_type": "spaceship",
-    "status": "solved",
-    "solver": "algorithm_v1",
-    "score": 150,
-    "ts": "2025-08-09T12:34:56Z"
-  },
-  "message": "Solution retrieved successfully"
+  "data": null,
+  "message": "Session aborted successfully"
 }
 ```
 
-**レコードが存在しない場合 (404 Not Found):**
-```
-HTTP 404 Not Found
-```
+**エラーケース:**
+- 404 Not Found: 指定されたセッションIDが見つからない場合
+- 400 Bad Request: セッションが既に非アクティブ（completed または failed）の場合
 
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+## エラー処理
 
-### POST /api/solutions
-
-新しいsolutionレコードを作成します。
-
-#### リクエストボディ
-
-```json
-{
-  "problem_id": 25,
-  "problem_type": "spaceship",
-  "status": "solved",
-  "solver": "algorithm_v1",
-  "score": 150
-}
-```
-
-#### パラメータ
-
-- `problem_id` (integer, required): 問題ID
-- `problem_type` (string, optional): 問題タイプ
-- `status` (string, optional): ステータス
-- `solver` (string, required): ソルバー名
-- `score` (integer, optional): スコア
-
-#### レスポンス
-
-**成功時 (200 OK):**
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "problem_id": 25,
-    "problem_type": "spaceship",
-    "status": "solved",
-    "solver": "algorithm_v1",
-    "score": 150,
-    "ts": "2025-08-09T12:34:56Z"
-  },
-  "message": "Solution created successfully"
-}
-```
-
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
-
-## Spaceship Resources API
-
-### GET /api/spaceship/{filename}
-
-Spaceshipリソースディレクトリ内のtxtファイルの内容を取得します。
-
-#### パラメータ
-
-- `filename` (path parameter, required): ファイル名（拡張子なし）
-  - 例: `problem1`, `problem25`
-  - 英数字とハイフンのみ許可（セキュリティ対策）
-
-#### レスポンス
-
-**成功時 (200 OK):**
-```json
-{
-  "success": true,
-  "data": {
-    "filename": "problem1",
-    "content": "1 -1\n1 -3\n2 -5\n2 -8\n3 -10\n\n"
-  },
-  "message": "File retrieved successfully"
-}
-```
-
-**ファイルが存在しない場合 (404 Not Found):**
-```
-HTTP 404 Not Found
-```
-
-**不正なファイル名の場合 (400 Bad Request):**
-```
-HTTP 400 Bad Request
-```
-
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+- 409 Conflict: 既にアクティブなセッションが存在する場合（`/select`時）
+- 404 Not Found: アクティブなセッションが存在しない場合（`/explore`, `/guess`時）、またはセッションが見つからない場合（`/sessions/{id}`時）
+- 400 Bad Request: セッションIDの不整合や不正なリクエスト
+- 502 Bad Gateway: 本家APIとの通信エラー
+- 500 Internal Server Error: データベースエラー

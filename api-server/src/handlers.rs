@@ -1,118 +1,258 @@
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use sqlx::MySqlPool;
-use std::fs;
+use tracing::error;
 
-use crate::models::{
-    ApiResponse, CreateSolutionRequest, Solution, SpaceshipFileResponse,
+use crate::{
+    database::{
+        abort_session, complete_session, create_session, get_active_session, get_all_sessions,
+        get_api_logs_for_session, get_session_by_id, has_active_session, log_api_request,
+    },
+    icfpc_client::IcfpClient,
+    models::{
+        ApiError, ApiResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
+        GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
+        SessionDetail, SessionsListResponse,
+    },
 };
 
-pub async fn get_spaceship_file(
-    Path(filename): Path<String>,
-) -> Result<Json<ApiResponse<SpaceshipFileResponse>>, StatusCode> {
-    // Security check: only allow alphanumeric characters and hyphens to prevent directory traversal
-    if !filename.chars().all(|c| c.is_alphanumeric() || c == '-') {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+impl From<ApiError> for StatusCode {
+    fn from(err: ApiError) -> Self {
+        let status_code = match err {
+            ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::Http(_) => StatusCode::BAD_GATEWAY,
+            ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
+            ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
+            ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+        };
 
-    let file_path = format!("resources/spaceship/{}.txt", filename);
-
-    match fs::read_to_string(&file_path) {
-        Ok(content) => Ok(Json(ApiResponse {
-            success: true,
-            data: Some(SpaceshipFileResponse {
-                filename: filename.clone(),
-                content,
-            }),
-            message: Some("File retrieved successfully".to_string()),
-        })),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        error!("API Error: {} (Status: {})", err, status_code.as_u16());
+        status_code
     }
 }
 
-pub async fn get_solutions(
+pub async fn select(
     State(pool): State<MySqlPool>,
-) -> Result<Json<ApiResponse<Vec<Solution>>>, StatusCode> {
-    match sqlx::query_as::<_, Solution>(
-        "
-        SELECT id, problem_id, problem_type, solver, status, score, ts
-        FROM (
-            SELECT
-                id, problem_id, problem_type, solver, status, score, ts,
-                ROW_NUMBER() OVER(PARTITION BY problem_type, problem_id ORDER BY score DESC) as rn
-            FROM solutions
-            WHERE status = 'submitted'
-        ) t
-        WHERE t.rn <= 20;
-    ",
-    )
-    .fetch_all(&pool)
-    .await
-    {
-        Ok(solutions) => Ok(Json(ApiResponse {
-            success: true,
-            data: Some(solutions),
-            message: Some("Solutions retrieved successfully".to_string()),
-        })),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    Json(payload): Json<SelectRequest>,
+) -> Result<Json<ApiResponse<SelectResponse>>, StatusCode> {
+    if has_active_session(&pool).await.map_err(StatusCode::from)? {
+        return Err(StatusCode::from(ApiError::SessionAlreadyActive));
     }
-}
 
-pub async fn get_solution(
-    Path(id): Path<i32>,
-    State(pool): State<MySqlPool>,
-) -> Result<Json<ApiResponse<Solution>>, StatusCode> {
-    match sqlx::query_as::<_, Solution>("SELECT * FROM solutions WHERE id = ?")
-        .bind(id)
-        .fetch_one(&pool)
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    let upstream_response = icfp_client
+        .select(&payload)
         .await
-    {
-        Ok(solution) => Ok(Json(ApiResponse {
-            success: true,
-            data: Some(solution),
-            message: Some("Solution retrieved successfully".to_string()),
-        })),
-        Err(sqlx::Error::RowNotFound) => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
+        .map_err(StatusCode::from)?;
+
+    let session = create_session(&pool).await.map_err(StatusCode::from)?;
+
+    log_api_request(
+        &pool,
+        &session.session_id,
+        "select",
+        Some(&serde_json::to_string(&payload).unwrap_or_default()),
+        Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
+        Some(200),
+    )
+    .await
+    .map_err(StatusCode::from)?;
+
+    let response = SelectResponse {
+        session_id: session.session_id,
+        problem_name: upstream_response.problem_name,
+    };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Session created and select request completed".to_string()),
+    )))
 }
 
-pub async fn create_solution(
+pub async fn explore(
     State(pool): State<MySqlPool>,
-    Json(payload): Json<CreateSolutionRequest>,
-) -> Result<Json<ApiResponse<Solution>>, StatusCode> {
-    match sqlx::query(
-        "INSERT INTO solutions (problem_id, problem_type, status, solver, score, content) VALUES (?, ?, ?, ?, ?, ?)"
-    )
-    .bind(&payload.problem_id)
-    .bind(&payload.problem_type)
-    .bind(&payload.status)
-    .bind(&payload.solver)
-    .bind(&payload.score)
-    .bind(&payload.content)
-    .execute(&pool)
-    .await
-    {
-        Ok(result) => {
-            let id = result.last_insert_id() as i32;
-            
-            match sqlx::query_as::<_, Solution>("SELECT * FROM solutions WHERE id = ?")
-                .bind(id)
-                .fetch_one(&pool)
-                .await
-            {
-                Ok(solution) => Ok(Json(ApiResponse {
-                    success: true,
-                    data: Some(solution),
-                    message: Some("Solution created successfully".to_string()),
-                })),
-                Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-            }
-        }
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    Json(payload): Json<ExploreRequest>,
+) -> Result<Json<ApiResponse<ExploreResponse>>, StatusCode> {
+    let session = get_active_session(&pool)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
+
+    if session.session_id != payload.session_id {
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session ID mismatch".to_string(),
+        )));
     }
+
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+
+    let upstream_request = ExploreUpstreamRequest {
+        id: icfp_client.get_team_id(),
+        plans: payload.plans,
+    };
+    let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
+
+    let upstream_response = icfp_client
+        .explore(&upstream_request)
+        .await
+        .map_err(StatusCode::from)?;
+
+    log_api_request(
+        &pool,
+        &session.session_id,
+        "explore",
+        Some(&request_body),
+        Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
+        Some(200),
+    )
+    .await
+    .map_err(StatusCode::from)?;
+
+    let response = ExploreResponse {
+        session_id: payload.session_id,
+        results: upstream_response.results,
+        query_count: upstream_response.query_count,
+    };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Explore request completed".to_string()),
+    )))
+}
+
+pub async fn guess(
+    State(pool): State<MySqlPool>,
+    Json(payload): Json<GuessRequest>,
+) -> Result<Json<ApiResponse<GuessResponse>>, StatusCode> {
+    let session = get_active_session(&pool)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
+
+    if session.session_id != payload.session_id {
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session ID mismatch".to_string(),
+        )));
+    }
+
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+
+    let upstream_request = GuessUpstreamRequest {
+        id: icfp_client.get_team_id(),
+        map: payload.map,
+    };
+    let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
+
+    let upstream_response = icfp_client
+        .guess(&upstream_request)
+        .await
+        .map_err(StatusCode::from)?;
+
+    log_api_request(
+        &pool,
+        &session.session_id,
+        "guess",
+        Some(&request_body),
+        Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
+        Some(200),
+    )
+    .await
+    .map_err(StatusCode::from)?;
+
+    complete_session(&pool, &session.session_id)
+        .await
+        .map_err(StatusCode::from)?;
+
+    let response = GuessResponse {
+        session_id: payload.session_id,
+        correct: upstream_response.correct,
+    };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Guess request completed and session terminated".to_string()),
+    )))
+}
+
+pub async fn get_sessions(
+    State(pool): State<MySqlPool>,
+) -> Result<Json<ApiResponse<SessionsListResponse>>, StatusCode> {
+    let sessions = get_all_sessions(&pool).await.map_err(StatusCode::from)?;
+
+    let response = SessionsListResponse { sessions };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Sessions retrieved successfully".to_string()),
+    )))
+}
+
+pub async fn get_current_session(
+    State(pool): State<MySqlPool>,
+) -> Result<Json<ApiResponse<Option<Session>>>, StatusCode> {
+    let session = get_active_session(&pool).await.map_err(StatusCode::from)?;
+
+    let message = if session.is_some() {
+        Some("Current session retrieved successfully".to_string())
+    } else {
+        Some("No active session".to_string())
+    };
+
+    Ok(Json(ApiResponse::success(session, message)))
+}
+
+pub async fn get_session_detail(
+    State(pool): State<MySqlPool>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<ApiResponse<SessionDetail>>, StatusCode> {
+    let session = get_session_by_id(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::SessionNotFound))?;
+
+    let api_logs = get_api_logs_for_session(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?;
+
+    let response = SessionDetail { session, api_logs };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Session detail retrieved successfully".to_string()),
+    )))
+}
+
+pub async fn abort_session_handler(
+    State(pool): State<MySqlPool>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<ApiResponse<()>>, StatusCode> {
+    let session = get_session_by_id(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::SessionNotFound))?;
+
+    if session.status != "active" {
+        return Err(StatusCode::from(ApiError::InvalidRequest(
+            "Session is not active".to_string(),
+        )));
+    }
+
+    abort_session(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?;
+
+    log_api_request(
+        &pool,
+        &session_id,
+        "abort",
+        None,
+        Some(&serde_json::json!({"aborted": true}).to_string()),
+        Some(200),
+    )
+    .await
+    .map_err(StatusCode::from)?;
+
+    Ok(Json(ApiResponse::success(
+        (),
+        Some("Session aborted successfully".to_string()),
+    )))
 }
