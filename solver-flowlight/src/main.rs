@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::time::{Duration, Instant};
@@ -305,6 +305,71 @@ fn apply_label_flip(st: &mut State, rng: &mut StdRng) {
     st.labels[v] = new;
 }
 
+// ノード内の6ポートをランダム置換（相手側のバックポートも調整）
+fn apply_node_port_permutation(st: &mut State, rng: &mut StdRng) {
+    let v = rng.gen_range(0..N);
+    let mut perm: [u8; 6] = [0, 1, 2, 3, 4, 5];
+    for i in (1..6).rev() {
+        let j = rng.gen_range(0..=i);
+        perm.swap(i, j);
+    }
+    let old = st.neighbors[v];
+    for d_old in 0u8..6u8 {
+        let d_new = perm[d_old as usize];
+        let (to, back) = old[d_old as usize];
+        st.neighbors[v][d_new as usize] = (to, back);
+        st.neighbors[to][back as usize] = (v, d_new);
+    }
+}
+
+// k本のエッジを同時にリワイア（k=3,4程度）
+fn apply_k_rewire(st: &mut State, rng: &mut StdRng, k: usize) {
+    if k < 2 || k > 6 {
+        return;
+    }
+    use std::collections::HashSet;
+    let mut chosen_left: Vec<(usize, u8)> = Vec::with_capacity(k);
+    let mut seen: HashSet<(usize, u8, usize, u8)> = HashSet::new();
+    let mut trials = 0;
+    while chosen_left.len() < k && trials < 1000 {
+        trials += 1;
+        let a = rng.gen_range(0..N);
+        let da = rng.gen_range(0..6) as u8;
+        let (b, db) = st.neighbors[a][da as usize];
+        let rep = if (a, da) <= (b, db) {
+            (a, da, b, db)
+        } else {
+            (b, db, a, da)
+        };
+        if seen.insert(rep) {
+            chosen_left.push((a, da));
+        }
+    }
+    if chosen_left.len() < k {
+        return;
+    }
+    let mut right: Vec<(usize, u8)> = Vec::with_capacity(k);
+    for &(a, da) in &chosen_left {
+        right.push(st.neighbors[a][da as usize]);
+    }
+    let mut idx: Vec<usize> = (0..k).collect();
+    for i in (1..k).rev() {
+        let j = rng.gen_range(0..=i);
+        idx.swap(i, j);
+    }
+    // 不動点を避ける簡単処理
+    for i in 0..k {
+        if idx[i] == i {
+            idx.swap(i, (i + 1) % k);
+        }
+    }
+    for i in 0..k {
+        let (a, da) = chosen_left[i];
+        let (b, db) = right[idx[i]];
+        st.connect(a, da, b, db);
+    }
+}
+
 // 焼きなまし本体
 fn sa_solve(
     plan: &[usize],
@@ -314,6 +379,7 @@ fn sa_solve(
     verbose: u8,
     random_init: bool,
     edit_eval: bool,
+    big_moves: bool,
 ) -> (State, usize) {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut cur = if random_init {
@@ -343,13 +409,29 @@ fn sa_solve(
 
     let mut iter: u64 = 0;
     while start.elapsed() < time_limit {
-        // ムーブ選択: 2-opt 70%, ラベル 30%
-        let use_two_opt = rng.gen_bool(0.7);
         let mut next = cur.clone();
-        if use_two_opt {
-            apply_two_opt_swap(&mut next, &mut rng);
+        if big_moves {
+            // 2-opt 50%, ラベル 10%, ノード置換 20%, 3-edge 15%, 4-edge 5%
+            let r: f64 = rng.gen_range(0.0..1.0);
+            if r < 0.50 {
+                apply_two_opt_swap(&mut next, &mut rng);
+            } else if r < 0.60 {
+                apply_label_flip(&mut next, &mut rng);
+            } else if r < 0.80 {
+                apply_node_port_permutation(&mut next, &mut rng);
+            } else if r < 0.95 {
+                apply_k_rewire(&mut next, &mut rng, 3);
+            } else {
+                apply_k_rewire(&mut next, &mut rng, 4);
+            }
         } else {
-            apply_label_flip(&mut next, &mut rng);
+            // 既定: 2-opt 70%, ラベル 30%
+            let use_two_opt = rng.gen_bool(0.7);
+            if use_two_opt {
+                apply_two_opt_swap(&mut next, &mut rng);
+            } else {
+                apply_label_flip(&mut next, &mut rng);
+            }
         }
 
         let next_score = if edit_eval {
@@ -424,6 +506,10 @@ struct Args {
     /// 編集距離風の評価関数を使う
     #[arg(long, default_value_t = false)]
     edit_eval: bool,
+
+    /// 大きな遷移（ポート置換・3/4-edge再配線）を有効化
+    #[arg(long, default_value_t = false)]
+    big_moves: bool,
 }
 
 #[tokio::main]
@@ -447,6 +533,7 @@ async fn main() -> Result<()> {
         args.verbose,
         args.random_init,
         args.edit_eval,
+        args.big_moves,
     );
 
     if args.verbose > 0 {
