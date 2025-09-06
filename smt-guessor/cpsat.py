@@ -26,6 +26,167 @@ def normalize_plan(plan: str) -> List[int]:
     return [int(ch) - 1 for ch in plan]
 
 
+def build_solver(
+    plans: List[str],
+    results: List[List[int]],
+    N: int,
+    starting_room: int = 0,
+    use_exactly_one_location: bool = True,
+) -> Tuple[cp_model.CpModel, Dict[str, Any]]:
+    """Build the CP-SAT model using port-complete-matching + trace constraints (B-form)."""
+    model = cp_model.CpModel()
+
+    # ---------- Normalize inputs ----------
+    norm_plans = [normalize_plan(p) for p in plans]
+    # check lengths
+    for i, (p, r) in enumerate(zip(norm_plans, results)):
+        if len(r) != len(p) + 1:
+            raise ValueError(
+                f"Plan/results length mismatch at index {i}: plan '{plans[i]}' "
+                f"(len={len(p)}) vs results len={len(r)}; must be len(plan)+1."
+            )
+
+    D = 6  # doors per room
+    P = D * N  # number of ports
+
+    # ---------- Variables ----------
+    # Pair variables for complete matching over ports (unordered pairs, including self-pairs for loops).
+    pair_vars: Dict[Tuple[int, int], cp_model.IntVar] = {}
+    for i in range(P):
+        for j in range(i, P):
+            pair_vars[(i, j)] = model.NewBoolVar(f"pair_{i}_{j}")
+
+    # For each port p, collect all pair vars that include p, and enforce exactly-one
+    pairs_inc = [[] for _ in range(P)]
+    for (i, j), var in pair_vars.items():
+        pairs_inc[i].append(var)
+        if i != j:
+            pairs_inc[j].append(var)
+
+    for p in range(P):
+        model.AddExactlyOne(pairs_inc[p])
+
+    # Room label variables: L_k in {0,1,2,3}
+    L = [model.NewIntVar(0, 3, f"L_{k}") for k in range(N)]
+
+    # Location variables for each plan and time: x[plan_idx][t][k] is True if at time t we are in room k
+    x: List[List[List[cp_model.BoolVar]]] = []
+    for idx, (plan, obs) in enumerate(zip(norm_plans, results)):
+        T = len(plan)
+        x_plan: List[List[cp_model.BoolVar]] = []
+        for t in range(T + 1):
+            x_t = [model.NewBoolVar(f"x_{idx}_{t}_{k}") for k in range(N)]
+            if use_exactly_one_location:
+                model.AddExactlyOne(x_t)
+            x_plan.append(x_t)
+        x.append(x_plan)
+
+        # starting room
+        model.Add(x_plan[0][starting_room] == 1)
+
+        # label consistency: x[t,k] -> L_k == obs[t]
+        for t in range(T + 1):
+            ot = obs[t]
+            for k in range(N):
+                model.Add(L[k] == ot).OnlyEnforceIf(x_plan[t][k])
+
+        # trace constraints (B-form channeling): introduce y[t,k,q] meaning x[t,k] & U[p,q]
+        # where p = D * k + a_t. Enforce:
+        #  - y => x[t,k]
+        #  - y => U[p,q]
+        #  - y => x[t+1, room(q)]
+        #  - sum_q y[t,k,q] == x[t,k]
+        for t in range(T):
+            a_t = plan[t]
+            for k in range(N):
+                p = D * k + a_t
+                y_vars_for_tk: List[cp_model.BoolVar] = []
+                for q in range(P):
+                    y_tkq = model.NewBoolVar(f"y_{idx}_{t}_{k}_{q}")
+                    y_vars_for_tk.append(y_tkq)
+                    # y => x[t,k]
+                    model.AddImplication(y_tkq, x_plan[t][k])
+                    # y => U[p,q]
+                    i, j = (p, q) if p <= q else (q, p)
+                    model.AddImplication(y_tkq, pair_vars[(i, j)])
+                    # y => x[t+1, room(q)]
+                    g, _ = divmod(q, D)
+                    model.AddImplication(y_tkq, x_plan[t + 1][g])
+
+                # Uniqueness per (t,k): exactly one y when x[t,k] == 1, otherwise none.
+                # sum_q y[t,k,q] == x[t,k]
+                model.Add(sum(y_vars_for_tk) == x_plan[t][k])
+
+    meta = {
+        "pair_vars": pair_vars,
+        "labels": L,
+        "N": N,
+        "D": D,
+        "plans": norm_plans,
+        "results": results,
+        "x": x,
+        "starting_room": starting_room,
+    }
+    return model, meta
+
+
+def solve_and_extract(
+    model: cp_model.CpModel,
+    meta: Dict[str, Any],
+    time_limit_s: float = 60.0,
+    progress: bool = False,
+) -> Dict[str, Any]:
+    """Solve the CP-SAT model and extract the requested map as a JSON-serializable dict."""
+    solver = cp_model.CpSolver()
+    if time_limit_s is not None and time_limit_s > 0:
+        solver.parameters.max_time_in_seconds = time_limit_s
+    solver.parameters.num_search_workers = 8
+
+    # Optional progress logging
+    if progress:
+        # Print solver search progress to stdout.
+        # EnableOutput() typically implies log_search_progress.
+        try:
+            solver.EnableOutput()
+        except Exception:
+            # Fallback for older versions if EnableOutput is unavailable.
+            solver.parameters.log_search_progress = True
+
+    status = solver.Solve(model)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return {
+            "status": int(status),
+            "error": "No solution found by CP-SAT within limits.",
+        }
+
+    N = meta["N"]
+    D = meta["D"]
+    pair_vars = meta["pair_vars"]
+    labels = meta["labels"]
+    starting_room = meta["starting_room"]
+
+    rooms = [int(solver.Value(Lk)) for Lk in labels]
+
+    connections = []
+    for (i, j), var in pair_vars.items():
+        if solver.Value(var) == 1:
+            room_i, door_i = divmod(i, D)
+            room_j, door_j = divmod(j, D)
+            connections.append(
+                {
+                    "from": {"room": room_i, "door": door_i},
+                    "to": {"room": room_j, "door": door_j},
+                }
+            )
+
+    return {
+        "status": int(status),
+        "rooms": rooms,
+        "startingRoom": starting_room,
+        "connections": connections,
+    }
+
+
 def build_solver_fast(
     plans: List[str],
     results: List[List[int]],
