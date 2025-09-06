@@ -309,6 +309,69 @@ fn score_edit_distance(st: &State, plan: &[usize], results: &[u8]) -> usize {
     best
 }
 
+// ノードごとの最頻ラベルを計算（現トポロジーでの訪問に基づく）
+fn majority_labels(st: &State, plan: &[usize], results: &[u8]) -> [u8; N] {
+    let l = plan.len();
+    debug_assert_eq!(results.len(), l + 1);
+    let mut counts = vec![[0usize; 4]; N];
+    let mut cur = 0usize;
+    for j in 0..l {
+        counts[cur][results[j] as usize] += 1;
+        let d = plan[j] as usize;
+        cur = st.neighbors[cur][d].0;
+    }
+    counts[cur][results[l] as usize] += 1;
+    let mut labels = [0u8; N];
+    for v in 0..N {
+        let mut best_c = counts[v][0];
+        let mut best_r = 0usize;
+        for r in 1..4 {
+            if counts[v][r] > best_c {
+                best_c = counts[v][r];
+                best_r = r;
+            }
+        }
+        labels[v] = best_r as u8;
+    }
+    labels
+}
+
+// SAED: 最頻ラベルを固定し、その下で編集距離風コストを計算（各コスト=1）
+fn score_saed(st: &State, plan: &[usize], results: &[u8]) -> usize {
+    let labels = majority_labels(st, plan, results);
+    let l = plan.len();
+    const INF: usize = 1_000_000_000;
+    let mut cur = vec![INF; N];
+    cur[0] = 0;
+    for j in 0..l {
+        let ins = relax_insertions(st, &cur, INF);
+        let mut next = vec![INF; N];
+        for v in 0..N {
+            let base = ins[v];
+            if base >= INF { continue; }
+            let label_cost = if labels[v] == results[j] { 0 } else { 1 };
+            // 削除
+            let del_cost = base + label_cost + 1;
+            if del_cost < next[v] { next[v] = del_cost; }
+            // 一致
+            let to = st.neighbors[v][plan[j]].0;
+            let mv_cost = base + label_cost;
+            if mv_cost < next[to] { next[to] = mv_cost; }
+        }
+        cur = next;
+    }
+    let ins = relax_insertions(st, &cur, INF);
+    let mut best = INF;
+    for v in 0..N {
+        let base = ins[v];
+        if base >= INF { continue; }
+        let label_cost = if labels[v] == results[l] { 0 } else { 1 };
+        let total = base + label_cost;
+        if total < best { best = total; }
+    }
+    best
+}
+
 // 2-opt ポート交換（双方向不変を保つ）
 fn apply_two_opt_swap(st: &mut State, rng: &mut StdRng) {
     let a1 = rng.gen_range(0..N);
@@ -409,6 +472,7 @@ fn sa_solve(
     verbose: u8,
     random_init: bool,
     edit_eval: bool,
+    saed_eval: bool,
     structure_eval: bool,
     big_moves: bool,
     t0: f64,
@@ -422,6 +486,8 @@ fn sa_solve(
     };
     let mut cur_score = if structure_eval {
         score_structure_only(&cur, plan, results)
+    } else if saed_eval {
+        score_saed(&cur, plan, results)
     } else if edit_eval {
         score_edit_distance(&cur, plan, results)
     } else {
@@ -455,7 +521,11 @@ fn sa_solve(
             if r < 0.50 {
                 apply_two_opt_swap(&mut next, &mut rng);
             } else if r < 0.60 {
-                if !structure_eval { apply_label_flip(&mut next, &mut rng); } else { apply_node_port_permutation(&mut next, &mut rng); }
+                if !(structure_eval || saed_eval) {
+                    apply_label_flip(&mut next, &mut rng);
+                } else {
+                    apply_node_port_permutation(&mut next, &mut rng);
+                }
             } else if r < 0.80 {
                 apply_node_port_permutation(&mut next, &mut rng);
             } else if r < 0.95 {
@@ -468,16 +538,17 @@ fn sa_solve(
             let use_two_opt = rng.gen_bool(0.7);
             if use_two_opt {
                 apply_two_opt_swap(&mut next, &mut rng);
-            } else if !structure_eval {
+            } else if !(structure_eval || saed_eval) {
                 apply_label_flip(&mut next, &mut rng);
             } else {
-                // ラベルムーブは意味が無いので別の構造ムーブ
                 apply_two_opt_swap(&mut next, &mut rng);
             }
         }
 
         let next_score = if structure_eval {
             score_structure_only(&next, plan, results)
+        } else if saed_eval {
+            score_saed(&next, plan, results)
         } else if edit_eval {
             score_edit_distance(&next, plan, results)
         } else {
@@ -550,6 +621,10 @@ struct Args {
     #[arg(long, default_value_t = false)]
     edit_eval: bool,
 
+    /// SAED（最頻ラベル固定の編集距離）で評価
+    #[arg(long, default_value_t = false)]
+    saed_eval: bool,
+
     /// グラフ構造のみを評価（ラベルは貪欲最適とみなす）
     #[arg(long, default_value_t = false)]
     structure_eval: bool,
@@ -588,6 +663,7 @@ async fn main() -> Result<()> {
         args.verbose,
         args.random_init,
         args.edit_eval,
+        args.saed_eval,
         args.structure_eval,
         args.big_moves,
         args.t0,
