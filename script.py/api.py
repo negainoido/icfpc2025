@@ -81,6 +81,52 @@ class API:
         data = {"id": self.team_id, "user_name": self.user_name, "map": map_data}
         return self.make_request("/guess", data)
 
+    def make_get_request(self, endpoint: str) -> dict[str, Any]:
+        """GETリクエストを送信し、レスポンスを返す"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            headers = {
+                "CF-Access-Client-Id": self.client_id,
+                "CF-Access-Client-Secret": self.client_secret,
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            click.echo(f"エラー: {e}", err=True)
+            sys.exit(1)
+
+    def make_put_request(self, endpoint: str) -> bool:
+        """PUTリクエストを送信し、成功可否を返す"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            headers = {
+                "CF-Access-Client-Id": self.client_id,
+                "CF-Access-Client-Secret": self.client_secret,
+            }
+            response = requests.put(url, headers=headers)
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            click.echo(f"エラー: {e}", err=True)
+            return False
+
+    def get_sessions(self) -> dict[str, Any]:
+        """全セッション一覧を取得"""
+        return self.make_get_request("/sessions")
+
+    def get_current_session(self) -> dict[str, Any] | None:
+        """現在のアクティブセッション情報を取得"""
+        return self.make_get_request("/sessions/current")
+
+    def get_session_detail(self, session_id: str) -> dict[str, Any]:
+        """特定セッションの詳細情報とAPIログ履歴を取得"""
+        return self.make_get_request(f"/sessions/{session_id}")
+
+    def abort_session(self, session_id: str) -> bool:
+        """セッションを強制中止"""
+        return self.make_put_request(f"/sessions/{session_id}/abort")
+
 
 load_dotenv()
 TEAM_ID = os.environ.get("TEAM_ID")
@@ -371,6 +417,89 @@ def guess_inline(
 
 
 @cli.command()
+def sessions():
+    """全セッションの一覧を表示する"""
+    result = api.get_sessions()
+    click.echo("=== セッション一覧 ===")
+    for session in result["sessions"]:
+        status_emoji = (
+            "🟢"
+            if session["status"] == "active"
+            else "⚪"
+            if session["status"] == "completed"
+            else "🔴"
+        )
+        user_info = f" ({session['user_name']})" if session["user_name"] else ""
+        click.echo(
+            f"{status_emoji} {session['session_id']} - {user_info} - {session['status']} - {session['created_at']}"
+        )
+
+
+@cli.command()
+def session_current():
+    """現在のアクティブセッション情報を表示する"""
+    result = api.get_current_session()
+    if result is None:
+        click.echo("現在アクティブなセッションはありません")
+    else:
+        click.echo("=== 現在のアクティブセッション ===")
+        click.echo(f"Session ID: {result['session_id']}")
+        click.echo(f"User: {result['user_name'] or 'N/A'}")
+        click.echo(f"Status: {result['status']}")
+        click.echo(f"Created: {result['created_at']}")
+
+
+@cli.command()
+@click.argument("session_id")
+def session_detail(session_id: str):
+    """特定セッションの詳細情報とAPIログ履歴を表示する
+
+    SESSION_ID: 詳細を表示するセッションID
+    """
+    result = api.get_session_detail(session_id)
+    session = result["session"]
+    api_logs = result["api_logs"]
+
+    click.echo("=== セッション詳細 ===")
+    click.echo(f"Session ID: {session['session_id']}")
+    click.echo(f"User: {session['user_name'] or 'N/A'}")
+    click.echo(f"Status: {session['status']}")
+    click.echo(f"Created: {session['created_at']}")
+    if session["completed_at"]:
+        click.echo(f"Completed: {session['completed_at']}")
+
+    click.echo(f"\n=== APIログ履歴 ({len(api_logs)}件) ===")
+    for log in api_logs:
+        status_emoji = "✅" if log["response_status"] == 200 else "❌"
+        click.echo(
+            f"{status_emoji} {log['endpoint']} - {log['response_status']} - {log['created_at']}"
+        )
+        if log["endpoint"] == "explore":
+            try:
+                req = json.loads(log["request_body"])
+                resp = json.loads(log["response_body"])
+                click.echo(f"   Plans: {req.get('plans', [])}")
+                click.echo(f"   Query Count: {resp.get('queryCount', 'N/A')}")
+            except Exception:
+                pass
+
+
+@cli.command()
+@click.argument("session_id")
+@click.confirmation_option(prompt="本当にこのセッションを中止しますか？")
+def session_abort(session_id: str):
+    """セッションを強制中止する
+
+    SESSION_ID: 中止するセッションID
+    """
+    success = api.abort_session(session_id)
+    if success:
+        click.echo(f"✅ セッション {session_id[:8]}... を中止しました")
+    else:
+        click.echo(f"❌ セッション {session_id[:8]}... の中止に失敗しました")
+
+
+@cli.command()
 def example():
     """使用例を表示する"""
     click.echo("=== ICFPコンテスト2025 エディフィキウムツール 使用例 ===\n")
@@ -389,6 +518,12 @@ def example():
     click.echo(
         '   python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
     )
+
+    click.echo("5. セッション管理:")
+    click.echo("   python main.py sessions          # 全セッション一覧")
+    click.echo("   python main.py current           # 現在のアクティブセッション")
+    click.echo("   python main.py session-detail <SESSION_ID>  # セッション詳細")
+    click.echo("   python main.py abort <SESSION_ID> # セッション中止\n")
 
     click.echo("地図ファイル（map.json）の例:")
     example_map = {
