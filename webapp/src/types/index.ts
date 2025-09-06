@@ -2,6 +2,7 @@
 export interface Session {
   id: number;
   session_id: string;
+  user_name?: string;
   status: string;
   created_at: string;
   completed_at?: string;
@@ -10,6 +11,7 @@ export interface Session {
 // Select API Types
 export interface SelectRequest {
   problemName: string;
+  user_name?: string;
 }
 
 export interface SelectResponse {

@@ -23,6 +23,14 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 本家の`/select`に代理で投げるAPI。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
 そうでない場合は新たなセッション番号を発行した上で`/select`を投げ、セッションを進行中にする。
 
+**リクエスト:**
+```json
+{
+  "problemName": "問題名",
+  "user_name": "ユーザー名（省略可能）"
+}
+```
+
 **レスポンス:**
 ```json
 {
@@ -95,6 +103,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
       {
         "id": 1,
         "session_id": "uuid-string",
+        "user_name": "ユーザー名（null可）",
         "status": "completed",
         "created_at": "2025-09-06T01:00:00Z",
         "completed_at": "2025-09-06T01:30:00Z"
@@ -117,6 +126,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
   "data": {
     "id": 1,
     "session_id": "uuid-string",
+    "user_name": "ユーザー名（null可）",
     "status": "active",
     "created_at": "2025-09-06T01:00:00Z",
     "completed_at": null
@@ -146,6 +156,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
     "session": {
       "id": 1,
       "session_id": "uuid-string",
+      "user_name": "ユーザー名（null可）",
       "status": "completed",
       "created_at": "2025-09-06T01:00:00Z",
       "completed_at": "2025-09-06T01:30:00Z"

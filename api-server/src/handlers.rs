@@ -44,7 +44,7 @@ pub async fn select(
         .await
         .map_err(StatusCode::from)?;
 
-    let session = create_session(&pool).await.map_err(StatusCode::from)?;
+    let session = create_session(&pool, payload.user_name.as_deref()).await.map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,

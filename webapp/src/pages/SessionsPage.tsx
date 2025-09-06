@@ -192,6 +192,12 @@ const SessionsPage = () => {
                   <div style={{ color: '#155724' }}>
                     <strong>セッションID:</strong> {currentSession.session_id}
                     <br />
+                    {currentSession.user_name && (
+                      <>
+                        <strong>ユーザー名:</strong> {currentSession.user_name}
+                        <br />
+                      </>
+                    )}
                     <strong>開始時刻:</strong> {formatDateTime(currentSession.created_at)}
                     <br />
                     <strong>継続時間:</strong> {getSessionDuration(currentSession)}
@@ -268,6 +274,7 @@ const SessionsPage = () => {
                 <thead>
                   <tr style={{ backgroundColor: '#f8f9fa' }}>
                     <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>セッションID</th>
+                    <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>ユーザー名</th>
                     <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>ステータス</th>
                     <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>開始時刻</th>
                     <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>終了時刻</th>
@@ -280,6 +287,9 @@ const SessionsPage = () => {
                     <tr key={session.session_id} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: '12px', fontFamily: 'monospace', fontSize: '12px' }}>
                         {session.session_id.substring(0, 8)}...
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        {session.user_name || '-'}
                       </td>
                       <td style={{ padding: '12px' }}>
                         <span style={{
@@ -398,6 +408,9 @@ const SessionsPage = () => {
                 fontSize: '14px'
               }}>
                 <div><strong>セッションID:</strong> {selectedSession.session.session_id}</div>
+                {selectedSession.session.user_name && (
+                  <div><strong>ユーザー名:</strong> {selectedSession.session.user_name}</div>
+                )}
                 <div><strong>ステータス:</strong> 
                   <span style={{
                     padding: '2px 6px',

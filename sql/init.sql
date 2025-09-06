@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id VARCHAR(255) UNIQUE NOT NULL,
+    user_name VARCHAR(255) NULL,
     status ENUM('active', 'completed', 'failed') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NULL

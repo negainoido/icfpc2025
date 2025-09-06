@@ -14,6 +14,7 @@ const PROBLEM_OPTIONS = [
 export default function ProblemSelector() {
   const { state, dispatch } = useSession();
   const [selectedProblem, setSelectedProblem] = useState(PROBLEM_OPTIONS[0]);
+  const [userName, setUserName] = useState('');
 
   const handleSelect = async () => {
     try {
@@ -22,6 +23,7 @@ export default function ProblemSelector() {
 
       const response = await api.select({
         problemName: selectedProblem,
+        user_name: userName.trim() || undefined,
       });
 
       dispatch({
@@ -54,6 +56,26 @@ export default function ProblemSelector() {
     <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
       <h2>Select Problem</h2>
       
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', marginBottom: '5px' }}>
+          User Name (optional):
+        </label>
+        <input
+          type="text"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          placeholder="Enter your name (optional)"
+          style={{
+            width: '100%',
+            padding: '8px',
+            fontSize: '16px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            marginBottom: '15px',
+          }}
+        />
+      </div>
+
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '5px' }}>
           Problem Name:
