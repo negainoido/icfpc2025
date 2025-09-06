@@ -141,27 +141,48 @@ fn init_route_respecting_ring(plan: &[usize], results: &[u8], rng: &mut StdRng) 
     st
 }
 
+// 完全ランダム初期化（ポート結線とラベルを全てランダム）
+fn init_fully_random(rng: &mut StdRng) -> State {
+    let mut st = State::new_disconnected();
+
+    // ラベルをランダムに設定
+    for v in 0..N {
+        st.labels[v] = rng.gen_range(0..4) as u8;
+    }
+
+    // すべてのスタブを列挙してシャッフルし、順にペアにして接続
+    let mut stubs: Vec<(usize, u8)> = Vec::with_capacity(N * 6);
+    for v in 0..N {
+        for d in 0u8..6u8 {
+            stubs.push((v, d));
+        }
+    }
+    for i in (1..stubs.len()).rev() {
+        let j = rng.gen_range(0..=i);
+        stubs.swap(i, j);
+    }
+    let mut i = 0usize;
+    while i + 1 < stubs.len() {
+        let (a, da) = stubs[i];
+        let (b, db) = stubs[i + 1];
+        st.connect(a, da, b, db);
+        i += 2;
+    }
+    st
+}
+
 // トレースを実行して矛盾総数を返す
 fn simulate_and_score(st: &State, plan: &[usize], results: &[u8]) -> usize {
     let mut cur = 0usize;
     let mut mismatches = 0usize;
     let l = plan.len();
     for j in 0..l {
-        if cur >= N {
-            // 未割当ポートから飛んだなど。残り分をすべて矛盾として加算して終了
-            mismatches += (l - j) + 1; // 現在位置の比較分も含める
-            return mismatches;
-        }
+        assert!(cur < N);
         if st.labels[cur] != results[j] {
             mismatches += 1;
         }
         let d = plan[j] as u8;
         let (to, _back) = st.neighbors[cur][d as usize];
-        if to == usize::MAX {
-            // 未割当ポート。残り全て矛盾として加算して終了
-            mismatches += (l - j);
-            return mismatches;
-        }
         cur = to;
     }
     if cur >= N || st.labels[cur] != results[l] {
@@ -203,9 +224,14 @@ fn sa_solve(
     time_limit: Duration,
     seed: u64,
     verbose: u8,
+    random_init: bool,
 ) -> (State, usize) {
     let mut rng = StdRng::seed_from_u64(seed);
-    let mut cur = init_route_respecting_ring(plan, results, &mut rng);
+    let mut cur = if random_init {
+        init_fully_random(&mut rng)
+    } else {
+        init_route_respecting_ring(plan, results, &mut rng)
+    };
     let mut cur_score = simulate_and_score(&cur, plan, results);
     let mut best = cur.clone();
     let mut best_score = cur_score;
@@ -293,6 +319,10 @@ struct Args {
     /// 冗長出力レベル
     #[arg(short, long, default_value_t = 0)]
     verbose: u8,
+
+    /// 初期状態を完全ランダムにする
+    #[arg(long, default_value_t = false)]
+    random_init: bool,
 }
 
 #[tokio::main]
@@ -314,6 +344,7 @@ async fn main() -> Result<()> {
         Duration::from_secs(args.time_limit),
         seed,
         args.verbose,
+        args.random_init,
     );
 
     if args.verbose > 0 {
