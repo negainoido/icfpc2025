@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone)]
 pub struct Room {
     pub id: usize,
-    pub label: u8, // 2-bit label (0-3)
+    pub label: u8,                          // 2-bit label (0-3)
     pub doors: [Option<(usize, usize)>; 6], // door_num -> (room_id, their_door_num)
 }
 
@@ -37,11 +37,11 @@ impl Graph {
             next_id: 0,
             path_to_room: HashMap::new(),
         };
-        
+
         // Add starting room
         graph.add_room(0); // Starting room always has label 0 based on problem examples
         graph.path_to_room.insert(0, String::new());
-        
+
         graph
     }
 
@@ -60,7 +60,7 @@ impl Graph {
             r2.connect_door(door2, room1, door1);
         }
     }
-    
+
     pub fn connect_one_way(&mut self, from_room: usize, from_door: usize, to_room: usize) {
         if let Some(room) = self.rooms.get_mut(&from_room) {
             room.doors[from_door] = Some((to_room, 0)); // We don't track the return door
@@ -121,12 +121,13 @@ impl Graph {
         }
 
         // Update path_to_room mappings
-        let paths_to_update: Vec<(usize, String)> = self.path_to_room
+        let paths_to_update: Vec<(usize, String)> = self
+            .path_to_room
             .iter()
             .filter(|(room_id, _)| **room_id == remove_id)
             .map(|(_, path)| (keep_id, path.clone()))
             .collect();
-        
+
         for (room_id, path) in paths_to_update {
             self.path_to_room.insert(room_id, path);
         }
@@ -148,7 +149,7 @@ impl Graph {
         if !path.is_empty() {
             let parent_path = &path[0..path.len() - 1];
             let door = path.chars().last().unwrap().to_digit(10).unwrap() as usize;
-            
+
             if let Some(parent_id) = self.find_room_by_path(parent_path) {
                 // We don't know the return door yet, will be discovered later
                 if let Some(parent) = self.rooms.get_mut(&parent_id) {
@@ -164,15 +165,15 @@ impl Graph {
         use serde_json::json;
 
         let mut room_map = HashMap::new();
-        
+
         // Ensure starting room is always index 0
         room_map.insert(self.starting_room, 0);
         let mut room_index = 1;
-        
+
         // Create room index mapping for other rooms
         let mut sorted_room_ids: Vec<usize> = self.rooms.keys().cloned().collect();
         sorted_room_ids.sort();
-        
+
         for room_id in sorted_room_ids {
             if room_id != self.starting_room {
                 room_map.insert(room_id, room_index);
@@ -191,7 +192,7 @@ impl Graph {
 
         for (room_id, room) in &self.rooms {
             let from_index = room_map[room_id];
-            
+
             for (door_num, connection) in room.doors.iter().enumerate() {
                 if let Some((to_room_id, _to_door)) = connection {
                     // Skip if the target room doesn't exist
@@ -199,7 +200,7 @@ impl Graph {
                         continue;
                     }
                     let to_index = room_map[to_room_id];
-                    
+
                     // For one-way connections, we need to find the return door
                     // by checking the target room's connections back to this room
                     let mut return_door = 0;
@@ -213,7 +214,7 @@ impl Graph {
                             }
                         }
                     }
-                    
+
                     connections.push(json!({
                         "from": {"room": from_index, "door": door_num},
                         "to": {"room": to_index, "door": return_door}

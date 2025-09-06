@@ -1,8 +1,8 @@
+use crate::api_trait::ApiClientTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use std::collections::{HashMap, HashSet};
-use crate::api_trait::ApiClientTrait;
 use serde_json;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub struct MockApiClient {
@@ -25,7 +25,7 @@ impl MockApiClient {
     pub fn new() -> Self {
         Self::new_with_problem("primus")
     }
-    
+
     pub fn new_with_problem(problem: &str) -> Self {
         Self {
             problem_name: problem.to_string(),
@@ -33,7 +33,7 @@ impl MockApiClient {
             graph: MockGraph::new_for_problem(problem),
         }
     }
-    
+
     pub fn new_with_seed(problem: &str, seed: u64) -> Self {
         Self {
             problem_name: problem.to_string(),
@@ -47,15 +47,16 @@ impl MockApiClient {
         let submitted_rooms = submission["rooms"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("Invalid submission: missing rooms"))?;
-        
+
         let submitted_connections = submission["connections"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("Invalid submission: missing connections"))?;
-        
+
         let starting_room = submission["startingRoom"]
             .as_u64()
-            .ok_or_else(|| anyhow::anyhow!("Invalid submission: missing startingRoom"))? as usize;
-        
+            .ok_or_else(|| anyhow::anyhow!("Invalid submission: missing startingRoom"))?
+            as usize;
+
         // Expected room count based on problem
         let expected_room_count = match self.problem_name.as_str() {
             "probatio" => 3,
@@ -66,41 +67,44 @@ impl MockApiClient {
             "quintus" => 30,
             _ => 6,
         };
-        
+
         if submitted_rooms.len() != expected_room_count {
-            println!("[MOCK] Solution verification FAILED: Expected {} rooms, got {}", 
-                     expected_room_count, submitted_rooms.len());
+            println!(
+                "[MOCK] Solution verification FAILED: Expected {} rooms, got {}",
+                expected_room_count,
+                submitted_rooms.len()
+            );
             return Ok(false);
         }
-        
+
         // Build the submitted graph structure
         let mut submitted_graph: HashMap<(usize, usize), usize> = HashMap::new();
-        
+
         for conn in submitted_connections {
             let from_room = conn["from"]["room"].as_u64().unwrap() as usize;
             let from_door = conn["from"]["door"].as_u64().unwrap() as usize;
             let to_room = conn["to"]["room"].as_u64().unwrap() as usize;
-            
+
             submitted_graph.insert((from_room, from_door), to_room);
         }
-        
+
         // Build submitted room labels
         let mut submitted_labels = HashMap::new();
         for (idx, label) in submitted_rooms.iter().enumerate() {
             submitted_labels.insert(idx, label.as_u64().unwrap() as u8);
         }
-        
+
         // Check if the graphs are topologically equivalent
         // Test random paths to verify they produce the same label sequences
         println!("[MOCK] Checking solution by comparing random paths...");
-        
+
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        
+
         // Test with many random paths of various lengths
         let num_tests = 100;
         let max_path_length = 20;
-        
+
         for test_num in 0..num_tests {
             // Generate a random path
             let path_length = rng.gen_range(0..=max_path_length);
@@ -109,21 +113,25 @@ impl MockApiClient {
                 let door = rng.gen_range(0..6);
                 path.push_str(&door.to_string());
             }
-            
+
             // Show progress for longer tests
             if test_num % 20 == 0 {
-                println!("  Testing path {}/{} (length {}): '{}'", 
-                         test_num + 1, num_tests, path.len(), 
-                         if path.len() > 10 { &path[..10] } else { &path });
+                println!(
+                    "  Testing path {}/{} (length {}): '{}'",
+                    test_num + 1,
+                    num_tests,
+                    path.len(),
+                    if path.len() > 10 { &path[..10] } else { &path }
+                );
             }
             // Execute path on original graph
             let original_labels = self.execute_path(&path);
-            
+
             // Execute path on submitted graph
             let mut submitted_result = Vec::new();
             let mut current_room = starting_room;
             submitted_result.push(submitted_labels[&current_room]);
-            
+
             for c in path.chars() {
                 if let Some(door) = c.to_digit(10) {
                     let door = door as usize;
@@ -131,21 +139,26 @@ impl MockApiClient {
                         current_room = next_room;
                         submitted_result.push(submitted_labels[&current_room]);
                     } else {
-                        println!("[MOCK] Solution verification FAILED: Missing connection for room {} door {}", 
-                                 current_room, door);
+                        println!(
+                            "[MOCK] Solution verification FAILED: Missing connection for room {} door {}",
+                            current_room, door
+                        );
                         return Ok(false);
                     }
                 }
             }
-            
+
             if original_labels != submitted_result {
-                println!("[MOCK] Solution verification FAILED: Path '{}' produces different labels", path);
+                println!(
+                    "[MOCK] Solution verification FAILED: Path '{}' produces different labels",
+                    path
+                );
                 println!("  Expected: {:?}", original_labels);
                 println!("  Got:      {:?}", submitted_result);
                 return Ok(false);
             }
         }
-        
+
         println!("[MOCK] Solution verification PASSED: All tested paths match!");
         Ok(true)
     }
@@ -153,10 +166,10 @@ impl MockApiClient {
     fn execute_path(&self, path: &str) -> Vec<u8> {
         let mut result = Vec::new();
         let mut current_room = 0; // Always start from room 0
-        
+
         // Record starting room label
         result.push(self.graph.room_labels[&current_room]);
-        
+
         // Follow the path
         for c in path.chars() {
             if let Some(door) = c.to_digit(10) {
@@ -170,7 +183,7 @@ impl MockApiClient {
                 }
             }
         }
-        
+
         result
     }
 }
@@ -179,16 +192,16 @@ impl MockGraph {
     fn new() -> Self {
         Self::new_for_problem("primus")
     }
-    
+
     fn new_for_problem(problem: &str) -> Self {
         Self::new_with_seed(problem, 42)
     }
-    
+
     fn new_with_seed(problem: &str, seed: u64) -> Self {
         use rand::{Rng, SeedableRng};
         // Use provided seed for graph generation
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-        
+
         let paths = HashMap::new();
         let mut room_labels = HashMap::new();
         let mut connections = HashMap::new();
@@ -202,26 +215,26 @@ impl MockGraph {
             "quintus" => 30,
             _ => 6, // Default to 6
         };
-        
+
         // Generate room labels
         // For probatio: 3 rooms with unique labels (0-2)
         // For primus: 6 rooms with unique labels (0-5)
         // For larger problems: use 4 labels (0,1,2,3) cycling
         let num_labels = match num_rooms {
-            3 => 3,   // probatio - all unique
-            6 => 6,   // primus - all unique
-            _ => 4,   // larger problems use 4 labels
+            3 => 3, // probatio - all unique
+            6 => 6, // primus - all unique
+            _ => 4, // larger problems use 4 labels
         };
-        
+
         for i in 0..num_rooms {
             let label = if num_rooms <= 6 {
-                i as u8  // Unique labels for small problems
+                i as u8 // Unique labels for small problems
             } else {
-                (i % num_labels) as u8  // Cycle through labels for larger problems
+                (i % num_labels) as u8 // Cycle through labels for larger problems
             };
             room_labels.insert(i, label);
         }
-        
+
         // Generate connections for each room's 6 doors
         if problem == "test_duplicate" {
             // Create a graph with known structure to test equivalence detection
@@ -233,11 +246,11 @@ impl MockGraph {
                 // Room 0 and 3 have identical connections
                 connections.insert((0, door), door % 3);
                 connections.insert((3, door), door % 3);
-                
-                // Room 1 and 4 have identical connections  
+
+                // Room 1 and 4 have identical connections
                 connections.insert((1, door), (door + 1) % 3);
                 connections.insert((4, door), (door + 1) % 3);
-                
+
                 // Room 2 and 5 have identical connections
                 connections.insert((2, door), (door + 2) % 3);
                 connections.insert((5, door), (door + 2) % 3);
@@ -252,7 +265,7 @@ impl MockGraph {
                 }
             }
         }
-        
+
         Self {
             paths,
             room_labels,
@@ -273,19 +286,22 @@ impl ApiClientTrait for MockApiClient {
         for (i, plan) in plans.iter().enumerate() {
             println!("  Plan {}: '{}'", i + 1, plan);
         }
-        
+
         let mut results = Vec::new();
-        
+
         for plan in &plans {
             let path_result = self.execute_path(plan);
             println!("  Result for '{}': {:?}", plan, path_result);
             results.push(path_result);
         }
-        
+
         let query_count = self.query_count + results.len() as u32;
-        println!("[MOCK] Response: {} results, total query count: {}", 
-                 results.len(), query_count);
-        
+        println!(
+            "[MOCK] Response: {} results, total query count: {}",
+            results.len(),
+            query_count
+        );
+
         Ok((results, query_count))
     }
 }

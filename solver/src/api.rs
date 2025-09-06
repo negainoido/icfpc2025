@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 use crate::api_trait::ApiClientTrait;
+use anyhow::{Result, anyhow};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct ApiClient {
@@ -52,12 +52,7 @@ impl ApiClient {
             problem_name: problem_name.to_string(),
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&request).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -79,33 +74,27 @@ impl ApiClient {
         for (i, plan) in plans.iter().enumerate() {
             println!("  Plan {}: '{}'", i + 1, plan);
         }
-        
+
         let url = format!("{}/explore", self.base_url);
         let request = ExploreRequest {
             id: self.team_id.clone(),
             plans: plans.clone(),
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&request).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Explore failed with status {}: {}",
-                status,
-                text
-            ));
+            return Err(anyhow!("Explore failed with status {}: {}", status, text));
         }
 
         let explore_response: ExploreResponse = response.json().await?;
-        println!("[API] Response: {} results, total query count: {}", 
-                 explore_response.results.len(), explore_response.query_count);
+        println!(
+            "[API] Response: {} results, total query count: {}",
+            explore_response.results.len(),
+            explore_response.query_count
+        );
         for (i, result) in explore_response.results.iter().enumerate() {
             println!("  Result {}: {:?}", i + 1, result);
         }

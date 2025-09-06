@@ -64,14 +64,18 @@ pub async fn has_active_session(pool: &MySqlPool) -> Result<bool, ApiError> {
     Ok(count > 0)
 }
 
-pub async fn create_session(pool: &MySqlPool, user_name: Option<&str>) -> Result<Session, ApiError> {
+pub async fn create_session(
+    pool: &MySqlPool,
+    user_name: Option<&str>,
+) -> Result<Session, ApiError> {
     let session_id = Uuid::new_v4().to_string();
 
-    let result = sqlx::query("INSERT INTO sessions (session_id, user_name, status) VALUES (?, ?, 'active')")
-        .bind(&session_id)
-        .bind(user_name)
-        .execute(pool)
-        .await?;
+    let result =
+        sqlx::query("INSERT INTO sessions (session_id, user_name, status) VALUES (?, ?, 'active')")
+            .bind(&session_id)
+            .bind(user_name)
+            .execute(pool)
+            .await?;
 
     let id = result.last_insert_id() as i32;
 
@@ -92,9 +96,12 @@ pub async fn get_active_session(pool: &MySqlPool) -> Result<Option<Session>, Api
     Ok(session)
 }
 
-pub async fn get_active_session_by_user(pool: &MySqlPool, user_name: &str) -> Result<Option<Session>, ApiError> {
+pub async fn get_active_session_by_user(
+    pool: &MySqlPool,
+    user_name: &str,
+) -> Result<Option<Session>, ApiError> {
     let session = sqlx::query_as::<_, Session>(
-        "SELECT * FROM sessions WHERE status = 'active' AND user_name = ? LIMIT 1"
+        "SELECT * FROM sessions WHERE status = 'active' AND user_name = ? LIMIT 1",
     )
     .bind(user_name)
     .fetch_optional(pool)
