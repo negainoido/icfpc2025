@@ -5,21 +5,23 @@ register以外のすべてのプロトコルエンドポイント（select, expl
 """
 
 import json
-import sys
-from typing import Any, Dict
 import os
 import random
+import sys
+from typing import Any
 
 import click
 import requests
 
 TEAM_ID = os.environ.get("TEAM_ID")
 assert TEAM_ID, "環境変数TEAM_IDを設定して"
-BASE_URL = os.environ.get("API_HOST", "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com")
+BASE_URL = os.environ.get(
+    "API_HOST", "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
+)
 print("Using HOST:", BASE_URL)
 
 
-def make_request(endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def make_request(endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
     """APIリクエストを送信し、レスポンスを返す"""
     url = f"{BASE_URL}{endpoint}"
 
@@ -64,10 +66,12 @@ def select(problem_name: str):
 
     click.echo(f"✓ 問題が選択されました: {result['problemName']}")
 
-def send_explore(plans: tuple):
+
+def send_explore(plans: list[str]):
     data = {"id": TEAM_ID, "plans": list(plans)}
     result = make_request("/explore", data)
     return result
+
 
 @cli.command()
 @click.argument("plans", nargs=-1, required=True)
@@ -81,7 +85,7 @@ def explore(plans: tuple):
       python api.py explore "0" "12" "345"
     """
     click.echo(f"{len(plans)}個のルートプランで探検中...")
-    result = send_explore(plans)
+    result = send_explore(list(plans))
 
     click.echo(f"✓ 探検完了! 遠征回数: {result['queryCount']}")
     click.echo("\n結果:")
@@ -92,22 +96,23 @@ def explore(plans: tuple):
     click.echo("\n--- smt-guessor friendly output ---")
     click.echo(json.dumps(json_output, ensure_ascii=False))
 
+
 @cli.command()
 @click.argument("N", type=int)
 def solve(n: int):
-    graph = [[None] * 6 for _ in range(n)]
+    graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
-    salt = "".join([random.choice("012345") for i in range(n*8)])
+    salt = "".join([random.choice("012345") for _ in range(n * 8)])
 
-    results = send_explore((salt,))
-    labels2node = {}
-    labels2node[tuple(results["results"][0][-len(salt)-1:])] = 0
+    results = send_explore([salt])
+    labels2node: dict[tuple[Any, ...], int] = {}
+    labels2node[tuple(results["results"][0][-len(salt) - 1 :])] = 0
     graph_labels[0] = results["results"][0][0]
 
     while True:
         q = [(0, "")]
         visited = set()
-        plans = []
+        plans: list[tuple[tuple[int, int], str]] = []
         while q:
             current, path = q[0]
             q = q[1:]
@@ -117,7 +122,7 @@ def solve(n: int):
 
             for i in range(6):
                 if graph[current][i] is not None:
-                    q.append((graph[current][i], path + str(i)))
+                    q.append((graph[current][i], path + str(i)))  # type: ignore
                     continue
                 plans.append(((current, i), path + str(i) + salt))
         if not plans:
@@ -128,13 +133,13 @@ def solve(n: int):
         print("result", result)
 
         for i, result in enumerate(result["results"]):
-            labels = tuple(result[-len(salt)-1:])
+            labels = tuple(result[-len(salt) - 1 :])
             print("labels", labels)
             if labels not in labels2node:
                 labels2node[labels] = len(labels2node)
             node, e = plans[i][0]
             graph[node][e] = labels2node[labels]
-            graph_labels[node] = result[-len(salt)-2]
+            graph_labels[node] = result[-len(salt) - 2]
         print("graph", graph)
         print("graph_labels", graph_labels)
 
@@ -152,6 +157,9 @@ def solve(n: int):
 
             to = graph[i][j]
             for k in range(6):
+                if to is None:
+                    click.echo("❌ グラフが不完全")
+                    return
                 from_node = graph[to][k]
                 if from_node != i:
                     continue
@@ -171,6 +179,12 @@ def solve(n: int):
     data = {"id": TEAM_ID, "map": map_data}
     result = make_request("/guess", data)
     print(result)
+
+    if result["correct"]:
+        click.echo("🎉 正解! 地図が正しく提出されました!")
+    else:
+        click.echo("❌ 不正解。地図が間違っています。")
+        click.echo("注意: 問題は選択解除されました。新しい問題を選択してください。")
 
 
 @cli.command()

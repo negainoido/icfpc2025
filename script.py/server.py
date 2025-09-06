@@ -8,7 +8,6 @@ import logging
 import random
 import uuid
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -39,11 +38,11 @@ class SelectResponse(BaseModel):
 
 class ExploreRequest(BaseModel):
     id: str
-    plans: List[str]
+    plans: list[str]
 
 
 class ExploreResponse(BaseModel):
-    results: List[List[int]]
+    results: list[list[int]]
     queryCount: int
 
 
@@ -61,9 +60,9 @@ class Connection(BaseModel):
 
 
 class MapData(BaseModel):
-    rooms: List[int]
+    rooms: list[int]
     startingRoom: int
-    connections: List[Connection]
+    connections: list[Connection]
 
 
 class GuessRequest(BaseModel):
@@ -91,7 +90,7 @@ class Room:
     """部屋を表すクラス"""
 
     label: int  # 2ビット整数 (0-3)
-    doors: Dict[int, tuple]  # door_id -> (connected_room_id, connected_door_id)
+    doors: dict[int, tuple]  # door_id -> (connected_room_id, connected_door_id)
 
 
 @dataclass
@@ -99,7 +98,7 @@ class Problem:
     """問題インスタンスを表すクラス"""
 
     name: str
-    rooms: List[Room]
+    rooms: list[Room]
     starting_room: int = 0
 
     @classmethod
@@ -136,12 +135,12 @@ class Team:
     name: str
     pl: str
     email: str
-    current_problem: Optional[Problem] = None
+    current_problem: Problem | None = None
     query_count: int = 0
 
 
 # グローバル状態
-teams: Dict[str, Team] = {}
+teams: dict[str, Team] = {}
 
 
 def generate_random_problem(problem_name: str, size: int) -> Problem:
@@ -231,7 +230,7 @@ def generate_json_graph(problem: Problem) -> str:
     return json.dumps(graph_data, ensure_ascii=False, separators=(",", ":"))
 
 
-def simulate_exploration(problem: Problem, plans: List[str]) -> List[List[int]]:
+def simulate_exploration(problem: Problem, plans: list[str]) -> list[list[int]]:
     """ルートプランを実行して観察結果を返す"""
     results = []
 
@@ -291,8 +290,8 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
     n = len(problem.rooms)
     test_plans = []
 
-    # 長さ n, 2*n, 3*n のそれぞれでランダム生成
-    for length_multiplier in [1, 2, 3]:
+    # 長さ (length_multiplier * n) のそれぞれでランダム生成
+    for length_multiplier in [5, 10, 18]:
         plan_length = n * length_multiplier
         for _ in range(20):
             # ランダムなドア番号（0-5）を生成
@@ -312,7 +311,7 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
     return True
 
 
-def simulate_submitted_map(map_data: MapData, plans: List[str]) -> List[List[int]]:
+def simulate_submitted_map(map_data: MapData, plans: list[str]) -> list[list[int]]:
     """提出された地図でルートプランをシミュレート"""
     problem = Problem.from_map_data(map_data)
     return simulate_exploration(problem, plans)
