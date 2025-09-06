@@ -103,10 +103,16 @@ def solve(n: int):
     graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
     salt = "".join([random.choice("012345") for _ in range(n * 8)])
-
-    results = send_explore([salt])
+    salts = [
+        str(i) + "".join([random.choice("012345") for _ in range(5)]) for i in range(3)
+    ]
+    results = send_explore(salts)
     labels2node: dict[tuple[Any, ...], int] = {}
-    labels2node[tuple(results["results"][0][-len(salt) - 1 :])] = 0
+    labels_key = []
+    for i in range(len(salts)):
+        labels_key.append(tuple(results["results"][i][-len(salt) - 1 :]))
+
+    labels2node[tuple(labels_key)] = 0
     graph_labels[0] = results["results"][0][0]
 
     while True:
@@ -125,7 +131,8 @@ def solve(n: int):
                 if next_room is not None:
                     q.append((next_room, path + str(i)))
                     continue
-                plans.append(((current, i), path + str(i) + salt))
+                for salt in salts:
+                    plans.append(((current, i), path + str(i) + salt))
         if not plans:
             break
 
@@ -133,14 +140,19 @@ def solve(n: int):
         print("plans", plans)
         print("result", result)
 
-        for i, result in enumerate(result["results"]):
-            labels = tuple(result[-len(salt) - 1 :])
-            print("labels", labels)
-            if labels not in labels2node:
-                labels2node[labels] = len(labels2node)
-            node, e = plans[i][0]
-            graph[node][e] = labels2node[labels]
-            graph_labels[node] = result[-len(salt) - 2]
+        for i in range(len(plans) // len(salts)):
+            labels_key = []
+            for j in range(len(salts)):
+                labels_key.append(
+                    tuple(result["results"][i * len(salts) + j][-len(salt) - 1 :])
+                )
+            labels_key = tuple(labels_key)
+            if labels_key not in labels2node:
+                labels2node[labels_key] = len(labels2node)
+            node, e = plans[i * len(salts)][0]
+            graph[node][e] = labels2node[labels_key]
+            graph_labels[node] = result["results"][i * len(salts)][-len(salt) - 2]
+
         print("graph", graph)
         print("graph_labels", graph_labels)
 
