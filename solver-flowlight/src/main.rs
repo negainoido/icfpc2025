@@ -193,6 +193,36 @@ fn simulate_and_score(st: &State, plan: &[usize], results: &[u8]) -> usize {
     mismatches
 }
 
+// グラフ構造固定でラベルを最適に貪欲割当したときの最小矛盾数
+// 各ノードに対して、訪問時に観測されたラベルの頻度最大のラベルを選ぶだけで最適
+fn score_structure_only(st: &State, plan: &[usize], results: &[u8]) -> usize {
+    let l = plan.len();
+    debug_assert_eq!(results.len(), l + 1);
+
+    // counts[v][r]: ノードvで観測ラベルr(0..3)が現れた回数
+    let mut counts = vec![[0usize; 4]; N];
+    let mut cur = 0usize;
+    for j in 0..l {
+        let r = results[j] as usize;
+        counts[cur][r] += 1;
+        let d = plan[j] as usize;
+        cur = st.neighbors[cur][d].0;
+    }
+    // 最終位置の観測
+    counts[cur][results[l] as usize] += 1;
+
+    // 総観測回数と、各ノードでの最多一致数の合計
+    let mut total_obs = 0usize;
+    let mut total_best = 0usize;
+    for v in 0..N {
+        let s = counts[v][0] + counts[v][1] + counts[v][2] + counts[v][3];
+        total_obs += s;
+        let best = *counts[v].iter().max().unwrap();
+        total_best += best;
+    }
+    total_obs - total_best
+}
+
 // 挿入操作（任意のドアを開けて1歩進む、コスト=1）を
 // 任意回適用した結果の最小コストを多源ダイクストラで求める
 fn relax_insertions(st: &State, base: &[usize], inf: usize) -> Vec<usize> {
@@ -379,7 +409,10 @@ fn sa_solve(
     verbose: u8,
     random_init: bool,
     edit_eval: bool,
+    structure_eval: bool,
     big_moves: bool,
+    t0: f64,
+    t1: f64,
 ) -> (State, usize) {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut cur = if random_init {
@@ -387,7 +420,9 @@ fn sa_solve(
     } else {
         init_route_respecting_ring(plan, results, &mut rng)
     };
-    let mut cur_score = if edit_eval {
+    let mut cur_score = if structure_eval {
+        score_structure_only(&cur, plan, results)
+    } else if edit_eval {
         score_edit_distance(&cur, plan, results)
     } else {
         simulate_and_score(&cur, plan, results)
@@ -396,8 +431,9 @@ fn sa_solve(
     let mut best_score = cur_score;
 
     let start = Instant::now();
-    let mut t = 3.0f64; // 初期温度
-    let alpha = 0.9996f64; // 減衰率
+    let total = time_limit.as_secs_f64().max(1e-9);
+    let t0 = t0.max(1e-12);
+    let t1 = t1.max(1e-12);
 
     if verbose > 0 {
         println!(
@@ -409,6 +445,9 @@ fn sa_solve(
 
     let mut iter: u64 = 0;
     while start.elapsed() < time_limit {
+        // 時間割合 tau に応じた幾何補間温度
+        let tau = (start.elapsed().as_secs_f64() / total).clamp(0.0, 1.0);
+        let t = t0.powf(1.0 - tau) * t1.powf(tau);
         let mut next = cur.clone();
         if big_moves {
             // 2-opt 50%, ラベル 10%, ノード置換 20%, 3-edge 15%, 4-edge 5%
@@ -416,7 +455,7 @@ fn sa_solve(
             if r < 0.50 {
                 apply_two_opt_swap(&mut next, &mut rng);
             } else if r < 0.60 {
-                apply_label_flip(&mut next, &mut rng);
+                if !structure_eval { apply_label_flip(&mut next, &mut rng); } else { apply_node_port_permutation(&mut next, &mut rng); }
             } else if r < 0.80 {
                 apply_node_port_permutation(&mut next, &mut rng);
             } else if r < 0.95 {
@@ -429,12 +468,17 @@ fn sa_solve(
             let use_two_opt = rng.gen_bool(0.7);
             if use_two_opt {
                 apply_two_opt_swap(&mut next, &mut rng);
-            } else {
+            } else if !structure_eval {
                 apply_label_flip(&mut next, &mut rng);
+            } else {
+                // ラベルムーブは意味が無いので別の構造ムーブ
+                apply_two_opt_swap(&mut next, &mut rng);
             }
         }
 
-        let next_score = if edit_eval {
+        let next_score = if structure_eval {
+            score_structure_only(&next, plan, results)
+        } else if edit_eval {
             score_edit_distance(&next, plan, results)
         } else {
             simulate_and_score(&next, plan, results)
@@ -474,7 +518,6 @@ fn sa_solve(
                 cur_score = next_score;
             }
         }
-        t *= alpha;
         iter += 1;
         if best_score == 0 {
             break;
@@ -507,6 +550,18 @@ struct Args {
     #[arg(long, default_value_t = false)]
     edit_eval: bool,
 
+    /// グラフ構造のみを評価（ラベルは貪欲最適とみなす）
+    #[arg(long, default_value_t = false)]
+    structure_eval: bool,
+
+    /// 初期温度 T0（時間割合0での温度）
+    #[arg(long, default_value_t = 3.0)]
+    t0: f64,
+
+    /// 最終温度 T1（時間割合1での温度）
+    #[arg(long, default_value_t = 0.01)]
+    t1: f64,
+
     /// 大きな遷移（ポート置換・3/4-edge再配線）を有効化
     #[arg(long, default_value_t = false)]
     big_moves: bool,
@@ -533,7 +588,10 @@ async fn main() -> Result<()> {
         args.verbose,
         args.random_init,
         args.edit_eval,
+        args.structure_eval,
         args.big_moves,
+        args.t0,
+        args.t1,
     );
 
     if args.verbose > 0 {
