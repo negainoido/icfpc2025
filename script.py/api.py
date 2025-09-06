@@ -22,7 +22,7 @@ class API:
         team_id: str | None,
         client_id: str | None,
         client_secret: str | None,
-        session_id: str | None = None,
+        user_name: str | None,
     ):
         """API client
 
@@ -36,14 +36,14 @@ class API:
             garasubo.com に必要
         client_secret
             garasubo.com に必要
-        session_id
-            garasubo.com で続きから始める場合に必要
+        user_name
+            garasubo.com のときに使う
         """
         self.base_url = base_url or "https://negainoido.garasubo.com/api"
         self.team_id = team_id
         self.client_id = client_id
         self.client_secret = client_secret
-        self.session_id = session_id
+        self.user_name = user_name
 
     def make_request(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """APIリクエストを送信し、レスポンスを返す"""
@@ -61,27 +61,25 @@ class API:
             sys.exit(1)
 
     def select(self, problem_name: str) -> dict[str, Any]:
-        data = {"id": self.team_id, "problemName": problem_name}
+        data = {
+            "id": self.team_id,
+            "user_name": self.user_name,
+            "problemName": problem_name,
+        }
         result = self.make_request("/select", data)
         if "session_id" in result:
             self.session_id = result["session_id"]
             print(f"SessionId: {self.session_id}")
-            print(f"run guess or solve with: -s '{self.session_id}'")
         return result
 
     def explore(self, plans: list[str]):
-        data = {"id": self.team_id, "session_id": self.session_id, "plans": plans}
-        print(data)
+        data = {"id": self.team_id, "user_name": self.user_name, "plans": plans}
         result = self.make_request("/explore", data)
         return result
 
     def guess(self, map_data: dict[str, Any]) -> dict[str, Any]:
-        data = {"id": self.team_id, "session_id": self.session_id, "map": map_data}
+        data = {"id": self.team_id, "user_name": self.user_name, "map": map_data}
         return self.make_request("/guess", data)
-
-    def set_session(self, session_id: str | None):
-        if session_id:
-            self.session_id = session_id
 
 
 load_dotenv()
@@ -89,16 +87,20 @@ TEAM_ID = os.environ.get("TEAM_ID")
 API_HOST = os.environ.get("API_HOST")
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+USER_NAME = os.environ.get("USER")
 
-if TEAM_ID and API_HOST:
+if TEAM_ID and API_HOST and USER_NAME:
     print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
-    api = API(API_HOST, TEAM_ID, None, None)
-elif CLIENT_ID and CLIENT_SECRET:
+    api = API(API_HOST, TEAM_ID, None, None, USER_NAME)
+elif CLIENT_ID and CLIENT_SECRET and USER_NAME:
     print(f"Using garasubo.com API access as {CLIENT_ID}")
-    api = API(None, None, CLIENT_ID, CLIENT_SECRET)
+    api = API(None, None, CLIENT_ID, CLIENT_SECRET, USER_NAME)
+elif not USER_NAME:
+    print("Error: You have no $USER")
+    sys.exit(1)
 else:
     print(
-        "Error: Please set either TEAM_ID and API_HOST, or CLIENT_ID and CLIENT_SECRET"
+        "Error: Set {TEAM_ID and API_HOST} for prod/local , or {CLIENT_ID and CLIENT_SECRET} for garasubo.com"
     )
     sys.exit(1)
 
@@ -134,9 +136,8 @@ def select(problem_name: str):
 
 
 @cli.command()
-@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("plans", nargs=-1, required=True)
-def explore(session_id: str | None, plans: tuple):
+def explore(plans: tuple):
     """エディフィキウムを探検する
 
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
@@ -145,8 +146,6 @@ def explore(session_id: str | None, plans: tuple):
     例:
       python api.py explore "0" "12" "345"
     """
-    api.set_session(session_id)
-
     click.echo(f"{len(plans)}個のルートプランで探検中...")
     result = api.explore(list(plans))
 
@@ -161,11 +160,8 @@ def explore(session_id: str | None, plans: tuple):
 
 
 @cli.command()
-@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("N", type=int)
-def solve(session_id: str | None, n: int):
-    api.set_session(session_id)
-
+def solve(n: int):
     graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
     salts = [
@@ -265,9 +261,8 @@ def solve(session_id: str | None, n: int):
 
 
 @cli.command()
-@click.option("--session-id", "-s", type=str, default=None)
 @click.argument("map_file", type=click.File("r"))
-def guess(session_id: str | None, map_file):
+def guess(map_file):
     """地図を提出する
 
     MAP_FILE: 地図データのJSONファイル
@@ -283,8 +278,6 @@ def guess(session_id: str | None, map_file):
         ]
       }
     """
-    api.set_session(session_id)
-
     try:
         map_data = json.load(map_file)
     except json.JSONDecodeError as e:
@@ -327,9 +320,10 @@ def guess(session_id: str | None, map_file):
     multiple=True,
     help="接続の指定（形式: from_room,from_door,to_room,to_door）",
 )
-@click.option("--session-id", "-S", type=str, default=None)
 def guess_inline(
-    rooms: tuple, starting_room: int, connection: tuple, session_id: str | None
+    rooms: tuple,
+    starting_room: int,
+    connection: tuple,
 ):
     """コマンドラインで直接地図を指定して提出する
 
@@ -342,8 +336,6 @@ def guess_inline(
             "エラー: 少なくとも1つの部屋を指定してください（-r オプション）", err=True
         )
         sys.exit(1)
-
-    api.set_session(session_id)
 
     connections = []
     for conn_str in connection:
