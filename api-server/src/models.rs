@@ -52,6 +52,8 @@ pub struct SelectRequest {
     #[serde(rename = "problemName")]
     pub problem_name: String,
     pub user_name: Option<String>,
+    #[serde(default)]
+    pub enqueue: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -71,7 +73,8 @@ pub struct SelectUpstreamResponse {
 pub struct SelectResponse {
     pub session_id: String,
     #[serde(rename = "problemName")]
-    pub problem_name: String,
+    pub problem_name: Option<String>,
+    pub status: String,
 }
 
 // Explore API types

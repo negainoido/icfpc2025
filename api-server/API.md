@@ -13,29 +13,52 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 
 ## データベース
 
-- `sessions`: セッション管理用テーブル
-- `api_logs`: APIリクエスト/レスポンスログ用テーブル
+- `sessions`: セッション管理用テーブル（ステータス: `active`, `completed`, `failed`, `pending`）
+- `api_logs`: APIリクエスト/レスポンスログ用テーブル  
+- `pending_requests`: キューに入れられたselectリクエストの情報を保存するテーブル
+
+## セッションキューの仕組み
+
+このAPIでは、同時に複数のセッションを管理するためのキュー機能を提供しています：
+
+1. **通常の動作**: `enqueue: false`の場合、アクティブなセッションがあると409エラーを返します
+2. **キュー動作**: `enqueue: true`の場合、アクティブなセッションがあってもリクエストを`pending`状態でキューに保存します
+3. **自動実行**: アクティブなセッションが終了（`completed`または`failed`）すると、キューの先頭にある`pending`セッションが自動的に`active`になり、保存されたselectリクエストが実行されます
 
 ## API エンドポイント
 
 ### `POST /api/select`
 
-本家の`/select`に代理で投げるAPI。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
-そうでない場合は新たなセッション番号を発行した上で`/select`を投げ、セッションを進行中にする。
+本家の`/select`に代理で投げるAPI。
+
+**動作:**
+- `enqueue`が`false`（デフォルト）または省略された場合：従来通りの動作。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
+- `enqueue`が`true`の場合：進行中のセッションがあっても新しいセッションを`pending`状態でキューに追加する。アクティブなセッション終了時に自動的に`active`になり、selectリクエストが実行される。
 
 **リクエスト:**
 ```json
 {
   "problemName": "問題名",
-  "user_name": "ユーザー名（省略可能）"
+  "user_name": "ユーザー名（省略可能）",
+  "enqueue": false
 }
 ```
 
-**レスポンス:**
+**レスポンス（activeセッションが作成された場合）:**
 ```json
 {
   "session_id": "生成されたUUID",
-  "problemName": "問題名"
+  "problemName": "問題名",
+  "status": "active"
+}
+```
+
+**レスポンス（pendingセッションがキューに追加された場合）:**
+```json
+{
+  "session_id": "生成されたUUID",
+  "problemName": null,
+  "status": "pending"
 }
 ```
 
