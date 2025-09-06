@@ -4,6 +4,7 @@ use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 #[derive(Parser, Debug)]
@@ -37,6 +38,14 @@ struct Args {
     /// Optional time limit in seconds (stops annealing early)
     #[arg(long)]
     time_limit: Option<f32>,
+
+    /// Log progress every N iterations (emit only if verbose>0)
+    #[arg(long)]
+    log_every: Option<usize>,
+
+    /// Save intermediate best map every N iterations (uses --output as base)
+    #[arg(long)]
+    save_every: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -346,7 +355,18 @@ fn swap_labels(m: &mut Model, q1: usize, q2: usize) {
     m.labels.swap(q1, q2);
 }
 
-fn anneal(inst: &Instance, model: &mut Model, iters: usize, lambda_bal: f32, rng: &mut StdRng, time_limit: Option<Duration>) -> Energy {
+fn anneal(
+    inst: &Instance,
+    model: &mut Model,
+    iters: usize,
+    lambda_bal: f32,
+    rng: &mut StdRng,
+    time_limit: Option<Duration>,
+    log_every: Option<usize>,
+    verbose: u8,
+    save_every: Option<usize>,
+    save_base: Option<&Path>,
+) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
     let mut best = cur;
@@ -356,31 +376,52 @@ fn anneal(inst: &Instance, model: &mut Model, iters: usize, lambda_bal: f32, rng
     // temperature schedule
     let mut t = 1.0_f32;
     let alpha = 0.999_f32;
+    let mut since_log_moves: usize = 0;
+    let mut since_log_accepts: usize = 0;
+    if verbose > 0 {
+        eprintln!(
+            "anneal: start E={} (obs={}, bal={}), N={}, ports={}",
+            cur.total, cur.obs, cur.balance, inst.n, n_ports
+        );
+    }
     for k in 0..iters {
         if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
         // randomly choose move
         let mv: f32 = rng.r#gen();
         if mv < 0.7 {
-            // 2-opt move
+            // 2-opt move (only on two distinct, non-loop edges)
             let p1 = rng.gen_range(0..n_ports);
             let mut p2 = rng.gen_range(0..n_ports);
             if p2 == p1 { p2 = (p2 + 1) % n_ports; }
-            let old_a = model.match_to[p1];
-            let old_c = model.match_to[p2];
+
+            let a = p1;
+            let b = model.match_to[a];
+            let c = p2;
+            let d = model.match_to[c];
+
+            // Skip if either edge is a self-loop or edges overlap (would break involution)
+            // Edges must be (a<->b) and (c<->d) with all of a,b,c,d pairwise distinct
+            if a == b || c == d || a == c || a == d || b == c || b == d {
+                continue;
+            }
+
+            let old_a = b;
+            let old_c = d;
             let pattern_b: bool = rng.gen_bool(0.5);
-            if pattern_b { two_opt_b(model, p1, p2); } else { two_opt(model, p1, p2); }
+            if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
             let new_e = energy(inst, model, lambda_bal);
             let d = (new_e.total - cur.total) as f32;
             let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
             if accept {
                 cur = new_e;
+                since_log_accepts += 1;
                 if new_e.total < best.total { best = new_e; best_model = model.clone(); }
             } else {
                 // revert
-                model.match_to[p1] = old_a;
-                model.match_to[old_a] = p1;
-                model.match_to[p2] = old_c;
-                model.match_to[old_c] = p2;
+                model.match_to[a] = old_a;
+                model.match_to[old_a] = a;
+                model.match_to[c] = old_c;
+                model.match_to[old_c] = c;
             }
         } else {
             // label swap
@@ -393,17 +434,61 @@ fn anneal(inst: &Instance, model: &mut Model, iters: usize, lambda_bal: f32, rng
             let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
             if accept {
                 cur = new_e;
+                since_log_accepts += 1;
                 if new_e.total < best.total { best = new_e; best_model = model.clone(); }
             } else {
                 model.labels.swap(q1, q2);
             }
         }
+        since_log_moves += 1;
         t *= alpha;
         if t < 1e-4 { t = 1e-4; }
         // cheap break if perfect fit on observations
         if best.obs == 0 { /* keep going to balance */ }
+
+        if let Some(every) = log_every {
+            if verbose > 0 && every > 0 && (k + 1) % every == 0 {
+                let acc_rate = if since_log_moves > 0 {
+                    since_log_accepts as f32 / since_log_moves as f32
+                } else { 0.0 };
+                eprintln!(
+                    "anneal: it={}/{} T={:.4} curE={} (obs={},bal={}) bestE={} acc={:.2} elapsed={:.2}s",
+                    k + 1,
+                    iters,
+                    t,
+                    cur.total,
+                    cur.obs,
+                    cur.balance,
+                    best.total,
+                    acc_rate,
+                    start_t.elapsed().as_secs_f32()
+                );
+                since_log_moves = 0;
+                since_log_accepts = 0;
+            }
+        }
+
+        if let (Some(every), Some(base)) = (save_every, save_base) {
+            if every > 0 && (k + 1) % every == 0 {
+                // Save best-so-far
+                let save_path = derive_save_path(base, k + 1);
+                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                    if verbose > 0 {
+                        eprintln!("warn: failed to save {}: {}", save_path.display(), e);
+                    }
+                } else if verbose > 0 {
+                    eprintln!("saved {} (bestE={})", save_path.display(), best.total);
+                }
+            }
+        }
     }
     *model = best_model;
+    if verbose > 0 {
+        eprintln!(
+            "anneal: done bestE={} (obs={}, bal={}) elapsed={:.2}s",
+            best.total, best.obs, best.balance, start_t.elapsed().as_secs_f32()
+        );
+    }
     best
 }
 
@@ -458,6 +543,22 @@ fn finalize_match_to(model: &mut Model) {
     }
 }
 
+fn derive_save_path(base: &Path, iter: usize) -> PathBuf {
+    let dir = base.parent().unwrap_or_else(|| Path::new("."));
+    let stem = base.file_stem().and_then(|s| s.to_str()).unwrap_or("out");
+    let ext = base.extension().and_then(|e| e.to_str()).unwrap_or("json");
+    let name = format!("{}-{:06}.{}", stem, iter, ext);
+    dir.join(name)
+}
+
+fn write_output_path(model: &Model, s0: usize, path: &Path) -> Result<()> {
+    let out = emit_output(model, s0);
+    let serialized = serde_json::to_string_pretty(&out)?;
+    if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { fs::create_dir_all(parent)?; } }
+    fs::write(path, serialized)?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -491,8 +592,29 @@ async fn main() -> Result<()> {
     // Build initial and anneal
     let mut model = build_initial(&inst, &mut rng);
     finalize_match_to(&mut model);
+
+    // Save initial solution as iter 0 if output is a file
+    let save_base = if args.output != "-" { Some(Path::new(&args.output)) } else { None };
+    if let Some(base) = save_base {
+        let p0 = derive_save_path(base, 0);
+        write_output_path(&model, inst.s0 as usize, &p0)?;
+        if args.verbose > 0 { eprintln!("saved {} (initial)", p0.display()); }
+    }
+
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
-    let best_e = anneal(&inst, &mut model, args.iters, args.lambda_bal, &mut rng, time_limit);
+    let log_every = if args.verbose > 0 { args.log_every.or(Some(10_000)) } else { None };
+    let best_e = anneal(
+        &inst,
+        &mut model,
+        args.iters,
+        args.lambda_bal,
+        &mut rng,
+        time_limit,
+        log_every,
+        args.verbose,
+        args.save_every.or(log_every),
+        save_base,
+    );
     finalize_match_to(&mut model);
     if args.verbose > 0 {
         eprintln!("energy: obs={}, balance={}, total={}", best_e.obs, best_e.balance, best_e.total);
