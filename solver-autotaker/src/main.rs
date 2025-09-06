@@ -46,6 +46,30 @@ struct Args {
     /// Save intermediate best map every N iterations (uses --output as base)
     #[arg(long)]
     save_every: Option<usize>,
+
+    /// Initial temperature
+    #[arg(long, default_value_t = 1.0_f32)]
+    t0: f32,
+
+    /// Cooling factor per iteration
+    #[arg(long, default_value_t = 0.999_f32)]
+    alpha: f32,
+
+    /// Minimum temperature clamp
+    #[arg(long, default_value_t = 1e-4_f32)]
+    tmin: f32,
+
+    /// Number of restarts (multi-start annealing)
+    #[arg(long, default_value_t = 1usize)]
+    restarts: usize,
+
+    /// Reheat if no improvement for this many iterations
+    #[arg(long)]
+    reheat_every: Option<usize>,
+
+    /// Temperature to reset to on reheat
+    #[arg(long)]
+    reheat_to: Option<f32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -380,6 +404,11 @@ fn anneal(
     verbose: u8,
     save_every: Option<usize>,
     save_base: Option<&Path>,
+    t0: f32,
+    alpha: f32,
+    tmin: f32,
+    reheat_every: Option<usize>,
+    reheat_to: Option<f32>,
 ) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
@@ -388,10 +417,11 @@ fn anneal(
     let n_ports = inst.n * 6;
 
     // temperature schedule
-    let mut t = 1.0_f32;
-    let alpha = 0.999_f32;
+    let mut t = t0.max(1e-8);
+    let alpha = alpha;
     let mut since_log_moves: usize = 0;
     let mut since_log_accepts: usize = 0;
+    let mut last_best_iter: usize = 0;
     if verbose > 0 {
         eprintln!(
             "anneal: start E={} (obs={}, bal={}), N={}, ports={}",
@@ -446,7 +476,7 @@ fn anneal(
             if accept {
                 cur = new_e;
                 since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); }
+                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
             } else {
                 // revert
                 model.match_to[a] = old_a;
@@ -478,16 +508,28 @@ fn anneal(
             if accept {
                 cur = new_e;
                 since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); }
+                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
             } else {
                 model.labels.swap(q1, q2);
             }
         }
         since_log_moves += 1;
         t *= alpha;
-        if t < 1e-4 { t = 1e-4; }
+        if t < tmin { t = tmin; }
         // cheap break if perfect fit on observations
         if best.obs == 0 { /* keep going to balance */ }
+
+        // Optional reheat if stagnated
+        if let Some(r_every) = reheat_every {
+            if r_every > 0 && k.saturating_sub(last_best_iter) >= r_every {
+                let new_t = reheat_to.unwrap_or(t0 * 0.1).max(t);
+                if verbose > 0 {
+                    eprintln!("anneal: reheat at it={} T {:.4} -> {:.4}", k + 1, t, new_t);
+                }
+                t = new_t;
+                last_best_iter = k; // avoid immediate reheat repeat
+            }
+        }
 
         if let Some(every) = log_every {
             if verbose > 0 && every > 0 && (k + 1) % every == 0 {
@@ -646,24 +688,54 @@ async fn main() -> Result<()> {
 
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
     let log_every = if args.verbose > 0 { args.log_every.or(Some(10_000)) } else { None };
-    let best_e = anneal(
-        &inst,
-        &mut model,
-        args.iters,
-        args.lambda_bal,
-        &mut rng,
-        time_limit,
-        log_every,
-        args.verbose,
-        args.save_every.or(log_every),
-        save_base,
-    );
-    finalize_match_to(&mut model);
-    if args.verbose > 0 {
-        eprintln!("energy: obs={}, balance={}, total={}", best_e.obs, best_e.balance, best_e.total);
+
+    // Multi-start annealing (restarts)
+    let restarts = args.restarts.max(1);
+    let mut best_overall_model = model.clone();
+    let mut best_overall_e = energy(&inst, &model, args.lambda_bal);
+    let mut base_seed = seed;
+    for r in 0..restarts {
+        if args.verbose > 0 && restarts > 1 {
+            eprintln!("restart {}/{}", r + 1, restarts);
+        }
+        // Derive per-restart RNG
+        let restart_seed = base_seed ^ ((r as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let mut rng = StdRng::seed_from_u64(restart_seed);
+
+        // Fresh initial model per restart
+        let mut m = build_initial(&inst, &mut rng);
+        finalize_match_to(&mut m);
+        let mut m_save_base = save_base; // may overwrite per restart; acceptable for now
+
+        let best_e = anneal(
+            &inst,
+            &mut m,
+            args.iters,
+            args.lambda_bal,
+            &mut rng,
+            time_limit,
+            log_every,
+            args.verbose,
+            args.save_every.or(log_every),
+            m_save_base,
+            args.t0,
+            args.alpha,
+            args.tmin,
+            args.reheat_every,
+            args.reheat_to,
+        );
+        finalize_match_to(&mut m);
+        if args.verbose > 0 {
+            eprintln!("energy: obs={}, balance={}, total={}", best_e.obs, best_e.balance, best_e.total);
+        }
+        if best_e.total < best_overall_e.total {
+            best_overall_e = best_e;
+            best_overall_model = m;
+        }
     }
 
-    let out = emit_output(&model, inst.s0);
+    // Use best-overall model
+    let out = emit_output(&best_overall_model, inst.s0);
 
     let serialized = serde_json::to_string_pretty(&out)?;
 
