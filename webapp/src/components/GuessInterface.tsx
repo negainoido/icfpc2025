@@ -52,12 +52,27 @@ export default function GuessInterface({ map }: Props) {
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h2>Submit Final Guess</h2>
-      
-      <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-        <p><strong>Session:</strong> {state.sessionId}</p>
-        <p><strong>Problem:</strong> {state.problemName}</p>
-        <p><strong>Total Explorations:</strong> {state.explorationResults.length}</p>
-        <p><strong>Final Query Count:</strong> {state.queryCount}</p>
+
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '10px',
+          backgroundColor: '#e7f3ff',
+          borderRadius: '4px',
+        }}
+      >
+        <p>
+          <strong>Session:</strong> {state.sessionId}
+        </p>
+        <p>
+          <strong>Problem:</strong> {state.problemName}
+        </p>
+        <p>
+          <strong>Total Explorations:</strong> {state.explorationResults.length}
+        </p>
+        <p>
+          <strong>Final Query Count:</strong> {state.queryCount}
+        </p>
       </div>
 
       {result ? (
@@ -72,20 +87,23 @@ export default function GuessInterface({ map }: Props) {
               border: `2px solid ${result.correct ? '#28a745' : '#dc3545'}`,
             }}
           >
-            <h3 style={{ 
-              color: result.correct ? '#155724' : '#721c24',
-              margin: '0 0 10px 0'
-            }}>
+            <h3
+              style={{
+                color: result.correct ? '#155724' : '#721c24',
+                margin: '0 0 10px 0',
+              }}
+            >
               {result.correct ? '🎉 Correct!' : '❌ Incorrect'}
             </h3>
-            <p style={{ 
-              color: result.correct ? '#155724' : '#721c24',
-              margin: 0
-            }}>
-              {result.correct 
+            <p
+              style={{
+                color: result.correct ? '#155724' : '#721c24',
+                margin: 0,
+              }}
+            >
+              {result.correct
                 ? 'Congratulations! Your map was correct.'
-                : 'Your map was incorrect. Better luck next time!'
-              }
+                : 'Your map was incorrect. Better luck next time!'}
             </p>
           </div>
 
@@ -108,12 +126,14 @@ export default function GuessInterface({ map }: Props) {
         // Show map confirmation and submit button
         <div>
           <h3>Final Map</h3>
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '20px',
-            borderRadius: '4px',
-            marginBottom: '20px',
-          }}>
+          <div
+            style={{
+              backgroundColor: '#f8f9fa',
+              padding: '20px',
+              borderRadius: '4px',
+              marginBottom: '20px',
+            }}
+          >
             <div style={{ marginBottom: '15px' }}>
               <strong>Rooms:</strong> [{map.rooms.join(', ')}]
             </div>
@@ -123,12 +143,16 @@ export default function GuessInterface({ map }: Props) {
             <div>
               <strong>Connections:</strong>
               {map.connections.length === 0 ? (
-                <span style={{ color: '#666', fontStyle: 'italic' }}> None</span>
+                <span style={{ color: '#666', fontStyle: 'italic' }}>
+                  {' '}
+                  None
+                </span>
               ) : (
                 <ul style={{ marginTop: '5px', paddingLeft: '20px' }}>
                   {map.connections.map((conn, index) => (
                     <li key={index} style={{ marginBottom: '5px' }}>
-                      Room {conn.from.room} Door {conn.from.door} ↔ Room {conn.to.room} Door {conn.to.door}
+                      Room {conn.from.room} Door {conn.from.door} ↔ Room{' '}
+                      {conn.to.room} Door {conn.to.door}
                     </li>
                   ))}
                 </ul>
@@ -137,21 +161,23 @@ export default function GuessInterface({ map }: Props) {
           </div>
 
           {state.error && (
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              borderRadius: '4px',
-              marginBottom: '20px',
-            }}>
+            <div
+              style={{
+                padding: '10px',
+                backgroundColor: '#f8d7da',
+                color: '#721c24',
+                borderRadius: '4px',
+                marginBottom: '20px',
+              }}
+            >
               {state.error}
             </div>
           )}
 
           <div style={{ textAlign: 'center' }}>
             <p style={{ marginBottom: '20px', color: '#666' }}>
-              <strong>Warning:</strong> Once you submit your guess, the session will be terminated.
-              Make sure your map is complete and correct.
+              <strong>Warning:</strong> Once you submit your guess, the session
+              will be terminated. Make sure your map is complete and correct.
             </p>
 
             <button

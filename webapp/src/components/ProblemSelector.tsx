@@ -36,7 +36,11 @@ export default function ProblemSelector() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
-          dispatch({ type: 'SET_ERROR', payload: 'A session is already active. Please complete or reset it first.' });
+          dispatch({
+            type: 'SET_ERROR',
+            payload:
+              'A session is already active. Please complete or reset it first.',
+          });
         } else {
           dispatch({ type: 'SET_ERROR', payload: error.message });
         }
@@ -55,7 +59,7 @@ export default function ProblemSelector() {
   return (
     <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
       <h2>Select Problem</h2>
-      
+
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '5px' }}>
           User Name (optional):
@@ -91,7 +95,7 @@ export default function ProblemSelector() {
             borderRadius: '4px',
           }}
         >
-          {PROBLEM_OPTIONS.map(problem => (
+          {PROBLEM_OPTIONS.map((problem) => (
             <option key={problem} value={problem}>
               {problem}
             </option>
@@ -100,13 +104,15 @@ export default function ProblemSelector() {
       </div>
 
       {state.error && (
-        <div style={{
-          padding: '10px',
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          borderRadius: '4px',
-          marginBottom: '20px',
-        }}>
+        <div
+          style={{
+            padding: '10px',
+            backgroundColor: '#f8d7da',
+            color: '#721c24',
+            borderRadius: '4px',
+            marginBottom: '20px',
+          }}
+        >
           {state.error}
         </div>
       )}
@@ -129,7 +135,10 @@ export default function ProblemSelector() {
       </button>
 
       <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
-        <p><strong>Note:</strong> Team authentication is handled automatically by the server.</p>
+        <p>
+          <strong>Note:</strong> Team authentication is handled automatically by
+          the server.
+        </p>
         <p>Only one session can be active at a time.</p>
       </div>
     </div>

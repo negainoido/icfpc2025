@@ -56,7 +56,11 @@ export default function GamePage() {
       return;
     }
 
-    if (!window.confirm('現在のセッションを中止しますか？この操作は元に戻せません。')) {
+    if (
+      !window.confirm(
+        '現在のセッションを中止しますか？この操作は元に戻せません。'
+      )
+    ) {
       return;
     }
 
@@ -67,29 +71,46 @@ export default function GamePage() {
       alert('セッションを正常に中止しました');
     } catch (err) {
       console.error('Failed to abort session:', err);
-      dispatch({ type: 'SET_ERROR', payload: 'セッションの中止に失敗しました' });
+      dispatch({
+        type: 'SET_ERROR',
+        payload: 'セッションの中止に失敗しました',
+      });
     }
   };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderBottom: '1px solid #dee2e6',
-        padding: '15px 20px',
-        marginBottom: '20px',
-      }}>
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderBottom: '1px solid #dee2e6',
+          padding: '15px 20px',
+          marginBottom: '20px',
+        }}
+      >
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <div>
-              <h1 style={{ margin: '0 0 5px 0', fontSize: '24px', color: '#343a40' }}>
+              <h1
+                style={{
+                  margin: '0 0 5px 0',
+                  fontSize: '24px',
+                  color: '#343a40',
+                }}
+              >
                 {getPhaseTitle()}
               </h1>
               <p style={{ margin: 0, color: '#6c757d', fontSize: '14px' }}>
                 {getPhaseDescription()}
               </p>
             </div>
-            
+
             {state.sessionId && (
               <button
                 onClick={handleReset}
@@ -114,28 +135,32 @@ export default function GamePage() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
         {/* Error Display */}
         {state.error && (
-          <div style={{
-            backgroundColor: '#f8d7da',
-            border: '1px solid #f5c6cb',
-            borderRadius: '6px',
-            padding: '15px',
-            marginBottom: '20px',
-            color: '#721c24'
-          }}>
+          <div
+            style={{
+              backgroundColor: '#f8d7da',
+              border: '1px solid #f5c6cb',
+              borderRadius: '6px',
+              padding: '15px',
+              marginBottom: '20px',
+              color: '#721c24',
+            }}
+          >
             {state.error}
           </div>
         )}
 
         {/* Phase Progress Indicator */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          marginBottom: '30px',
-          padding: '20px',
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginBottom: '30px',
+            padding: '20px',
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          }}
+        >
           {[
             { key: 'problem-selection', label: 'Select Problem', icon: '📋' },
             { key: 'exploring', label: 'Explore', icon: '🔍' },
@@ -153,50 +178,88 @@ export default function GamePage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '20px',
-                    backgroundColor: 
-                      state.phase === phase.key ? '#007bff' :
-                      ['problem-selection', 'exploring', 'building-map', 'completed'].indexOf(state.phase) > 
-                      ['problem-selection', 'exploring', 'building-map', 'completed'].indexOf(phase.key) ? '#28a745' : '#e9ecef',
-                    color: 
-                      state.phase === phase.key || 
-                      ['problem-selection', 'exploring', 'building-map', 'completed'].indexOf(state.phase) > 
-                      ['problem-selection', 'exploring', 'building-map', 'completed'].indexOf(phase.key) ? 'white' : '#6c757d',
+                    backgroundColor:
+                      state.phase === phase.key
+                        ? '#007bff'
+                        : [
+                              'problem-selection',
+                              'exploring',
+                              'building-map',
+                              'completed',
+                            ].indexOf(state.phase) >
+                            [
+                              'problem-selection',
+                              'exploring',
+                              'building-map',
+                              'completed',
+                            ].indexOf(phase.key)
+                          ? '#28a745'
+                          : '#e9ecef',
+                    color:
+                      state.phase === phase.key ||
+                      [
+                        'problem-selection',
+                        'exploring',
+                        'building-map',
+                        'completed',
+                      ].indexOf(state.phase) >
+                        [
+                          'problem-selection',
+                          'exploring',
+                          'building-map',
+                          'completed',
+                        ].indexOf(phase.key)
+                        ? 'white'
+                        : '#6c757d',
                     marginBottom: '8px',
                   }}
                 >
                   {phase.icon}
                 </div>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: state.phase === phase.key ? 'bold' : 'normal',
-                  color: state.phase === phase.key ? '#007bff' : '#6c757d',
-                }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: state.phase === phase.key ? 'bold' : 'normal',
+                    color: state.phase === phase.key ? '#007bff' : '#6c757d',
+                  }}
+                >
                   {phase.label}
                 </div>
               </div>
-              
+
               {index < array.length - 1 && (
-                <div style={{
-                  flex: 1,
-                  height: '2px',
-                  backgroundColor: 
-                    ['problem-selection', 'exploring', 'building-map', 'completed'].indexOf(state.phase) > index ? '#28a745' : '#e9ecef',
-                  alignSelf: 'center',
-                  margin: '0 20px',
-                  maxWidth: '100px',
-                }} />
+                <div
+                  style={{
+                    flex: 1,
+                    height: '2px',
+                    backgroundColor:
+                      [
+                        'problem-selection',
+                        'exploring',
+                        'building-map',
+                        'completed',
+                      ].indexOf(state.phase) > index
+                        ? '#28a745'
+                        : '#e9ecef',
+                    alignSelf: 'center',
+                    margin: '0 20px',
+                    maxWidth: '100px',
+                  }}
+                />
               )}
             </React.Fragment>
           ))}
         </div>
 
         {/* Main Content Area */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          minHeight: '500px',
-        }}>
+        <div
+          style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            minHeight: '500px',
+          }}
+        >
           <ProblemSelector />
           <ExploreInterface />
           <MapBuilder />
@@ -205,16 +268,23 @@ export default function GamePage() {
       </div>
 
       {/* Footer */}
-      <div style={{
-        textAlign: 'center',
-        padding: '30px 20px',
-        color: '#6c757d',
-        fontSize: '14px',
-        marginTop: '40px',
-      }}>
+      <div
+        style={{
+          textAlign: 'center',
+          padding: '30px 20px',
+          color: '#6c757d',
+          fontSize: '14px',
+          marginTop: '40px',
+        }}
+      >
         <p>
-          ICFPC 2025 Library Explorer | 
-          <a href="https://icfpcontest2025.github.io/" target="_blank" rel="noopener noreferrer" style={{ color: '#007bff', marginLeft: '5px' }}>
+          ICFPC 2025 Library Explorer |
+          <a
+            href="https://icfpcontest2025.github.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#007bff', marginLeft: '5px' }}
+          >
             Official Website
           </a>
         </p>

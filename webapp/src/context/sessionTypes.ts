@@ -1,4 +1,8 @@
-export type GamePhase = 'problem-selection' | 'exploring' | 'building-map' | 'completed';
+export type GamePhase =
+  | 'problem-selection'
+  | 'exploring'
+  | 'building-map'
+  | 'completed';
 
 export interface SessionState {
   sessionId: string | null;
@@ -11,8 +15,14 @@ export interface SessionState {
 }
 
 export type SessionAction =
-  | { type: 'START_SESSION'; payload: { sessionId: string; problemName: string } }
-  | { type: 'ADD_EXPLORATION_RESULTS'; payload: { results: number[][]; queryCount: number } }
+  | {
+      type: 'START_SESSION';
+      payload: { sessionId: string; problemName: string };
+    }
+  | {
+      type: 'ADD_EXPLORATION_RESULTS';
+      payload: { results: number[][]; queryCount: number };
+    }
   | { type: 'SET_PHASE'; payload: GamePhase }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
@@ -28,7 +38,10 @@ export const initialState: SessionState = {
   error: null,
 };
 
-export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
+export function sessionReducer(
+  state: SessionState,
+  action: SessionAction
+): SessionState {
   switch (action.type) {
     case 'START_SESSION':
       return {
@@ -41,7 +54,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case 'ADD_EXPLORATION_RESULTS':
       return {
         ...state,
-        explorationResults: [...state.explorationResults, ...action.payload.results],
+        explorationResults: [
+          ...state.explorationResults,
+          ...action.payload.results,
+        ],
         queryCount: action.payload.queryCount,
       };
     case 'SET_PHASE':
