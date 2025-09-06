@@ -104,7 +104,7 @@ def solve(n: int):
     graph_labels = [None for _ in range(n)]
     salt = "".join([random.choice("012345") for _ in range(n * 8)])
     salts = [
-        str(i) + "".join([random.choice("012345") for _ in range(5)]) for i in range(3)
+        str(i) + "".join([random.choice("012345") for _ in range(5)]) for i in range(2)
     ]
     results = send_explore(salts)
     labels2node: dict[tuple[Any, ...], int] = {}
