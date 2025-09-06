@@ -24,6 +24,7 @@ pub enum ApiError {
 pub struct Session {
     pub id: i32,
     pub session_id: String,
+    pub user_name: Option<String>,
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -45,6 +46,7 @@ pub struct ApiLog {
 pub struct SelectRequest {
     #[serde(rename = "problemName")]
     pub problem_name: String,
+    pub user_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

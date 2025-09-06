@@ -23,3 +23,6 @@
 # deploy
 - deploy用のスクリプトです
 - deploy.shを実行することで、webappとapi-serverをGCP上のVMにデプロイします
+
+# script.py
+- 問題を解くためのローカルで動かすCLIツール

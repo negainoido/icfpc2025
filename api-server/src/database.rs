@@ -19,6 +19,7 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
         CREATE TABLE IF NOT EXISTS sessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             session_id VARCHAR(255) UNIQUE NOT NULL,
+            user_name VARCHAR(255) NULL,
             status ENUM('active', 'completed', 'failed') NOT NULL DEFAULT 'active',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP NULL
@@ -63,11 +64,12 @@ pub async fn has_active_session(pool: &MySqlPool) -> Result<bool, ApiError> {
     Ok(count > 0)
 }
 
-pub async fn create_session(pool: &MySqlPool) -> Result<Session, ApiError> {
+pub async fn create_session(pool: &MySqlPool, user_name: Option<&str>) -> Result<Session, ApiError> {
     let session_id = Uuid::new_v4().to_string();
 
-    let result = sqlx::query("INSERT INTO sessions (session_id, status) VALUES (?, 'active')")
+    let result = sqlx::query("INSERT INTO sessions (session_id, user_name, status) VALUES (?, ?, 'active')")
         .bind(&session_id)
+        .bind(user_name)
         .execute(pool)
         .await?;
 
