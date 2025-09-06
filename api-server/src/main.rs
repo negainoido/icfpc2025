@@ -43,9 +43,9 @@ async fn main() {
         .route("/api/guess", post(guess))
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/current", get(get_current_session))
-        .route("/api/sessions/:session_id", get(get_session_detail))
+        .route("/api/sessions/{session_id}", get(get_session_detail))
         .route(
-            "/api/sessions/:session_id/abort",
+            "/api/sessions/{session_id}/abort",
             put(abort_session_handler),
         )
         .with_state(pool)

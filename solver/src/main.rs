@@ -1,17 +1,17 @@
 mod api;
 mod api_trait;
-mod mock_api;
 mod graph;
+mod mock_api;
+mod random_test;
 mod solver;
 mod test;
-mod random_test;
 
 use anyhow::Result;
-use clap::Parser;
-use solver::Solver;
 use api::ApiClient;
 use api_trait::ApiClientTrait;
+use clap::Parser;
 use mock_api::MockApiClient;
+use solver::Solver;
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
@@ -27,14 +27,16 @@ struct Args {
     problem: String,
 
     /// Base URL for the API
-    #[arg(long, default_value = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com")]
+    #[arg(
+        long,
+        default_value = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
+    )]
     base_url: String,
-
 
     /// Random walk length for equivalence checking (defaults to 18 * problem_size)
     #[arg(long)]
     walk_length: Option<usize>,
-    
+
     /// Maximum number of random walk attempts for equivalence checking
     #[arg(long, default_value = "3")]
     max_tries: usize,
@@ -54,7 +56,10 @@ fn get_problem_size(problem_name: &str) -> usize {
         "quartus" => 24,
         "quintus" => 30,
         _ => {
-            println!("Warning: Unknown problem '{}', using default size of 10", problem_name);
+            println!(
+                "Warning: Unknown problem '{}', using default size of 10",
+                problem_name
+            );
             10
         }
     }
@@ -66,7 +71,8 @@ async fn main() -> Result<()> {
 
     // Get team ID from args or environment variable
     let team_id = args.team_id.unwrap_or_else(|| {
-        std::env::var("TEAM_ID").expect("TEAM_ID not provided via --team-id or TEAM_ID environment variable")
+        std::env::var("TEAM_ID")
+            .expect("TEAM_ID not provided via --team-id or TEAM_ID environment variable")
     });
 
     println!("=== ICFPC 2025 Solver ===");
@@ -91,10 +97,15 @@ async fn main() -> Result<()> {
     // Get problem size
     let problem_size = get_problem_size(&args.problem);
     println!("Problem size: {} iterations", problem_size);
-    
+
     // Calculate walk length as 18n (maximum allowed) or use provided value
     let walk_length = args.walk_length.unwrap_or(18 * problem_size);
-    println!("Random walk length: {} (max: 18 * {} = {})", walk_length, problem_size, 18 * problem_size);
+    println!(
+        "Random walk length: {} (max: 18 * {} = {})",
+        walk_length,
+        problem_size,
+        18 * problem_size
+    );
 
     // Create solver with calculated walk length and max_tries
     let mut solver = Solver::new_with_max_tries(api, walk_length, args.max_tries);
@@ -102,7 +113,7 @@ async fn main() -> Result<()> {
     // Run exploration
     println!("\n=== Starting Exploration ===\n");
     solver.explore(problem_size).await?;
-    
+
     // Skip return door discovery - not needed for correct solution
     // solver.discover_return_doors().await?;
 
@@ -156,17 +167,13 @@ async fn submit_solution(base_url: &str, team_id: &str, map: serde_json::Value) 
 
     let client = reqwest::Client::new();
     let url = format!("{}/guess", base_url);
-    
+
     let request = GuessRequest {
         id: team_id.to_string(),
         map,
     };
 
-    let response = client
-        .post(&url)
-        .json(&request)
-        .send()
-        .await?;
+    let response = client.post(&url).json(&request).send().await?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -179,7 +186,7 @@ async fn submit_solution(base_url: &str, team_id: &str, map: serde_json::Value) 
     }
 
     let guess_response: GuessResponse = response.json().await?;
-    
+
     if let Some(error) = guess_response.error {
         println!("Submission error: {}", error);
         return Err(anyhow::anyhow!("Submission error: {}", error));

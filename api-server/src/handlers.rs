@@ -4,14 +4,15 @@ use tracing::error;
 
 use crate::{
     database::{
-        abort_session, complete_session, create_session, get_active_session, get_active_session_by_user, get_all_sessions,
-        get_api_logs_for_session, get_session_by_id, has_active_session, log_api_request,
+        abort_session, complete_session, create_session, get_active_session,
+        get_active_session_by_user, get_all_sessions, get_api_logs_for_session, get_session_by_id,
+        has_active_session, log_api_request,
     },
     icfpc_client::IcfpClient,
     models::{
-        ApiError, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
-        GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
-        SessionDetail, SessionsListResponse,
+        ApiError, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest,
+        GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session, SessionDetail,
+        SessionsListResponse,
     },
 };
 
@@ -44,7 +45,9 @@ pub async fn select(
         .await
         .map_err(StatusCode::from)?;
 
-    let session = create_session(&pool, payload.user_name.as_deref()).await.map_err(StatusCode::from)?;
+    let session = create_session(&pool, payload.user_name.as_deref())
+        .await
+        .map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,
@@ -77,21 +80,21 @@ pub async fn explore(
                 .await
                 .map_err(StatusCode::from)?
                 .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
-            
+
             if session.session_id != *session_id {
                 return Err(StatusCode::from(ApiError::InvalidRequest(
                     "Session ID mismatch".to_string(),
                 )));
             }
             session
-        },
+        }
         (None, Some(user_name)) => {
             // user_nameが指定された場合はそのユーザーのアクティブセッションを取得
             get_active_session_by_user(&pool, user_name)
                 .await
                 .map_err(StatusCode::from)?
                 .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?
-        },
+        }
         (None, None) => {
             return Err(StatusCode::from(ApiError::InvalidRequest(
                 "Either session_id or user_name must be specified".to_string(),
@@ -144,21 +147,21 @@ pub async fn guess(
                 .await
                 .map_err(StatusCode::from)?
                 .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
-            
+
             if session.session_id != *session_id {
                 return Err(StatusCode::from(ApiError::InvalidRequest(
                     "Session ID mismatch".to_string(),
                 )));
             }
             session
-        },
+        }
         (None, Some(user_name)) => {
             // user_nameが指定された場合はそのユーザーのアクティブセッションを取得
             get_active_session_by_user(&pool, user_name)
                 .await
                 .map_err(StatusCode::from)?
                 .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?
-        },
+        }
         (None, None) => {
             return Err(StatusCode::from(ApiError::InvalidRequest(
                 "Either session_id or user_name must be specified".to_string(),

@@ -19,7 +19,6 @@ pub enum ApiError {
     InvalidRequest(String),
 }
 
-
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Session {
     pub id: i32,
@@ -154,4 +153,3 @@ pub struct SessionDetail {
 pub struct SessionsListResponse {
     pub sessions: Vec<Session>,
 }
-
