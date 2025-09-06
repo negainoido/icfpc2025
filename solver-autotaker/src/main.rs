@@ -100,6 +100,20 @@ struct Model {
     match_to: Vec<usize>,   // μ: involution on 0..6N-1, μ[μ[p]]==p
 }
 
+fn check_involution(m: &Model) -> bool {
+    let n = m.match_to.len();
+    for p in 0..n {
+        let q = m.match_to[p];
+        if q >= n { eprintln!("involution fail: p={} q(out)={}", p, q); return false; }
+        let r = m.match_to[q];
+        if r != p {
+            eprintln!("involution fail: p={} q={} r={}", p, q, r);
+            return false;
+        }
+    }
+    true
+}
+
 #[derive(Default, Clone, Copy, Debug)]
 struct Energy {
     obs: i32,
@@ -405,13 +419,30 @@ fn anneal(
                 continue;
             }
 
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
+            }
+
             let old_a = b;
             let old_c = d;
             let pattern_b: bool = rng.gen_bool(0.5);
             if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
+
+            #[cfg(debug_assertions)]
+            {
+                debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
+            }
             let new_e = energy(inst, model, lambda_bal);
-            let d = (new_e.total - cur.total) as f32;
+            let d_total = new_e.total - cur.total;
+            let d = d_total as f32;
             let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=2opt patB={} a={} b={} c={} d={} dE={} T={:.4} acc={} cur->new {}->{}",
+                    pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
+                );
+            }
             if accept {
                 cur = new_e;
                 since_log_accepts += 1;
@@ -422,6 +453,11 @@ fn anneal(
                 model.match_to[old_a] = a;
                 model.match_to[c] = old_c;
                 model.match_to[old_c] = c;
+
+                #[cfg(debug_assertions)]
+                {
+                    debug_assert!(check_involution(model), "post two_opt revert: involution broken");
+                }
             }
         } else {
             // label swap
@@ -430,8 +466,15 @@ fn anneal(
             if q2 == q1 { q2 = (q2 + 1) % inst.n; }
             model.labels.swap(q1, q2);
             let new_e = energy(inst, model, lambda_bal);
-            let d = (new_e.total - cur.total) as f32;
+            let d_total = new_e.total - cur.total;
+            let d = d_total as f32;
             let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=swap q1={} q2={} dE={} T={:.4} acc={} cur->new {}->{}",
+                    q1, q2, d_total, t, accept, cur.total, new_e.total
+                );
+            }
             if accept {
                 cur = new_e;
                 since_log_accepts += 1;
