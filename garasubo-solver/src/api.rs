@@ -1,4 +1,3 @@
-use crate::{SelectRequest, SelectResponse};
 use anyhow::Context;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -16,7 +15,7 @@ pub struct ExploreRequest {
 #[derive(Deserialize, Debug)]
 pub struct ExploreResponse {
     pub session_id: String,
-    pub results: Vec<Vec<i32>>,
+    pub results: Vec<Vec<u8>>,
     #[serde(rename = "queryCount")]
     pub query_count: i32,
 }
@@ -65,7 +64,7 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub(crate) fn new(base_url: String) -> Self {
+    pub fn new(base_url: String) -> Self {
         let client_id = std::env::var("CLIENT_ID").ok();
         let client_secret = std::env::var("CLIENT_SECRET").ok();
 
@@ -82,8 +81,6 @@ impl ApiClient {
         request_builder: reqwest::RequestBuilder,
     ) -> reqwest::RequestBuilder {
         if let (Some(client_id), Some(client_secret)) = (&self.client_id, &self.client_secret) {
-            println!("CLIENT_ID: {:?}", client_id);
-            println!("CLIENT_SECRET: {:?}", client_secret);
             request_builder
                 .header("CF-Access-Client-Id", client_id)
                 .header("CF-Access-Client-Secret", client_secret)
@@ -92,7 +89,7 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn select(
+    pub async fn select(
         &self,
         problem_name: String,
         user_name: Option<String>,
@@ -128,7 +125,7 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn abort_session(&self, session_id: &str) -> anyhow::Result<()> {
+    pub async fn abort_session(&self, session_id: &str) -> anyhow::Result<()> {
         let url = format!("{}/api/sessions/{}/abort", self.base_url, session_id);
 
         let response = self
@@ -149,7 +146,7 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn explore(
+    pub async fn explore(
         &self,
         session_id: &str,
         plans: &[String],
@@ -188,7 +185,7 @@ impl ApiClient {
         }
     }
 
-    pub(crate) async fn guess(
+    pub async fn guess(
         &self,
         session_id: &str,
         guess_map: GuessMap,
@@ -222,4 +219,20 @@ impl ApiClient {
             anyhow::bail!("Guess API request failed with status {}: {}", status, text);
         }
     }
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+pub struct SelectResponse {
+    pub session_id: String,
+    #[serde(rename = "problemName")]
+    problem_name: String,
+}
+
+#[derive(Serialize)]
+pub struct SelectRequest {
+    #[serde(rename = "problemName")]
+    problem_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_name: Option<String>,
 }

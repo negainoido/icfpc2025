@@ -3,16 +3,11 @@ mod de_bruijn;
 mod guess_map;
 
 use anyhow::{Context, Result};
-use api::{
-    ApiClient, Connection as ApiConnection, ExploreResponse, GuessMap as ApiGuessMap,
-    GuessResponse, RoomDoor,
-};
+use api::{ApiClient, Connection as ApiConnection, GuessMap as ApiGuessMap, RoomDoor};
 use clap::{Parser, Subcommand};
+use garasubo_solver::session_manager::SessionManager;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use tokio::signal;
-use tokio::sync::Mutex;
 
 #[derive(Parser)]
 #[command(name = "garasubo-solver")]
@@ -40,139 +35,6 @@ enum Commands {
         #[arg(long)]
         user_name: Option<String>,
     },
-}
-
-#[derive(Serialize)]
-struct SelectRequest {
-    #[serde(rename = "problemName")]
-    problem_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    user_name: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-struct SelectResponse {
-    session_id: String,
-    #[serde(rename = "problemName")]
-    problem_name: String,
-}
-
-pub struct SessionGuard {
-    api_client: ApiClient,
-    session_id: String,
-    should_abort: Arc<AtomicBool>,
-}
-
-impl SessionGuard {
-    fn new(api_client: ApiClient, session_id: String) -> Self {
-        Self {
-            api_client,
-            session_id,
-            should_abort: Arc::new(AtomicBool::new(true)),
-        }
-    }
-
-    pub fn session_id(&self) -> &str {
-        &self.session_id
-    }
-
-    pub fn mark_success(&self) {
-        self.should_abort.store(false, Ordering::Relaxed);
-    }
-
-    pub async fn explore(&self, plans: &[String]) -> Result<ExploreResponse> {
-        self.api_client.explore(&self.session_id, plans).await
-    }
-
-    pub async fn guess(&self, guess_map: ApiGuessMap) -> Result<GuessResponse> {
-        self.api_client.guess(&self.session_id, guess_map).await
-    }
-}
-
-impl Drop for SessionGuard {
-    fn drop(&mut self) {
-        if self.should_abort.load(Ordering::Relaxed) {
-            let session_id = self.session_id.clone();
-            let api_client = self.api_client.clone();
-
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    if let Err(e) = api_client.abort_session(&session_id).await {
-                        eprintln!(
-                            "Warning: Failed to abort session {} during drop: {:#}",
-                            session_id, e
-                        );
-                    } else {
-                        println!("Session {} aborted successfully during drop", session_id);
-                    }
-                });
-            });
-        }
-    }
-}
-
-struct SessionManager {
-    api_client: ApiClient,
-    current_session: Arc<Mutex<Option<String>>>,
-}
-
-impl SessionManager {
-    fn new(api_client: ApiClient) -> Self {
-        Self {
-            api_client,
-            current_session: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    async fn start_session(
-        &self,
-        problem_name: String,
-        user_name: Option<String>,
-    ) -> Result<SelectResponse> {
-        let response = self
-            .api_client
-            .select(problem_name.clone(), user_name.clone())
-            .await
-            .with_context(|| format!("Failed to start session for problem '{}'", problem_name))?;
-
-        let mut session = self.current_session.lock().await;
-        *session = Some(response.session_id.clone());
-
-        Ok(response)
-    }
-
-    async fn start_session_with_guard(
-        &self,
-        problem_name: String,
-        user_name: Option<String>,
-    ) -> Result<SessionGuard> {
-        let response = self
-            .api_client
-            .select(problem_name.clone(), user_name.clone())
-            .await
-            .with_context(|| format!("Failed to start session for problem '{}'", problem_name))?;
-
-        let mut session = self.current_session.lock().await;
-        *session = Some(response.session_id.clone());
-
-        Ok(SessionGuard::new(
-            self.api_client.clone(),
-            response.session_id,
-        ))
-    }
-
-    async fn abort_current_session(&self) -> Result<()> {
-        let session = self.current_session.lock().await;
-        if let Some(ref session_id) = *session {
-            if let Err(e) = self.api_client.abort_session(session_id).await {
-                eprintln!("Warning: Failed to abort session {}: {:#}", session_id, e);
-            } else {
-                println!("Session {} aborted successfully", session_id);
-            }
-        }
-        Ok(())
-    }
 }
 
 fn convert_guess_map(guess_map: guess_map::GuessMap) -> ApiGuessMap {
