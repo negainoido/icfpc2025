@@ -97,8 +97,8 @@ def explore(plans: tuple):
 def solve(n: int):
     graph = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
-    salt = "".join([random.choice("012345") for i in range(10)])
-    salt = "2545441155"
+    salt = "".join([random.choice("012345") for i in range(n*8)])
+
     results = send_explore((salt,))
     labels2node = {}
     labels2node[tuple(results["results"][0][-len(salt)-1:])] = 0
@@ -155,10 +155,10 @@ def solve(n: int):
                 from_node = graph[to][k]
                 if from_node != i:
                     continue
-                if (from_node, k) in used_edge:
+                if (to, k) in used_edge:
                     continue
                 used_edge.add((i, j))
-                used_edge.add((from_node, k))
+                used_edge.add((to, k))
                 map_data["connections"].append(
                     {
                         "from": {"room": i, "door": j},
