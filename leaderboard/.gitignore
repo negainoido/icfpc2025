@@ -1,0 +1,4 @@
+results/*.json
+.claude/
+.ruff_cache/
+.venv/
