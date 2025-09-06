@@ -461,23 +461,20 @@ def build_output(
         A = rep_to_room[dsu.find(st.src)]
         B = rep_to_room[dsu.find(st.dst)]
         observed_rev.setdefault((A, B), set())
-        # If later there is a step from B to A, record that door:
-        # we check by scanning steps once; simpler approach: fill after a first pass
     for st in problem.steps:
         A = rep_to_room[dsu.find(st.src)]
         B = rep_to_room[dsu.find(st.dst)]
         observed_rev.setdefault((B, A), set()).add(st.door)
 
-    # pick reverse doors
-    # maintain per-room used ports
+    # pick reverse doors ensuring each endpoint is used at most once
+    # maintain per-room used ports only for endpoints already paired
     used_ports: Dict[int, Set[int]] = {r: set() for r in range(K)}
-    for (room, port), nb in forward.items():
-        used_ports[room].add(port)
+    # track if a concrete endpoint is already paired: (room,port) -> (nbr_room,nbr_port)
+    mate: Dict[Tuple[int, int], Tuple[int, int]] = {}
 
     connections = []
-    emitted: Set[Tuple[int, int, int, int]] = set()
 
-    # helper to get a free port index 0..5
+    # helper to get a free port index 0..5 not currently paired
     def free_port(room: int) -> int:
         for c in range(6):
             if c not in used_ports[room]:
@@ -485,20 +482,42 @@ def build_output(
         # fallback: reuse some (graph may be multi-edge); try to avoid duplicates
         return 0
 
-    # For each observed edge, emit a connection with a concrete reverse port.
-    # De-duplicate by (A,portA) pairs (only one record per forward port).
-    for (A, portA), B in forward.items():
-        # choose reverse port
-        cand = list(observed_rev.get((B, A), set()))
-        if len(cand) > 0:
-            portB = min([c for c in cand if c not in used_ports[B]], default=cand[0])
-        else:
-            portB = free_port(B)
-        used_ports[B].add(portB)
-        tup = (A, portA, B, portB)
-        if tup in emitted:
+    # Process in stable order for determinism
+    for (A, portA), B in sorted(forward.items()):
+        # if this endpoint already has a mate, skip (the reverse direction likely created it)
+        if (A, portA) in mate:
             continue
-        emitted.add(tup)
+        # candidates for reverse port at B: prefer observed ones from B->A
+        cand = list(observed_rev.get((B, A), set()))
+        # sort to get deterministic choice
+        cand.sort()
+        portB: Optional[int] = None
+        for c in cand:
+            # avoid degenerate (A,portA) -> (A,portA) self-endpoint
+            if A == B and c == portA:
+                continue
+            # choose only if not already paired on B
+            if c in used_ports[B]:
+                continue
+            portB = c
+            break
+        if portB is None:
+            # pick a free port on B, avoiding (A,portA) if same room
+            for c in range(6):
+                if c in used_ports[B]:
+                    continue
+                if A == B and c == portA:
+                    continue
+                portB = c
+                break
+            if portB is None:
+                # last resort: reuse some port (ensure not identical endpoint)
+                portB = 0 if not (A == B and 0 == portA) else 1
+        # record pairing on both endpoints
+        used_ports[A].add(portA)
+        used_ports[B].add(portB)
+        mate[(A, portA)] = (B, portB)
+        mate[(B, portB)] = (A, portA)
         connections.append(
             {"from": {"room": A, "door": portA}, "to": {"room": B, "door": portB}}
         )
