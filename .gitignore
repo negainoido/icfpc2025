@@ -139,3 +139,4 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+.env

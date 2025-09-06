@@ -18,10 +18,13 @@ API を素直に叩くだけ
 
 ```
 # 本番サーバを叩く
-TEAM_ID=*** uv run ./api.py --help
+# idとsecretはdocs参照
+export CLINET_ID=<client id>
+export CLIENT_SECRET=<client secret>
+uv run ./api.py --help
 
 # ローカルサーバを叩く
-TEAM_ID=*** API_HOST=http://localhost:8000 uv run ./api.py --help
+API_HOST=http://localhost:8000 uv run ./api.py --help
 ```
 
 ## server.py

@@ -5,13 +5,16 @@ FastAPIを使用してすべてのプロトコルを実装
 """
 
 import logging
+import os
 import random
 import uuid
 from dataclasses import dataclass
 
 from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+load_dotenv(override=False)
 logger = logging.getLogger("uvicorn")
 app = FastAPI(title="エディフィキウム図書館マッピング API", version="1.0.0")
 
@@ -426,4 +429,5 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

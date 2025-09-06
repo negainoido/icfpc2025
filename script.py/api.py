@@ -12,11 +12,17 @@ from typing import Any
 
 import click
 import requests
+from dotenv import load_dotenv
 
-TEAM_ID = os.environ.get("TEAM_ID")
-assert TEAM_ID, "環境変数TEAM_IDを設定して"
+# .env から環境変数を読み込み（既存の環境変数は上書きしない）
+load_dotenv(override=False)
+
+CLIENT_ID = os.environ.get("CLIENT_ID")
+assert CLIENT_ID, "環境変数CLIENT_IDを設定して (.env でも可)"
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+assert CLIENT_SECRET, "環境変数CLIENT_SECRETを設定して (.env でも可)"
 BASE_URL = os.environ.get(
-    "API_HOST", "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
+    "API_HOST", "https://negainoido.garasubo.com"
 )
 print("Using HOST:", BASE_URL)
 
@@ -24,9 +30,15 @@ print("Using HOST:", BASE_URL)
 def make_request(endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
     """APIリクエストを送信し、レスポンスを返す"""
     url = f"{BASE_URL}{endpoint}"
+    headers = {
+        "CF-Access-Client-Id": CLIENT_ID,
+        "CF-Access-Client-Secret": CLIENT_SECRET,
+    }
 
     try:
-        response = requests.post(url, json=data)
+        response = requests.post(url, json=data, headers=headers)
+        if not response.ok:
+            click.echo(f"HTTP Error {response.status_code}: {response.text}", err=True)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -59,23 +71,31 @@ def select(problem_name: str):
       quartus       24
       quintus       30
     """
-    data = {"id": TEAM_ID, "problemName": problem_name}
+    data = {"problemName": problem_name}
 
     click.echo(f"問題 '{problem_name}' を選択中...")
-    result = make_request("/select", data)
+    # 新APIサーバーは /api/select
+    result = make_request("/api/select", data)
 
-    click.echo(f"✓ 問題が選択されました: {result['problemName']}")
+    # フィールド名は problemName / session_id
+    problem_name = result.get("problemName") or result.get("problem_name")
+    session_id = result.get("session_id")
+    if not session_id:
+        click.echo(f"レスポンスに session_id が含まれていません: {result}", err=True)
+        sys.exit(1)
+    click.echo(f"✓ 問題が選択されセッションが開始されました: {(problem_name, session_id)}")
 
 
-def send_explore(plans: list[str]):
-    data = {"id": TEAM_ID, "plans": list(plans)}
-    result = make_request("/explore", data)
+def send_explore(session_id: str, plans: list[str]):
+    data = {"session_id": session_id, "plans": list(plans)}
+    result = make_request("/api/explore", data)
     return result
 
 
 @cli.command()
+@click.option("--session-id", required=True, help="/api/select の戻り値 session_id")
 @click.argument("plans", nargs=-1, required=True)
-def explore(plans: tuple):
+def explore(session_id: str, plans: tuple):
     """エディフィキウムを探検する
 
     PLANS: ルートプラン（0-5の数字の文字列）を1つ以上指定
@@ -85,21 +105,22 @@ def explore(plans: tuple):
       python api.py explore "0" "12" "345"
     """
     click.echo(f"{len(plans)}個のルートプランで探検中...")
-    result = send_explore(list(plans))
+    result = send_explore(session_id, list(plans))
 
-    click.echo(f"✓ 探検完了! 遠征回数: {result['queryCount']}")
+    click.echo(f"✓ 探検完了! 遠征回数: {result.get('queryCount')}")
     click.echo("\n結果:")
-    for _, (plan, observations) in enumerate(zip(plans, result["results"])):
+    for _, (plan, observations) in enumerate(zip(plans, result.get("results", []))):
         click.echo(f"  プラン '{plan}': {observations}")
 
-    json_output = {"plans": list(plans), "results": result["results"]}
+    json_output = {"plans": list(plans), "results": result.get("results", [])}
     click.echo("\n--- smt-guessor friendly output ---")
     click.echo(json.dumps(json_output, ensure_ascii=False))
 
 
 @cli.command()
+@click.option("--session-id", required=True, help="/api/select の戻り値 session_id")
 @click.argument("N", type=int)
-def solve(n: int):
+def solve(n: int, session_id: str):
     graph: list[list[int | None]] = [[None] * 6 for _ in range(n)]
     graph_labels = [None for _ in range(n)]
     salt = "".join([random.choice("012345") for _ in range(n * 8)])
@@ -176,7 +197,7 @@ def solve(n: int):
                 break
 
     print(json.dumps(map_data, ensure_ascii=False))
-    data = {"id": TEAM_ID, "map": map_data}
+    data = {"session_id": session_id, "map": map_data}
     result = make_request("/guess", data)
     print(result)
 
@@ -188,8 +209,9 @@ def solve(n: int):
 
 
 @cli.command()
+@click.option("--session-id", required=True, help="/api/select の戻り値 session_id")
 @click.argument("map_file", type=click.File("r"))
-def guess(map_file):
+def guess(session_id: str, map_file):
     """地図を提出する
 
     MAP_FILE: 地図データのJSONファイル
@@ -220,10 +242,10 @@ def guess(map_file):
             )
             sys.exit(1)
 
-    data = {"id": TEAM_ID, "map": map_data}
+    data = {"session_id": session_id, "map": map_data}
 
     click.echo("地図を提出中...")
-    result = make_request("/guess", data)
+    result = make_request("/api/guess", data)
 
     if result["correct"]:
         click.echo("🎉 正解! 地図が正しく提出されました!")
@@ -233,6 +255,7 @@ def guess(map_file):
 
 
 @cli.command()
+@click.option("--session-id", required=True, help="/api/select の戻り値 session_id")
 @click.option(
     "--rooms", "-r", multiple=True, type=int, help="部屋のラベル（2ビット整数）"
 )
@@ -249,7 +272,7 @@ def guess(map_file):
     multiple=True,
     help="接続の指定（形式: from_room,from_door,to_room,to_door）",
 )
-def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
+def guess_inline(session_id: str, rooms: tuple, starting_room: int, connection: tuple):
     """コマンドラインで直接地図を指定して提出する
 
     \b
@@ -286,10 +309,10 @@ def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
         "connections": connections,
     }
 
-    data = {"id": TEAM_ID, "map": map_data}
+    data = {"session_id": session_id, "map": map_data}
 
     click.echo("地図を提出中...")
-    result = make_request("/guess", data)
+    result = make_request("/api/guess", data)
 
     if result["correct"]:
         click.echo("🎉 正解! 地図が正しく提出されました!")
@@ -305,17 +328,17 @@ def example():
 
     click.echo("0. 環境変数は TEAM_ID に設定する")
     click.echo("1. 問題を選択:")
-    click.echo("   python main.py select probatio\n")
+    click.echo("   python api.py select probatio  # session_id を取得\n")
 
     click.echo("2. 探検を実行:")
-    click.echo('   python main.py explore "0" "12" "345"\n')
+    click.echo('   python api.py explore --session-id <session_id> "0" "12" "345"\n')
 
     click.echo("3. 地図ファイルから提出:")
-    click.echo("   python main.py guess map.json\n")
+    click.echo("   python api.py guess --session-id <session_id> map.json\n")
 
     click.echo("4. コマンドラインから直接提出:")
     click.echo(
-        '   python main.py guess-inline -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
+        '   python api.py guess-inline --session-id <session_id> -r 0 -r 1 -r 2 -s 0 -c "0,0,1,3" -c "1,1,2,2"\n'
     )
 
     click.echo("地図ファイル（map.json）の例:")
