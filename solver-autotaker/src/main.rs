@@ -425,21 +425,36 @@ fn emit_output(model: &Model, s0: Room) -> OutputMap {
 
 fn finalize_match_to(model: &mut Model) {
     let n_ports = model.match_to.len();
-    // First, clamp out-of-range entries to self-loops
+    let mut used = vec![false; n_ports];
+    let mut pool: Vec<usize> = Vec::new();
     for p in 0..n_ports {
-        let q = model.match_to[p];
-        if q >= n_ports { model.match_to[p] = p; }
-    }
-    // Ensure involution: if μ[μ[p]] != p, fix by mutual pairing or self-loop
-    for p in 0..n_ports {
-        let q = model.match_to[p];
-        if q >= n_ports { model.match_to[p] = p; continue; }
-        let qq = model.match_to[q];
-        if qq != p {
-            // Try to make them mutual
+        if used[p] { continue; }
+        let q0 = model.match_to[p];
+        let q = if q0 < n_ports { q0 } else { p };
+        if q != p && !used[q] {
+            // prefer honoring existing mutual-like pair
             model.match_to[p] = q;
             model.match_to[q] = p;
+            used[p] = true;
+            used[q] = true;
+        } else {
+            // defer to pool; we will pair later without self-loops
+            pool.push(p);
+            used[p] = true;
         }
+    }
+    // Pair remaining pool greedily
+    let mut i = 0usize;
+    while i + 1 < pool.len() {
+        let a = pool[i];
+        let b = pool[i + 1];
+        model.match_to[a] = b;
+        model.match_to[b] = a;
+        i += 2;
+    }
+    if i < pool.len() {
+        let a = pool[i];
+        model.match_to[a] = a; // odd leftover should not happen, but keep safe
     }
 }
 
@@ -478,6 +493,7 @@ async fn main() -> Result<()> {
     finalize_match_to(&mut model);
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
     let best_e = anneal(&inst, &mut model, args.iters, args.lambda_bal, &mut rng, time_limit);
+    finalize_match_to(&mut model);
     if args.verbose > 0 {
         eprintln!("energy: obs={}, balance={}, total={}", best_e.obs, best_e.balance, best_e.total);
     }
