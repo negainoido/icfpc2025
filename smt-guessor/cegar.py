@@ -10,7 +10,8 @@ Usage:
   python solver.py --input in.json --output out.json
   python solver.py --input in.json --minN 8 --maxN 64 --seed-local-det
 Options:
-  --seed-local-det   : seed "door[i]=door[j] ⇒ m[i+1,j+1]" for all pairs (faster)
+  --seed-local-det / --no-seed-local-det:
+      seed "door[i]=door[j] ⇒ m[i+1,j+1]" for all pairs (default: enabled)
   --complete-ports {none,fill} : fill unobserved ports to 6 per room (default: none)
   --verbose          : print CEGAR loop stats
 Requires:
@@ -556,7 +557,20 @@ def main():
     )
     ap.add_argument("--minN", type=int, default=1)
     ap.add_argument("--maxN", type=int, default=128)
-    ap.add_argument("--seed-local-det", action="store_true", dest="seed_local_det")
+    # Enable by default; allow explicit disabling via --no-seed-local-det
+    ap.add_argument(
+        "--seed-local-det",
+        action="store_true",
+        dest="seed_local_det",
+        default=True,
+        help="Seed local determinism constraints (default: enabled)",
+    )
+    ap.add_argument(
+        "--no-seed-local-det",
+        action="store_false",
+        dest="seed_local_det",
+        help="Disable local determinism seeding",
+    )
     ap.add_argument("--complete-ports", choices=["none", "fill"], default="none")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument(
