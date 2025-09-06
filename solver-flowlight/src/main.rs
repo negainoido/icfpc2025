@@ -79,8 +79,6 @@ fn init_route_respecting_ring(plan: &[usize], results: &[u8], rng: &mut StdRng) 
 
     // 空きポート管理（スタック）
     let mut free_ports: Vec<Vec<u8>> = (0..N).map(|_| (0u8..6u8).rev().collect()).collect();
-    let mut pop_free = |node: usize| -> Option<u8> { free_ports[node].pop() };
-    let has_free = |node: usize| -> bool { !free_ports[node].is_empty() };
 
     // 経路に沿って、未割当ポートに限り (r, d_cur) と (r2, d_back) を接続
     for (j, &d_cur) in plan.iter().enumerate() {
@@ -91,24 +89,21 @@ fn init_route_respecting_ring(plan: &[usize], results: &[u8], rng: &mut StdRng) 
             visited[r] = true;
         }
         if !st.is_assigned(r, d_cur as u8) {
-            let partner_node = if has_free(r2) {
-                r2
-            } else {
+            // 優先: r2 に空きがあればそこを使う
+            let mut partner_node = r2;
+            if free_ports[partner_node].is_empty() {
                 // r2 に空きが無ければ、ランダムに空きのあるノードを探す
                 let mut pick = None;
                 for _ in 0..(N * 2) {
                     let x = rng.gen_range(0..N);
-                    if has_free(x) {
+                    if !free_ports[x].is_empty() {
                         pick = Some(x);
                         break;
                     }
                 }
-                match pick {
-                    Some(x) => x,
-                    None => r,
-                } // 最悪自ノード
-            };
-            if let Some(db) = pop_free(partner_node) {
+                partner_node = pick.unwrap_or(r); // 最悪自ノード
+            }
+            if let Some(db) = free_ports[partner_node].pop() {
                 st.connect(r, d_cur as u8, partner_node, db);
             }
         }
@@ -138,6 +133,11 @@ fn init_route_respecting_ring(plan: &[usize], results: &[u8], rng: &mut StdRng) 
         st.connect(a, da, b, db);
         i += 2;
     }
+    // 奇数個余った場合は自己ループで埋める（自己ループ許可仕様）
+    if i < stubs.len() {
+        let (a, da) = stubs[i];
+        st.connect(a, da, a, da);
+    }
     st
 }
 
@@ -147,14 +147,24 @@ fn simulate_and_score(st: &State, plan: &[usize], results: &[u8]) -> usize {
     let mut mismatches = 0usize;
     let l = plan.len();
     for j in 0..l {
+        if cur >= N {
+            // 未割当ポートから飛んだなど。残り分をすべて矛盾として加算して終了
+            mismatches += (l - j) + 1; // 現在位置の比較分も含める
+            return mismatches;
+        }
         if st.labels[cur] != results[j] {
             mismatches += 1;
         }
         let d = plan[j] as u8;
         let (to, _back) = st.neighbors[cur][d as usize];
+        if to == usize::MAX {
+            // 未割当ポート。残り全て矛盾として加算して終了
+            mismatches += (l - j);
+            return mismatches;
+        }
         cur = to;
     }
-    if st.labels[cur] != results[l] {
+    if cur >= N || st.labels[cur] != results[l] {
         mismatches += 1;
     }
     mismatches
@@ -200,7 +210,7 @@ fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> 
 
     while start.elapsed() < time_limit {
         // ムーブ選択: 2-opt 70%, ラベル 30%
-        let use_two_opt = rand::random::<f64>() < 0.7;
+        let use_two_opt = rng.gen_bool(0.7);
         let mut next = cur.clone();
         if use_two_opt {
             apply_two_opt_swap(&mut next, &mut rng);
@@ -219,7 +229,7 @@ fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> 
             }
         } else {
             let p = (-(delta as f64) / t).exp();
-            if rand::random::<f64>() < p.clamp(0.0, 1.0) {
+            if rng.gen_bool(p.clamp(0.0, 1.0)) {
                 cur = next;
                 cur_score = next_score;
             }
