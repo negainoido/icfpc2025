@@ -187,3 +187,19 @@ pub async fn get_api_logs_for_session(
 
     Ok(logs)
 }
+
+// Acquire a named MySQL lock to serialize select() requests
+pub async fn acquire_select_lock(pool: &MySqlPool) -> Result<bool, ApiError> {
+    // timeout 5 seconds; returns 1 if success, 0 if timeout, NULL on error
+    let got: Option<i64> = sqlx::query_scalar("SELECT GET_LOCK('icfpc_select_lock', 5)")
+        .fetch_one(pool)
+        .await?;
+    Ok(got.unwrap_or(0) == 1)
+}
+
+pub async fn release_select_lock(pool: &MySqlPool) -> Result<(), ApiError> {
+    let _released: Option<i64> = sqlx::query_scalar("SELECT RELEASE_LOCK('icfpc_select_lock')")
+        .fetch_one(pool)
+        .await?;
+    Ok(())
+}
