@@ -146,10 +146,13 @@ teams: dict[str, Team] = {}
 def generate_random_problem(problem_name: str, size: int) -> Problem:
     """指定された問題名に基づいてランダムな問題を生成する"""
 
-    # 各部屋にランダムな2ビットラベルを割り当て
+    # 各部屋にできるだけ均等な2ビットラベルを割り当て
+    offset = random.randint(0, 3)
+    labels = [(i + offset) % 4 for i in range(size)]
+    random.shuffle(labels)
+
     rooms = []
-    for _ in range(size):
-        label = random.randint(0, 3)  # 2ビット整数 (0-3)
+    for label in labels:
         room = Room(label=label, doors={})
         rooms.append(room)
 
