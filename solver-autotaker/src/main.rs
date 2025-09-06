@@ -70,6 +70,10 @@ struct Args {
     /// Temperature to reset to on reheat
     #[arg(long)]
     reheat_to: Option<f32>,
+
+    /// Probability of random relabel move (low)
+    #[arg(long, default_value_t = 0.05_f32)]
+    p_relabel: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,10 +392,7 @@ fn two_opt_b(m: &mut Model, p1: usize, p2: usize) {
     m.match_to[b] = c; m.match_to[c] = b;
 }
 
-fn swap_labels(m: &mut Model, q1: usize, q2: usize) {
-    if q1 == q2 { return; }
-    m.labels.swap(q1, q2);
-}
+// removed unused swap_labels helper
 
 fn anneal(
     inst: &Instance,
@@ -409,6 +410,7 @@ fn anneal(
     tmin: f32,
     reheat_every: Option<usize>,
     reheat_to: Option<f32>,
+    p_relabel: f32,
 ) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
@@ -432,7 +434,10 @@ fn anneal(
         if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
         // randomly choose move
         let mv: f32 = rng.r#gen();
-        if mv < 0.7 {
+        let p_relabel = p_relabel.clamp(0.0, 1.0);
+        let p_swap = 0.30_f32.min(1.0 - p_relabel);
+        let p_two_opt = (1.0 - p_swap - p_relabel).max(0.0);
+        if mv < p_two_opt {
             // 2-opt move (only on two distinct, non-loop edges)
             let p1 = rng.gen_range(0..n_ports);
             let mut p2 = rng.gen_range(0..n_ports);
@@ -489,7 +494,7 @@ fn anneal(
                     debug_assert!(check_involution(model), "post two_opt revert: involution broken");
                 }
             }
-        } else {
+        } else if mv < p_two_opt + p_swap {
             // label swap
             let q1 = rng.gen_range(0..inst.n);
             let mut q2 = rng.gen_range(0..inst.n);
@@ -511,6 +516,30 @@ fn anneal(
                 if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
             } else {
                 model.labels.swap(q1, q2);
+            }
+        } else {
+            // random relabel: pick a room and set a random new label != old
+            let q = rng.gen_range(0..inst.n);
+            let old_l = model.labels[q];
+            let r: u8 = rng.gen_range(1..=3); // 1..=3 then add to old and mod 4 ensures != old
+            let new_l: u8 = ((old_l as u8 + r) % 4) as u8;
+            model.labels[q] = new_l;
+            let new_e = energy(inst, model, lambda_bal);
+            let d_total = new_e.total - cur.total;
+            let d = d_total as f32;
+            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=relabel q={} old={} new={} dE={} T={:.4} acc={} cur->new {}->{}",
+                    q, old_l, new_l, d_total, t, accept, cur.total, new_e.total
+                );
+            }
+            if accept {
+                cur = new_e;
+                since_log_accepts += 1;
+                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
+            } else {
+                model.labels[q] = old_l;
             }
         }
         since_log_moves += 1;
@@ -723,6 +752,7 @@ async fn main() -> Result<()> {
             args.tmin,
             args.reheat_every,
             args.reheat_to,
+            args.p_relabel,
         );
         finalize_match_to(&mut m);
         if args.verbose > 0 {
