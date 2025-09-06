@@ -34,7 +34,7 @@ export interface ExploreResponse {
 // Guess API Types
 export interface DoorLocation {
   room: number;
-  door: number;
+  door: number; // Door number 0-5 (hexagonal room has 6 doors)
 }
 
 export interface Connection {

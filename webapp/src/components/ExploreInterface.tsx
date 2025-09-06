@@ -8,8 +8,17 @@ export default function ExploreInterface() {
   const [currentPlan, setCurrentPlan] = useState('');
 
   const handleAddPlan = () => {
-    if (currentPlan.trim()) {
-      setPlans([...plans.filter(p => p.trim()), currentPlan.trim()]);
+    const plan = currentPlan.trim();
+    if (plan) {
+      // Validate that plan only contains digits 0-5
+      if (!/^[0-5]+$/.test(plan)) {
+        dispatch({
+          type: 'SET_ERROR',
+          payload: 'Plans must only contain door numbers 0-5',
+        });
+        return;
+      }
+      setPlans([...plans.filter((p) => p.trim()), plan]);
       setCurrentPlan('');
     }
   };
@@ -24,7 +33,7 @@ export default function ExploreInterface() {
       return;
     }
 
-    const validPlans = plans.filter(p => p.trim());
+    const validPlans = plans.filter((p) => p.trim());
     if (validPlans.length === 0) {
       dispatch({ type: 'SET_ERROR', payload: 'At least one plan is required' });
       return;
@@ -68,24 +77,37 @@ export default function ExploreInterface() {
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h2>Explore Library</h2>
-      
-      <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-        <p><strong>Session:</strong> {state.sessionId}</p>
-        <p><strong>Problem:</strong> {state.problemName}</p>
-        <p><strong>Query Count:</strong> {state.queryCount}</p>
+
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '10px',
+          backgroundColor: '#e7f3ff',
+          borderRadius: '4px',
+        }}
+      >
+        <p>
+          <strong>Session:</strong> {state.sessionId}
+        </p>
+        <p>
+          <strong>Problem:</strong> {state.problemName}
+        </p>
+        <p>
+          <strong>Query Count:</strong> {state.queryCount}
+        </p>
       </div>
 
       <div style={{ display: 'flex', gap: '20px' }}>
         {/* Left Panel - Plan Input */}
         <div style={{ flex: 1 }}>
           <h3>Exploration Plans</h3>
-          
+
           <div style={{ marginBottom: '10px' }}>
             <input
               type="text"
               value={currentPlan}
               onChange={(e) => setCurrentPlan(e.target.value)}
-              placeholder="Enter plan (e.g., NESW)"
+              placeholder="Enter plan (e.g., 012345)"
               style={{
                 width: '100%',
                 padding: '8px',
@@ -118,49 +140,58 @@ export default function ExploreInterface() {
 
           <div style={{ marginBottom: '20px' }}>
             <h4>Current Plans:</h4>
-            {plans.filter(p => p.trim()).length === 0 ? (
-              <p style={{ color: '#666', fontStyle: 'italic' }}>No plans added yet</p>
+            {plans.filter((p) => p.trim()).length === 0 ? (
+              <p style={{ color: '#666', fontStyle: 'italic' }}>
+                No plans added yet
+              </p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
-                {plans.filter(p => p.trim()).map((plan, index) => (
-                  <li key={index} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px',
-                    backgroundColor: '#f8f9fa',
-                    marginBottom: '5px',
-                    borderRadius: '4px',
-                  }}>
-                    <code>{plan}</code>
-                    <button
-                      onClick={() => handleRemovePlan(index)}
+                {plans
+                  .filter((p) => p.trim())
+                  .map((plan, index) => (
+                    <li
+                      key={index}
                       style={{
-                        padding: '4px 8px',
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px',
+                        backgroundColor: '#f8f9fa',
+                        marginBottom: '5px',
                         borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
                       }}
                     >
-                      Remove
-                    </button>
-                  </li>
-                ))}
+                      <code>{plan}</code>
+                      <button
+                        onClick={() => handleRemovePlan(index)}
+                        style={{
+                          padding: '4px 8px',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
               </ul>
             )}
           </div>
 
           {state.error && (
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              borderRadius: '4px',
-              marginBottom: '20px',
-            }}>
+            <div
+              style={{
+                padding: '10px',
+                backgroundColor: '#f8d7da',
+                color: '#721c24',
+                borderRadius: '4px',
+                marginBottom: '20px',
+              }}
+            >
               {state.error}
             </div>
           )}
@@ -168,21 +199,29 @@ export default function ExploreInterface() {
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={handleExplore}
-              disabled={state.isLoading || plans.filter(p => p.trim()).length === 0}
+              disabled={
+                state.isLoading || plans.filter((p) => p.trim()).length === 0
+              }
               style={{
                 flex: 1,
                 padding: '12px',
                 fontSize: '16px',
-                backgroundColor: state.isLoading || plans.filter(p => p.trim()).length === 0 ? '#ccc' : '#007bff',
+                backgroundColor:
+                  state.isLoading || plans.filter((p) => p.trim()).length === 0
+                    ? '#ccc'
+                    : '#007bff',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: state.isLoading || plans.filter(p => p.trim()).length === 0 ? 'not-allowed' : 'pointer',
+                cursor:
+                  state.isLoading || plans.filter((p) => p.trim()).length === 0
+                    ? 'not-allowed'
+                    : 'pointer',
               }}
             >
               {state.isLoading ? 'Exploring...' : 'Explore'}
             </button>
-            
+
             <button
               onClick={handleFinishExploring}
               disabled={state.explorationResults.length === 0}
@@ -190,11 +229,15 @@ export default function ExploreInterface() {
                 flex: 1,
                 padding: '12px',
                 fontSize: '16px',
-                backgroundColor: state.explorationResults.length === 0 ? '#ccc' : '#28a745',
+                backgroundColor:
+                  state.explorationResults.length === 0 ? '#ccc' : '#28a745',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: state.explorationResults.length === 0 ? 'not-allowed' : 'pointer',
+                cursor:
+                  state.explorationResults.length === 0
+                    ? 'not-allowed'
+                    : 'pointer',
               }}
             >
               Build Map
@@ -205,19 +248,24 @@ export default function ExploreInterface() {
         {/* Right Panel - Results */}
         <div style={{ flex: 1 }}>
           <h3>Exploration Results</h3>
-          
+
           {state.explorationResults.length === 0 ? (
-            <p style={{ color: '#666', fontStyle: 'italic' }}>No exploration results yet</p>
+            <p style={{ color: '#666', fontStyle: 'italic' }}>
+              No exploration results yet
+            </p>
           ) : (
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {state.explorationResults.map((result, index) => (
-                <div key={index} style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  marginBottom: '10px',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}>
+                <div
+                  key={index}
+                  style={{
+                    padding: '10px',
+                    backgroundColor: '#f8f9fa',
+                    marginBottom: '10px',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                  }}
+                >
                   <strong>Result {index + 1}:</strong>
                   <pre style={{ margin: '5px 0', fontFamily: 'monospace' }}>
                     {JSON.stringify(result, null, 2)}
@@ -230,11 +278,17 @@ export default function ExploreInterface() {
       </div>
 
       <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
-        <p><strong>Instructions:</strong></p>
+        <p>
+          <strong>Instructions:</strong>
+        </p>
         <ul>
-          <li>Enter plans using direction letters (N, E, S, W)</li>
-          <li>Each plan represents a sequence of moves through the library</li>
+          <li>Enter plans using door numbers (0, 1, 2, 3, 4, 5)</li>
+          <li>Each room is hexagonal with 6 doors numbered 0-5</li>
+          <li>
+            Each plan represents a sequence of door choices through the library
+          </li>
           <li>Results show room labels encountered during exploration</li>
+          <li>Multiple rooms can have the same label</li>
           <li>Use multiple exploration rounds to gather enough information</li>
         </ul>
       </div>

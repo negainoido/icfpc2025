@@ -27,7 +27,7 @@ export default function MapBuilder() {
   const handleAddRoom = () => {
     const roomNum = parseInt(newRoom);
     if (!isNaN(roomNum) && !map.rooms.includes(roomNum)) {
-      setMap(prev => ({
+      setMap((prev) => ({
         ...prev,
         rooms: [...prev.rooms, roomNum].sort((a, b) => a - b),
       }));
@@ -36,13 +36,14 @@ export default function MapBuilder() {
   };
 
   const handleRemoveRoom = (roomNum: number) => {
-    setMap(prev => ({
+    setMap((prev) => ({
       ...prev,
-      rooms: prev.rooms.filter(r => r !== roomNum),
+      rooms: prev.rooms.filter((r) => r !== roomNum),
       connections: prev.connections.filter(
-        c => c.from.room !== roomNum && c.to.room !== roomNum
+        (c) => c.from.room !== roomNum && c.to.room !== roomNum
       ),
-      startingRoom: prev.startingRoom === roomNum ? (prev.rooms[0] || 0) : prev.startingRoom,
+      startingRoom:
+        prev.startingRoom === roomNum ? prev.rooms[0] || 0 : prev.startingRoom,
     }));
   };
 
@@ -52,14 +53,28 @@ export default function MapBuilder() {
     const toRoom = parseInt(newConnection.toRoom);
     const toDoor = parseInt(newConnection.toDoor);
 
-    if (!isNaN(fromRoom) && !isNaN(fromDoor) && !isNaN(toRoom) && !isNaN(toDoor)) {
+    if (
+      !isNaN(fromRoom) &&
+      !isNaN(fromDoor) &&
+      !isNaN(toRoom) &&
+      !isNaN(toDoor)
+    ) {
+      // Validate door numbers are in range 0-5
+      if (fromDoor < 0 || fromDoor > 5 || toDoor < 0 || toDoor > 5) {
+        dispatch({
+          type: 'SET_ERROR',
+          payload: 'Door numbers must be between 0 and 5',
+        });
+        return;
+      }
+
       if (map.rooms.includes(fromRoom) && map.rooms.includes(toRoom)) {
         const connection: Connection = {
           from: { room: fromRoom, door: fromDoor },
           to: { room: toRoom, door: toDoor },
         };
 
-        setMap(prev => ({
+        setMap((prev) => ({
           ...prev,
           connections: [...prev.connections, connection],
         }));
@@ -75,7 +90,7 @@ export default function MapBuilder() {
   };
 
   const handleRemoveConnection = (index: number) => {
-    setMap(prev => ({
+    setMap((prev) => ({
       ...prev,
       connections: prev.connections.filter((_, i) => i !== index),
     }));
@@ -83,12 +98,18 @@ export default function MapBuilder() {
 
   const handleSubmitMap = () => {
     if (map.rooms.length === 0) {
-      dispatch({ type: 'SET_ERROR', payload: 'Map must have at least one room' });
+      dispatch({
+        type: 'SET_ERROR',
+        payload: 'Map must have at least one room',
+      });
       return;
     }
 
     if (!map.rooms.includes(map.startingRoom)) {
-      dispatch({ type: 'SET_ERROR', payload: 'Starting room must be in the rooms list' });
+      dispatch({
+        type: 'SET_ERROR',
+        payload: 'Starting room must be in the rooms list',
+      });
       return;
     }
 
@@ -100,7 +121,7 @@ export default function MapBuilder() {
 
     // Store the map in session state and move to guess phase
     dispatch({ type: 'SET_PHASE', payload: 'completed' });
-    
+
     // Trigger the guess API call
     // This could be moved to a separate component or handled differently
     console.log('Final map:', finalMap);
@@ -117,18 +138,32 @@ export default function MapBuilder() {
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto' }}>
       <h2>Build Library Map</h2>
-      
-      <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-        <p><strong>Session:</strong> {state.sessionId}</p>
-        <p><strong>Problem:</strong> {state.problemName}</p>
-        <p><strong>Exploration Results:</strong> {state.explorationResults.length} sets of data</p>
+
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '10px',
+          backgroundColor: '#e7f3ff',
+          borderRadius: '4px',
+        }}
+      >
+        <p>
+          <strong>Session:</strong> {state.sessionId}
+        </p>
+        <p>
+          <strong>Problem:</strong> {state.problemName}
+        </p>
+        <p>
+          <strong>Exploration Results:</strong>{' '}
+          {state.explorationResults.length} sets of data
+        </p>
       </div>
 
       <div style={{ display: 'flex', gap: '20px' }}>
         {/* Left Panel - Map Construction */}
         <div style={{ flex: 1 }}>
           <h3>Rooms</h3>
-          
+
           <div style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
               <input
@@ -163,15 +198,22 @@ export default function MapBuilder() {
               <label>Starting Room: </label>
               <select
                 value={map.startingRoom}
-                onChange={(e) => setMap(prev => ({ ...prev, startingRoom: parseInt(e.target.value) }))}
+                onChange={(e) =>
+                  setMap((prev) => ({
+                    ...prev,
+                    startingRoom: parseInt(e.target.value),
+                  }))
+                }
                 style={{
                   padding: '4px',
                   border: '1px solid #ccc',
                   borderRadius: '4px',
                 }}
               >
-                {map.rooms.map(room => (
-                  <option key={room} value={room}>{room}</option>
+                {map.rooms.map((room) => (
+                  <option key={room} value={room}>
+                    {room}
+                  </option>
                 ))}
               </select>
             </div>
@@ -179,10 +221,19 @@ export default function MapBuilder() {
             <div>
               <strong>Current Rooms:</strong>
               {map.rooms.length === 0 ? (
-                <p style={{ color: '#666', fontStyle: 'italic' }}>No rooms added yet</p>
+                <p style={{ color: '#666', fontStyle: 'italic' }}>
+                  No rooms added yet
+                </p>
               ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' }}>
-                  {map.rooms.map(room => (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '5px',
+                    marginTop: '5px',
+                  }}
+                >
+                  {map.rooms.map((room) => (
                     <span
                       key={room}
                       style={{
@@ -190,8 +241,12 @@ export default function MapBuilder() {
                         alignItems: 'center',
                         gap: '5px',
                         padding: '4px 8px',
-                        backgroundColor: room === map.startingRoom ? '#d4edda' : '#f8f9fa',
-                        border: room === map.startingRoom ? '2px solid #28a745' : '1px solid #dee2e6',
+                        backgroundColor:
+                          room === map.startingRoom ? '#d4edda' : '#f8f9fa',
+                        border:
+                          room === map.startingRoom
+                            ? '2px solid #28a745'
+                            : '1px solid #dee2e6',
                         borderRadius: '4px',
                       }}
                     >
@@ -216,49 +271,113 @@ export default function MapBuilder() {
           </div>
 
           <h3>Connections</h3>
-          
+
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '10px',
+                marginBottom: '10px',
+              }}
+            >
               <input
                 type="number"
                 value={newConnection.fromRoom}
-                onChange={(e) => setNewConnection(prev => ({ ...prev, fromRoom: e.target.value }))}
+                onChange={(e) =>
+                  setNewConnection((prev) => ({
+                    ...prev,
+                    fromRoom: e.target.value,
+                  }))
+                }
                 placeholder="From room"
-                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
               />
               <input
                 type="number"
+                min="0"
+                max="5"
                 value={newConnection.fromDoor}
-                onChange={(e) => setNewConnection(prev => ({ ...prev, fromDoor: e.target.value }))}
-                placeholder="From door"
-                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                onChange={(e) =>
+                  setNewConnection((prev) => ({
+                    ...prev,
+                    fromDoor: e.target.value,
+                  }))
+                }
+                placeholder="From door (0-5)"
+                style={{
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
               />
               <input
                 type="number"
                 value={newConnection.toRoom}
-                onChange={(e) => setNewConnection(prev => ({ ...prev, toRoom: e.target.value }))}
+                onChange={(e) =>
+                  setNewConnection((prev) => ({
+                    ...prev,
+                    toRoom: e.target.value,
+                  }))
+                }
                 placeholder="To room"
-                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                style={{
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
               />
               <input
                 type="number"
+                min="0"
+                max="5"
                 value={newConnection.toDoor}
-                onChange={(e) => setNewConnection(prev => ({ ...prev, toDoor: e.target.value }))}
-                placeholder="To door"
-                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+                onChange={(e) =>
+                  setNewConnection((prev) => ({
+                    ...prev,
+                    toDoor: e.target.value,
+                  }))
+                }
+                placeholder="To door (0-5)"
+                style={{
+                  padding: '8px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                }}
               />
             </div>
             <button
               onClick={handleAddConnection}
-              disabled={!newConnection.fromRoom || !newConnection.fromDoor || !newConnection.toRoom || !newConnection.toDoor}
+              disabled={
+                !newConnection.fromRoom ||
+                !newConnection.fromDoor ||
+                !newConnection.toRoom ||
+                !newConnection.toDoor
+              }
               style={{
                 width: '100%',
                 padding: '8px 16px',
-                backgroundColor: (!newConnection.fromRoom || !newConnection.fromDoor || !newConnection.toRoom || !newConnection.toDoor) ? '#ccc' : '#007bff',
+                backgroundColor:
+                  !newConnection.fromRoom ||
+                  !newConnection.fromDoor ||
+                  !newConnection.toRoom ||
+                  !newConnection.toDoor
+                    ? '#ccc'
+                    : '#007bff',
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (!newConnection.fromRoom || !newConnection.fromDoor || !newConnection.toRoom || !newConnection.toDoor) ? 'not-allowed' : 'pointer',
+                cursor:
+                  !newConnection.fromRoom ||
+                  !newConnection.fromDoor ||
+                  !newConnection.toRoom ||
+                  !newConnection.toDoor
+                    ? 'not-allowed'
+                    : 'pointer',
               }}
             >
               Add Connection
@@ -266,13 +385,15 @@ export default function MapBuilder() {
           </div>
 
           {state.error && (
-            <div style={{
-              padding: '10px',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              borderRadius: '4px',
-              marginBottom: '20px',
-            }}>
+            <div
+              style={{
+                padding: '10px',
+                backgroundColor: '#f8d7da',
+                color: '#721c24',
+                borderRadius: '4px',
+                marginBottom: '20px',
+              }}
+            >
               {state.error}
             </div>
           )}
@@ -293,7 +414,7 @@ export default function MapBuilder() {
             >
               Back to Explore
             </button>
-            
+
             <button
               onClick={handleSubmitMap}
               disabled={map.rooms.length === 0}
@@ -316,20 +437,24 @@ export default function MapBuilder() {
         {/* Right Panel - Current Map & Exploration Data */}
         <div style={{ flex: 1 }}>
           <h3>Current Map</h3>
-          <pre style={{
-            backgroundColor: '#f8f9fa',
-            padding: '15px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            overflow: 'auto',
-            marginBottom: '20px',
-          }}>
+          <pre
+            style={{
+              backgroundColor: '#f8f9fa',
+              padding: '15px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              overflow: 'auto',
+              marginBottom: '20px',
+            }}
+          >
             {JSON.stringify(map, null, 2)}
           </pre>
 
           <h3>Connections ({map.connections.length})</h3>
           {map.connections.length === 0 ? (
-            <p style={{ color: '#666', fontStyle: 'italic' }}>No connections added yet</p>
+            <p style={{ color: '#666', fontStyle: 'italic' }}>
+              No connections added yet
+            </p>
           ) : (
             <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
               {map.connections.map((conn, index) => (
@@ -347,7 +472,8 @@ export default function MapBuilder() {
                   }}
                 >
                   <span>
-                    Room {conn.from.room} Door {conn.from.door} ↔ Room {conn.to.room} Door {conn.to.door}
+                    Room {conn.from.room} Door {conn.from.door} ↔ Room{' '}
+                    {conn.to.room} Door {conn.to.door}
                   </span>
                   <button
                     onClick={() => handleRemoveConnection(index)}

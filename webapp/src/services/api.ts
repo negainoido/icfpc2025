@@ -10,11 +10,10 @@ import {
   SessionsListResponse,
 } from '../types';
 
-
 class ApiError extends Error {
   constructor(
     message: string,
-    public status?: number,
+    public status?: number
   ) {
     super(message);
     this.name = 'ApiError';
@@ -24,7 +23,10 @@ class ApiError extends Error {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new ApiError(`HTTP ${response.status}: ${errorText}`, response.status);
+    throw new ApiError(
+      `HTTP ${response.status}: ${errorText}`,
+      response.status
+    );
   }
 
   const contentLength = response.headers.get('content-length');
@@ -106,9 +108,12 @@ export const api = {
   },
 
   async abortSession(sessionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/abort`, {
-      method: 'PUT',
-    });
+    const response = await fetch(
+      `${API_BASE_URL}/api/sessions/${sessionId}/abort`,
+      {
+        method: 'PUT',
+      }
+    );
 
     await handleResponse<void>(response);
   },
