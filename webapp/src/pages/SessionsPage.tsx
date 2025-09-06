@@ -55,6 +55,23 @@ const SessionsPage = () => {
     setSelectedSession(null);
   };
 
+  const handleAbortSession = async (sessionId: string) => {
+    if (!window.confirm('このセッションを中止しますか？この操作は元に戻せません。')) {
+      return;
+    }
+
+    try {
+      await api.abortSession(sessionId);
+      await loadSessions();
+      await loadCurrentSession();
+      setError(null);
+      alert('セッションを正常に中止しました');
+    } catch (err) {
+      console.error('Failed to abort session:', err);
+      setError('セッションの中止に失敗しました');
+    }
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -169,13 +186,32 @@ const SessionsPage = () => {
               borderRadius: '6px',
               padding: '15px'
             }}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#155724' }}>現在のアクティブセッション</h3>
-              <div style={{ color: '#155724' }}>
-                <strong>セッションID:</strong> {currentSession.session_id}
-                <br />
-                <strong>開始時刻:</strong> {formatDateTime(currentSession.created_at)}
-                <br />
-                <strong>継続時間:</strong> {getSessionDuration(currentSession)}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 10px 0', color: '#155724' }}>現在のアクティブセッション</h3>
+                  <div style={{ color: '#155724' }}>
+                    <strong>セッションID:</strong> {currentSession.session_id}
+                    <br />
+                    <strong>開始時刻:</strong> {formatDateTime(currentSession.created_at)}
+                    <br />
+                    <strong>継続時間:</strong> {getSessionDuration(currentSession)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleAbortSession(currentSession.session_id)}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  セッション中止
+                </button>
               </div>
             </div>
           ) : (
@@ -267,20 +303,38 @@ const SessionsPage = () => {
                         {getSessionDuration(session)}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => openSessionDetail(session)}
-                          style={{
-                            padding: '6px 12px',
-                            backgroundColor: '#17a2b8',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          詳細を見る
-                        </button>
+                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => openSessionDetail(session)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#17a2b8',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            詳細を見る
+                          </button>
+                          {session.status === 'active' && (
+                            <button
+                              onClick={() => handleAbortSession(session.session_id)}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                              }}
+                            >
+                              中止
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

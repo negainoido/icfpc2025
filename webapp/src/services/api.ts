@@ -104,6 +104,14 @@ export const api = {
     const result = await handleResponse<SessionDetail>(response);
     return result.data!;
   },
+
+  async abortSession(sessionId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}/abort`, {
+      method: 'PUT',
+    });
+
+    await handleResponse<void>(response);
+  },
 };
 
 export { ApiError };

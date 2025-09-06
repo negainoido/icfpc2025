@@ -104,6 +104,17 @@ pub async fn complete_session(pool: &MySqlPool, session_id: &str) -> Result<(), 
     Ok(())
 }
 
+pub async fn abort_session(pool: &MySqlPool, session_id: &str) -> Result<(), ApiError> {
+    sqlx::query(
+        "UPDATE sessions SET status = 'failed', completed_at = NOW() WHERE session_id = ? AND status = 'active'"
+    )
+    .bind(session_id)
+    .execute(pool)
+    .await?;
+    
+    Ok(())
+}
+
 pub async fn log_api_request(
     pool: &MySqlPool,
     session_id: &str,

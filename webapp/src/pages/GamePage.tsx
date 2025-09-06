@@ -5,6 +5,7 @@ import ExploreInterface from '../components/ExploreInterface';
 import MapBuilder from '../components/MapBuilder';
 import GuessInterface from '../components/GuessInterface';
 import { Map } from '../types';
+import { api } from '../services/api';
 
 export default function GamePage() {
   const { state, dispatch } = useSession();
@@ -49,8 +50,25 @@ export default function GamePage() {
     }
   };
 
-  const handleReset = () => {
-    dispatch({ type: 'RESET_SESSION' });
+  const handleReset = async () => {
+    if (!state.sessionId) {
+      dispatch({ type: 'RESET_SESSION' });
+      return;
+    }
+
+    if (!window.confirm('現在のセッションを中止しますか？この操作は元に戻せません。')) {
+      return;
+    }
+
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      await api.abortSession(state.sessionId);
+      dispatch({ type: 'RESET_SESSION' });
+      alert('セッションを正常に中止しました');
+    } catch (err) {
+      console.error('Failed to abort session:', err);
+      dispatch({ type: 'SET_ERROR', payload: 'セッションの中止に失敗しました' });
+    }
   };
 
   return (
@@ -75,17 +93,18 @@ export default function GamePage() {
             {state.sessionId && (
               <button
                 onClick={handleReset}
+                disabled={state.isLoading}
                 style={{
                   padding: '8px 16px',
-                  backgroundColor: '#dc3545',
+                  backgroundColor: state.isLoading ? '#6c757d' : '#dc3545',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: 'pointer',
+                  cursor: state.isLoading ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                 }}
               >
-                Reset Session
+                {state.isLoading ? 'Aborting...' : 'Reset Session'}
               </button>
             )}
           </div>
@@ -93,6 +112,20 @@ export default function GamePage() {
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px' }}>
+        {/* Error Display */}
+        {state.error && (
+          <div style={{
+            backgroundColor: '#f8d7da',
+            border: '1px solid #f5c6cb',
+            borderRadius: '6px',
+            padding: '15px',
+            marginBottom: '20px',
+            color: '#721c24'
+          }}>
+            {state.error}
+          </div>
+        )}
+
         {/* Phase Progress Indicator */}
         <div style={{
           display: 'flex',

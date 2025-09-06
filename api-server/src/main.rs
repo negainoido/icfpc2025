@@ -1,6 +1,6 @@
 use axum::{
     http::{HeaderValue, Method},
-    routing::{get, post},
+    routing::{get, post, put},
     Router,
 };
 use std::net::SocketAddr;
@@ -12,7 +12,7 @@ mod icfpc_client;
 mod models;
 
 use database::{create_pool, init_database};
-use handlers::{explore, guess, select, get_sessions, get_current_session, get_session_detail};
+use handlers::{explore, guess, select, get_sessions, get_current_session, get_session_detail, abort_session_handler};
 
 #[tokio::main]
 async fn main() {
@@ -41,6 +41,7 @@ async fn main() {
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/current", get(get_current_session))
         .route("/api/sessions/:session_id", get(get_session_detail))
+        .route("/api/sessions/:session_id/abort", put(abort_session_handler))
         .with_state(pool)
         .layer(cors);
 
@@ -53,6 +54,7 @@ async fn main() {
     println!("  GET  /api/sessions         - Get all sessions");
     println!("  GET  /api/sessions/current - Get current active session");
     println!("  GET  /api/sessions/:id     - Get session details and logs");
+    println!("  PUT  /api/sessions/:id/abort - Abort active session");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

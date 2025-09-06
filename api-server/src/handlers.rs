@@ -9,7 +9,7 @@ use tracing::error;
 use crate::{
     database::{
         complete_session, create_session, get_active_session, has_active_session, log_api_request,
-        get_all_sessions, get_session_by_id, get_api_logs_for_session,
+        get_all_sessions, get_session_by_id, get_api_logs_for_session, abort_session,
     },
     icfpc_client::IcfpClient,
     models::{ApiError, ApiResponse, SelectRequest, SelectResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest, SessionDetail, SessionsListResponse, Session},
@@ -211,5 +211,37 @@ pub async fn get_session_detail(
     Ok(Json(ApiResponse::success(
         response,
         Some("Session detail retrieved successfully".to_string()),
+    )))
+}
+
+pub async fn abort_session_handler(
+    State(pool): State<MySqlPool>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<ApiResponse<()>>, StatusCode> {
+    let session = get_session_by_id(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::SessionNotFound))?;
+
+    if session.status != "active" {
+        return Err(StatusCode::from(ApiError::InvalidRequest("Session is not active".to_string())));
+    }
+
+    abort_session(&pool, &session_id).await.map_err(StatusCode::from)?;
+
+    log_api_request(
+        &pool,
+        &session_id,
+        "abort",
+        None,
+        Some(&serde_json::json!({"aborted": true}).to_string()),
+        Some(200),
+    )
+    .await
+    .map_err(StatusCode::from)?;
+
+    Ok(Json(ApiResponse::success(
+        (),
+        Some("Session aborted successfully".to_string()),
     )))
 }

@@ -167,6 +167,23 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 }
 ```
 
+### `PUT /api/sessions/{session_id}/abort`
+
+アクティブなセッションを強制的に中止する。セッションのステータスが`failed`に変更され、`completed_at`が現在時刻に設定される。
+
+**レスポンス（成功時）:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Session aborted successfully"
+}
+```
+
+**エラーケース:**
+- 404 Not Found: 指定されたセッションIDが見つからない場合
+- 400 Bad Request: セッションが既に非アクティブ（completed または failed）の場合
+
 ## エラー処理
 
 - 409 Conflict: 既にアクティブなセッションが存在する場合（`/select`時）
