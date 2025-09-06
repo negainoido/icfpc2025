@@ -13,25 +13,44 @@ from typing import Any
 import click
 import requests
 
+
+class API:
+    def __init__(self, team_id: str, base_url: str):
+        self.team_id = team_id
+        self.base_url = base_url
+
+    def make_request(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
+        """APIリクエストを送信し、レスポンスを返す"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            response = requests.post(url, json=data)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            click.echo(f"エラー: {e}", err=True)
+            sys.exit(1)
+
+    def select(self, problem_name: str) -> dict[str, Any]:
+        data = {"id": self.team_id, "problemName": problem_name}
+        return self.make_request("/select", data)
+
+    def explore(self, plans: list[str]):
+        data = {"id": self.team_id, "plans": plans}
+        result = self.make_request("/explore", data)
+        return result
+
+    def guess(self, map_data: dict[str, Any]) -> dict[str, Any]:
+        data = {"id": self.team_id, "map": map_data}
+        return self.make_request("/guess", data)
+
+
 TEAM_ID = os.environ.get("TEAM_ID")
 assert TEAM_ID, "環境変数TEAM_IDを設定して"
 BASE_URL = os.environ.get(
     "API_HOST", "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com"
 )
 print("Using HOST:", BASE_URL)
-
-
-def make_request(endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
-    """APIリクエストを送信し、レスポンスを返す"""
-    url = f"{BASE_URL}{endpoint}"
-
-    try:
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        click.echo(f"エラー: {e}", err=True)
-        sys.exit(1)
+api = API(TEAM_ID, BASE_URL)
 
 
 @click.group()
@@ -59,18 +78,9 @@ def select(problem_name: str):
       quartus       24
       quintus       30
     """
-    data = {"id": TEAM_ID, "problemName": problem_name}
-
     click.echo(f"問題 '{problem_name}' を選択中...")
-    result = make_request("/select", data)
-
+    result = api.select(problem_name)
     click.echo(f"✓ 問題が選択されました: {result['problemName']}")
-
-
-def send_explore(plans: list[str]):
-    data = {"id": TEAM_ID, "plans": list(plans)}
-    result = make_request("/explore", data)
-    return result
 
 
 @cli.command()
@@ -85,7 +95,7 @@ def explore(plans: tuple):
       python api.py explore "0" "12" "345"
     """
     click.echo(f"{len(plans)}個のルートプランで探検中...")
-    result = send_explore(list(plans))
+    result = api.explore(list(plans))
 
     click.echo(f"✓ 探検完了! 遠征回数: {result['queryCount']}")
     click.echo("\n結果:")
@@ -106,7 +116,7 @@ def solve(n: int):
     salts = [
         str(i) + "".join([random.choice("012345") for _ in range(5)]) for i in range(3)
     ]
-    results = send_explore(salts)
+    results = api.explore(salts)
     labels2node: dict[tuple[Any, ...], int] = {}
     labels_key = []
     for i in range(len(salts)):
@@ -136,7 +146,7 @@ def solve(n: int):
         if not plans:
             break
 
-        result = send_explore([plan[1] for plan in plans])
+        result = api.explore([plan[1] for plan in plans])
         print("plans", plans)
         print("result", result)
 
@@ -189,8 +199,7 @@ def solve(n: int):
                 break
 
     print(json.dumps(map_data, ensure_ascii=False))
-    data = {"id": TEAM_ID, "map": map_data}
-    result = make_request("/guess", data)
+    result = api.guess(map_data)
     print(result)
 
     if result["correct"]:
@@ -233,10 +242,8 @@ def guess(map_file):
             )
             sys.exit(1)
 
-    data = {"id": TEAM_ID, "map": map_data}
-
     click.echo("地図を提出中...")
-    result = make_request("/guess", data)
+    result = api.guess(map_data)
 
     if result["correct"]:
         click.echo("🎉 正解! 地図が正しく提出されました!")
@@ -293,16 +300,13 @@ def guess_inline(rooms: tuple, starting_room: int, connection: tuple):
             click.echo(f"エラー: 接続の形式が無効です '{conn_str}': {e}", err=True)
             sys.exit(1)
 
+    click.echo("地図を提出中...")
     map_data = {
         "rooms": list(rooms),
         "startingRoom": starting_room,
         "connections": connections,
     }
-
-    data = {"id": TEAM_ID, "map": map_data}
-
-    click.echo("地図を提出中...")
-    result = make_request("/guess", data)
+    result = api.guess(map_data)
 
     if result["correct"]:
         click.echo("🎉 正解! 地図が正しく提出されました!")
