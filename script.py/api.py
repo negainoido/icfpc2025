@@ -121,8 +121,9 @@ def solve(n: int):
             visited.add(current)
 
             for i in range(6):
-                if graph[current][i] is not None:
-                    q.append((graph[current][i], path + str(i)))  # type: ignore
+                next_room = graph[current][i]
+                if next_room is not None:
+                    q.append((next_room, path + str(i)))
                     continue
                 plans.append(((current, i), path + str(i) + salt))
         if not plans:
