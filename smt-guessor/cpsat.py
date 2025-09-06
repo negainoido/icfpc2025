@@ -236,6 +236,18 @@ def build_solver_fast(
             model.AddElement(loc[t], L, lab_t)
             model.Add(lab_t == obs[t])
 
+        # 命名対称性緩和: loc[t] の最大値が t 以下
+        maxp = [model.NewIntVar(0, N - 1, f"maxp_{t}") for t in range(T + 1)]
+        model.Add(maxp[0] == loc[0])
+        for t in range(1, T + 1):
+            model.AddMaxEquality(maxp[t], [maxp[t - 1], loc[t]])
+            model.Add(loc[t] <= maxp[t - 1] + 1)
+
+        # 対称性緩和: starting_room のラベルは昇順
+        s = D * starting_room
+        for d in range(D - 1):
+            model.Add(match[s + d] <= match[s + d + 1])
+
         # トレース（行動 a_t で選んだポートの相手は次の部屋のいずれかのポート）
         for t in range(T):
             a_t = plan[t]
@@ -251,6 +263,11 @@ def build_solver_fast(
 
             # m_t = 6*loc[t+1] + o_t  （相手は次の部屋のどれかの扉）
             model.Add(m_t == D * loc[t + 1] + o_t)
+
+        model.AddDecisionStrategy(loc, cp_model.CHOOSE_FIRST, cp_model.SELECT_MIN_VALUE)
+        model.AddDecisionStrategy(
+            match, cp_model.CHOOSE_MIN_DOMAIN_SIZE, cp_model.SELECT_MIN_VALUE
+        )
 
     meta = {
         "L": L,
@@ -275,6 +292,7 @@ def solve_and_extract_fast(
         solver.parameters.max_time_in_seconds = time_limit_s
     # 並列数は環境に応じて調整（例: 8, 16 など）
     solver.parameters.num_search_workers = 8
+    solver.parameters.search_branching = cp_model.FIXED_SEARCH
 
     if progress:
         try:
