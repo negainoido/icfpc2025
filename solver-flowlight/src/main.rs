@@ -348,15 +348,21 @@ fn score_saed(st: &State, plan: &[usize], results: &[u8]) -> usize {
         let mut next = vec![INF; N];
         for v in 0..N {
             let base = ins[v];
-            if base >= INF { continue; }
+            if base >= INF {
+                continue;
+            }
             let label_cost = if labels[v] == results[j] { 0 } else { 1 };
             // 削除
             let del_cost = base + label_cost + 1;
-            if del_cost < next[v] { next[v] = del_cost; }
+            if del_cost < next[v] {
+                next[v] = del_cost;
+            }
             // 一致
             let to = st.neighbors[v][plan[j]].0;
             let mv_cost = base + label_cost;
-            if mv_cost < next[to] { next[to] = mv_cost; }
+            if mv_cost < next[to] {
+                next[to] = mv_cost;
+            }
         }
         cur = next;
     }
@@ -364,10 +370,14 @@ fn score_saed(st: &State, plan: &[usize], results: &[u8]) -> usize {
     let mut best = INF;
     for v in 0..N {
         let base = ins[v];
-        if base >= INF { continue; }
+        if base >= INF {
+            continue;
+        }
         let label_cost = if labels[v] == results[l] { 0 } else { 1 };
         let total = base + label_cost;
-        if total < best { best = total; }
+        if total < best {
+            best = total;
+        }
     }
     best
 }
@@ -396,6 +406,150 @@ fn apply_label_flip(st: &mut State, rng: &mut StdRng) {
         new = (new + 1) & 3;
     }
     st.labels[v] = new;
+}
+
+// ラベル数の下限/上限（均等分布: floor(N/4), ceil(N/4)）
+fn label_min_max() -> (usize, usize) {
+    let minc = N / 4;
+    let maxc = (N + 3) / 4; // ceil
+    (minc, maxc)
+}
+
+// ラベルの度数を数える
+fn label_counts(st: &State) -> [usize; 4] {
+    let mut cnt = [0usize; 4];
+    for &x in &st.labels {
+        cnt[x as usize] += 1;
+    }
+    cnt
+}
+
+// 初期化後などに、ラベルの均等分布制約を満たすように修正
+fn enforce_label_balance(st: &mut State, rng: &mut StdRng) {
+    let (minc, maxc) = label_min_max();
+    // バケツ: 各ラベルの頂点インデックス
+    let mut buckets: [Vec<usize>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+    for (i, &lab) in st.labels.iter().enumerate() {
+        buckets[lab as usize].push(i);
+    }
+    let mut cnt = [0usize; 4];
+    for c in 0..4 {
+        cnt[c] = buckets[c].len();
+    }
+
+    // まず min 充足: min 未満のラベルを満たすため、min を超えるラベルから移す
+    for b in 0..4 {
+        while cnt[b] < minc {
+            // donor を探す（max を超えるラベルを優先、なければ min を超えるラベル）
+            let mut donor: Option<usize> = None;
+            for a in 0..4 {
+                if cnt[a] > maxc {
+                    donor = Some(a);
+                    break;
+                }
+            }
+            if donor.is_none() {
+                for a in 0..4 {
+                    if cnt[a] > minc {
+                        donor = Some(a);
+                        break;
+                    }
+                }
+            }
+            let a = match donor {
+                Some(x) => x,
+                None => break,
+            };
+            if let Some(&v) = buckets[a].last() {
+                buckets[a].pop();
+                st.labels[v] = b as u8;
+                buckets[b].push(v);
+                cnt[a] -= 1;
+                cnt[b] += 1;
+            } else {
+                break;
+            }
+        }
+    }
+    // 次に max 超過を解消: max を超えるラベルから max 未満のラベルへ移す
+    for a in 0..4 {
+        while cnt[a] > maxc {
+            let mut recv: Option<usize> = None;
+            for b in 0..4 {
+                if cnt[b] < maxc {
+                    recv = Some(b);
+                    break;
+                }
+            }
+            let b = match recv {
+                Some(x) => x,
+                None => break,
+            };
+            if let Some(&v) = buckets[a].last() {
+                buckets[a].pop();
+                st.labels[v] = b as u8;
+                buckets[b].push(v);
+                cnt[a] -= 1;
+                cnt[b] += 1;
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+// 制約を満たす単一点ラベル変更（見つからなければ不作為）
+fn apply_label_flip_constrained(st: &mut State, rng: &mut StdRng) {
+    let (minc, maxc) = label_min_max();
+    let mut cnt = label_counts(st);
+    for _ in 0..(N * 8) {
+        let v = rng.gen_range(0..N);
+        let a = st.labels[v] as usize;
+        if cnt[a] <= minc {
+            continue;
+        }
+        // 受け取り可能ラベル候補（ランダム順）
+        let mut cand = [0usize; 3];
+        let mut idx = 0;
+        for b in 0..4 {
+            if b != a {
+                cand[idx] = b;
+                idx += 1;
+            }
+        }
+        for i in (0..3).rev() {
+            let j = rng.gen_range(0..=i);
+            cand.swap(i, j);
+        }
+        for &b in &cand {
+            if cnt[b] < maxc {
+                st.labels[v] = b as u8;
+                cnt[a] -= 1;
+                cnt[b] += 1;
+                return;
+            }
+        }
+    }
+}
+
+// 異なる2頂点のラベルをスワップ（常に総数を保つ）
+fn apply_label_swap(st: &mut State, rng: &mut StdRng) {
+    if N < 2 {
+        return;
+    }
+    for _ in 0..(N * 8) {
+        let a = rng.gen_range(0..N);
+        let mut b = rng.gen_range(0..N);
+        if a == b {
+            b = (b + 1) % N;
+        }
+        if st.labels[a] != st.labels[b] {
+            let tmp = st.labels[a];
+            st.labels[a] = st.labels[b];
+            st.labels[b] = tmp;
+            return;
+        }
+    }
 }
 
 // ノード内の6ポートをランダム置換（相手側のバックポートも調整）
@@ -474,6 +628,7 @@ fn sa_solve(
     edit_eval: bool,
     saed_eval: bool,
     structure_eval: bool,
+    balanced_labels: bool,
     big_moves: bool,
     t0: f64,
     t1: f64,
@@ -484,6 +639,9 @@ fn sa_solve(
     } else {
         init_route_respecting_ring(plan, results, &mut rng)
     };
+    if balanced_labels {
+        enforce_label_balance(&mut cur, &mut rng);
+    }
     let mut cur_score = if structure_eval {
         score_structure_only(&cur, plan, results)
     } else if saed_eval {
@@ -522,7 +680,15 @@ fn sa_solve(
                 apply_two_opt_swap(&mut next, &mut rng);
             } else if r < 0.60 {
                 if !(structure_eval || saed_eval) {
-                    apply_label_flip(&mut next, &mut rng);
+                    if balanced_labels {
+                        if rng.gen_bool(0.5) {
+                            apply_label_flip_constrained(&mut next, &mut rng);
+                        } else {
+                            apply_label_swap(&mut next, &mut rng);
+                        }
+                    } else {
+                        apply_label_flip(&mut next, &mut rng);
+                    }
                 } else {
                     apply_node_port_permutation(&mut next, &mut rng);
                 }
@@ -539,7 +705,15 @@ fn sa_solve(
             if use_two_opt {
                 apply_two_opt_swap(&mut next, &mut rng);
             } else if !(structure_eval || saed_eval) {
-                apply_label_flip(&mut next, &mut rng);
+                if balanced_labels {
+                    if rng.gen_bool(0.5) {
+                        apply_label_flip_constrained(&mut next, &mut rng);
+                    } else {
+                        apply_label_swap(&mut next, &mut rng);
+                    }
+                } else {
+                    apply_label_flip(&mut next, &mut rng);
+                }
             } else {
                 apply_two_opt_swap(&mut next, &mut rng);
             }
@@ -640,6 +814,10 @@ struct Args {
     /// 大きな遷移（ポート置換・3/4-edge再配線）を有効化
     #[arg(long, default_value_t = false)]
     big_moves: bool,
+
+    /// ラベル分布制約を適用（各ラベル数が floor(N/4)..ceil(N/4)）
+    #[arg(long, default_value_t = false)]
+    balanced_labels: bool,
 }
 
 #[tokio::main]
@@ -665,6 +843,7 @@ async fn main() -> Result<()> {
         args.edit_eval,
         args.saed_eval,
         args.structure_eval,
+        args.balanced_labels,
         args.big_moves,
         args.t0,
         args.t1,
