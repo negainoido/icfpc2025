@@ -8,6 +8,7 @@ import json
 import sys
 from typing import Any, Dict
 import os
+import random
 
 import click
 import requests
@@ -63,6 +64,10 @@ def select(problem_name: str):
 
     click.echo(f"✓ 問題が選択されました: {result['problemName']}")
 
+def send_explore(plans: tuple):
+    data = {"id": TEAM_ID, "plans": list(plans)}
+    result = make_request("/explore", data)
+    return result
 
 @cli.command()
 @click.argument("plans", nargs=-1, required=True)
@@ -75,10 +80,8 @@ def explore(plans: tuple):
     例:
       python api.py explore "0" "12" "345"
     """
-    data = {"id": TEAM_ID, "plans": list(plans)}
-
     click.echo(f"{len(plans)}個のルートプランで探検中...")
-    result = make_request("/explore", data)
+    result = send_explore(plans)
 
     click.echo(f"✓ 探検完了! 遠征回数: {result['queryCount']}")
     click.echo("\n結果:")
@@ -88,6 +91,86 @@ def explore(plans: tuple):
     json_output = {"plans": list(plans), "results": result["results"]}
     click.echo("\n--- smt-guessor friendly output ---")
     click.echo(json.dumps(json_output, ensure_ascii=False))
+
+@cli.command()
+@click.argument("N", type=int)
+def solve(n: int):
+    graph = [[None] * 6 for _ in range(n)]
+    graph_labels = [None for _ in range(n)]
+    salt = "".join([random.choice("012345") for i in range(10)])
+    salt = "2545441155"
+    results = send_explore((salt,))
+    labels2node = {}
+    labels2node[tuple(results["results"][0][-len(salt)-1:])] = 0
+    graph_labels[0] = results["results"][0][0]
+
+    while True:
+        q = [(0, "")]
+        visited = set()
+        plans = []
+        while q:
+            current, path = q[0]
+            q = q[1:]
+            if current in visited:
+                continue
+            visited.add(current)
+
+            for i in range(6):
+                if graph[current][i] is not None:
+                    q.append((graph[current][i], path + str(i)))
+                    continue
+                plans.append(((current, i), path + str(i) + salt))
+        if not plans:
+            break
+
+        result = send_explore([plan[1] for plan in plans])
+        print("plans", plans)
+        print("result", result)
+
+        for i, result in enumerate(result["results"]):
+            labels = tuple(result[-len(salt)-1:])
+            print("labels", labels)
+            if labels not in labels2node:
+                labels2node[labels] = len(labels2node)
+            node, e = plans[i][0]
+            graph[node][e] = labels2node[labels]
+            graph_labels[node] = result[-len(salt)-2]
+        print("graph", graph)
+        print("graph_labels", graph_labels)
+
+    map_data = {
+        "rooms": graph_labels,
+        "startingRoom": 0,
+        "connections": [],
+    }
+    used_edge = set()
+
+    for i in range(n):
+        for j in range(6):
+            if (i, j) in used_edge:
+                continue
+
+            to = graph[i][j]
+            for k in range(6):
+                from_node = graph[to][k]
+                if from_node != i:
+                    continue
+                if (from_node, k) in used_edge:
+                    continue
+                used_edge.add((i, j))
+                used_edge.add((from_node, k))
+                map_data["connections"].append(
+                    {
+                        "from": {"room": i, "door": j},
+                        "to": {"room": to, "door": k},
+                    }
+                )
+                break
+
+    print(json.dumps(map_data, ensure_ascii=False))
+    data = {"id": TEAM_ID, "map": map_data}
+    result = make_request("/guess", data)
+    print(result)
 
 
 @cli.command()
