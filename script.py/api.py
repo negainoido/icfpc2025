@@ -40,7 +40,7 @@ class API:
             garasubo.com で続きから始める場合に必要
         """
         self.base_url = base_url or "https://negainoido.garasubo.com/api"
-        self.team_id = team_id or "team-" + str(random.randint(100000, 999999))
+        self.team_id = team_id
         self.client_id = client_id
         self.client_secret = client_secret
         self.session_id = session_id
@@ -90,7 +90,7 @@ API_HOST = os.environ.get("API_HOST")
 CLIENT_ID = os.environ.get("CLIENT_ID")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
 
-if API_HOST:
+if TEAM_ID and API_HOST:
     print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
     api = API(API_HOST, TEAM_ID, None, None)
 elif CLIENT_ID and CLIENT_SECRET:
