@@ -4,7 +4,7 @@ use tracing::error;
 
 use crate::{
     database::{
-        abort_session, complete_session, create_session, get_active_session, get_all_sessions,
+        abort_session, complete_session, create_session, get_active_session, get_active_session_by_user, get_all_sessions,
         get_api_logs_for_session, get_session_by_id, has_active_session, log_api_request,
     },
     icfpc_client::IcfpClient,
@@ -69,16 +69,35 @@ pub async fn explore(
     State(pool): State<MySqlPool>,
     Json(payload): Json<ExploreRequest>,
 ) -> Result<Json<ExploreResponse>, StatusCode> {
-    let session = get_active_session(&pool)
-        .await
-        .map_err(StatusCode::from)?
-        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
-
-    if session.session_id != payload.session_id {
-        return Err(StatusCode::from(ApiError::InvalidRequest(
-            "Session ID mismatch".to_string(),
-        )));
-    }
+    // セッションを特定する: session_idまたはuser_nameのいずれかを使用
+    let session = match (&payload.session_id, &payload.user_name) {
+        (Some(session_id), _) => {
+            // session_idが指定された場合は従来通りの処理
+            let session = get_active_session(&pool)
+                .await
+                .map_err(StatusCode::from)?
+                .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
+            
+            if session.session_id != *session_id {
+                return Err(StatusCode::from(ApiError::InvalidRequest(
+                    "Session ID mismatch".to_string(),
+                )));
+            }
+            session
+        },
+        (None, Some(user_name)) => {
+            // user_nameが指定された場合はそのユーザーのアクティブセッションを取得
+            get_active_session_by_user(&pool, user_name)
+                .await
+                .map_err(StatusCode::from)?
+                .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?
+        },
+        (None, None) => {
+            return Err(StatusCode::from(ApiError::InvalidRequest(
+                "Either session_id or user_name must be specified".to_string(),
+            )));
+        }
+    };
 
     let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
 
@@ -105,7 +124,7 @@ pub async fn explore(
     .map_err(StatusCode::from)?;
 
     let response = ExploreResponse {
-        session_id: payload.session_id,
+        session_id: session.session_id,
         results: upstream_response.results,
         query_count: upstream_response.query_count,
     };
@@ -117,16 +136,35 @@ pub async fn guess(
     State(pool): State<MySqlPool>,
     Json(payload): Json<GuessRequest>,
 ) -> Result<Json<GuessResponse>, StatusCode> {
-    let session = get_active_session(&pool)
-        .await
-        .map_err(StatusCode::from)?
-        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
-
-    if session.session_id != payload.session_id {
-        return Err(StatusCode::from(ApiError::InvalidRequest(
-            "Session ID mismatch".to_string(),
-        )));
-    }
+    // セッションを特定する: session_idまたはuser_nameのいずれかを使用
+    let session = match (&payload.session_id, &payload.user_name) {
+        (Some(session_id), _) => {
+            // session_idが指定された場合は従来通りの処理
+            let session = get_active_session(&pool)
+                .await
+                .map_err(StatusCode::from)?
+                .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
+            
+            if session.session_id != *session_id {
+                return Err(StatusCode::from(ApiError::InvalidRequest(
+                    "Session ID mismatch".to_string(),
+                )));
+            }
+            session
+        },
+        (None, Some(user_name)) => {
+            // user_nameが指定された場合はそのユーザーのアクティブセッションを取得
+            get_active_session_by_user(&pool, user_name)
+                .await
+                .map_err(StatusCode::from)?
+                .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?
+        },
+        (None, None) => {
+            return Err(StatusCode::from(ApiError::InvalidRequest(
+                "Either session_id or user_name must be specified".to_string(),
+            )));
+        }
+    };
 
     let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
 
@@ -157,7 +195,7 @@ pub async fn guess(
         .map_err(StatusCode::from)?;
 
     let response = GuessResponse {
-        session_id: payload.session_id,
+        session_id: session.session_id,
         correct: upstream_response.correct,
     };
 

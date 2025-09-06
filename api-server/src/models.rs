@@ -72,7 +72,8 @@ pub struct SelectResponse {
 // Explore API types
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExploreRequest {
-    pub session_id: String,
+    pub session_id: Option<String>,
+    pub user_name: Option<String>,
     pub plans: Vec<String>,
 }
 
@@ -120,7 +121,8 @@ pub struct Map {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GuessRequest {
-    pub session_id: String,
+    pub session_id: Option<String>,
+    pub user_name: Option<String>,
     pub map: Map,
 }
 
