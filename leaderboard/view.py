@@ -57,19 +57,28 @@ def main():
         return
 
     # Initialize session state for team selection
+    # Check URL parameters for team selection
+    query_params = st.query_params
+    teams_param = query_params.get("teams", "")
+
     if "selected_teams" not in st.session_state:
-        # Default selection: top 10 teams by score + negainoido if not in top 10
-        latest_timestamp = df["timestamp"].max()
-        latest_scores = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
-            "score", ascending=False
-        )
-        top_10_teams = latest_scores["team_name"].head(10).tolist()
+        if teams_param:
+            # Load teams from URL parameter
+            selected_teams_from_url = set(teams_param.split(","))
+            st.session_state.selected_teams = selected_teams_from_url
+        else:
+            # Default selection: top 10 teams by score + negainoido if not in top 10
+            latest_timestamp = df["timestamp"].max()
+            latest_scores = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
+                "score", ascending=False
+            )
+            top_10_teams = latest_scores["team_name"].head(10).tolist()
 
-        default_teams = set(top_10_teams)
-        if "negainoido" not in default_teams:
-            default_teams.add("negainoido")
+            default_teams = set(top_10_teams)
+            if "negainoido" not in default_teams:
+                default_teams.add("negainoido")
 
-        st.session_state.selected_teams = default_teams
+            st.session_state.selected_teams = default_teams
 
     # Show latest scores with checkboxes
     st.subheader("Latest Scores")
@@ -121,6 +130,14 @@ def main():
     for _, row in edited_df.iterrows():
         if row["Chart"]:
             selected_teams.append(row["Team"])
+
+    # Update URL parameters with selected teams
+    if selected_teams:
+        teams_param = ",".join(selected_teams)
+        st.query_params["teams"] = teams_param
+    else:
+        if "teams" in st.query_params:
+            del st.query_params["teams"]
 
     if selected_teams:
         filtered_df = df[df["team_name"].isin(selected_teams)]
