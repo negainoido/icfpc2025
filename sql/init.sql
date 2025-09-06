@@ -1,10 +1,24 @@
-CREATE TABLE IF NOT EXISTS solutions(
-    id INT(11) AUTO_INCREMENT NOT NULL PRIMARY KEY,
-    problem_id INT(11) NOT NULL,
-    problem_type VARCHAR(255) NULL,
-    status VARCHAR(255) NULL,
-    solver VARCHAR(255) NOT NULL,
-    score INT NULL,
-    content TEXT NULL,
-    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- Sessions table for managing active game sessions
+CREATE TABLE IF NOT EXISTS sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) UNIQUE NOT NULL,
+    status ENUM('active', 'completed', 'failed') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL
 );
+
+-- API requests and responses log
+CREATE TABLE IF NOT EXISTS api_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) NOT NULL,
+    endpoint VARCHAR(50) NOT NULL, -- 'select', 'explore', 'guess'
+    request_body TEXT,
+    response_body TEXT,
+    response_status INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_session_id (session_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+-- Remove the old solutions table as it's no longer needed
+DROP TABLE IF EXISTS solutions;

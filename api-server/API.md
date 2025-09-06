@@ -1,159 +1,91 @@
 # API Documentation
 
-## Solutions API
+ICFPCのサーバーに代理でリクエストを投げるAPI群
+本家のAPIについては以下のURLを参照すること
+https://icfpcontest2025.github.io/specs/task_from_tex.html
 
-### GET /api/solutions
+## 環境変数
 
-solutionsテーブルの各問題ごとの上位20件のレコードを取得します。
+以下の環境変数が必要です：
+- `ICFPC_AUTH_TOKEN`: ICFPC本家APIの認証トークン（`/register`で得られるID）
+- `ICFPC_API_BASE_URL`: ICFPC本家APIのベースURL（デフォルト: https://icfpcontest2025.github.io/api）
+- `DATABASE_URL`: MySQLデータベース接続URL
 
-#### レスポンス
+## データベース
 
-**成功時 (200 OK):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "problem_id": 25,
-      "problem_type": "spaceship",
-      "status": "solved",
-      "solver": "algorithm_v1",
-      "score": 150,
-      "ts": "2025-08-09T12:34:56Z"
-    }
-  ],
-  "message": "Solutions retrieved successfully"
-}
-```
+- `sessions`: セッション管理用テーブル
+- `api_logs`: APIリクエスト/レスポンスログ用テーブル
 
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+## API エンドポイント
 
-### GET /api/solutions/{id}
+### `POST /select`
 
-指定されたIDのsolutionレコードを取得します。
+本家の`/select`に代理で投げるAPI。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
+そうでない場合は新たなセッション番号を発行した上で`/select`を投げ、セッションを進行中にする。
 
-#### パラメータ
-
-- `id` (path parameter, required): solution ID
-
-#### レスポンス
-
-**成功時 (200 OK):**
+**レスポンス:**
 ```json
 {
   "success": true,
   "data": {
-    "id": 1,
-    "problem_id": 25,
-    "problem_type": "spaceship",
-    "status": "solved",
-    "solver": "algorithm_v1",
-    "score": 150,
-    "ts": "2025-08-09T12:34:56Z"
+    "session_id": "生成されたUUID",
+    ...  // 本家APIからのレスポンス内容
   },
-  "message": "Solution retrieved successfully"
+  "message": "Session created and select request completed"
 }
 ```
 
-**レコードが存在しない場合 (404 Not Found):**
-```
-HTTP 404 Not Found
-```
+### `POST /explore`
 
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+セッションID付きで本家の`/explore`を叩く。リクエストの内容とその本家からのレスポンスの内容はDBにも格納される。
 
-### POST /api/solutions
-
-新しいsolutionレコードを作成します。
-
-#### リクエストボディ
-
+**リクエスト:**
 ```json
 {
-  "problem_id": 25,
-  "problem_type": "spaceship",
-  "status": "solved",
-  "solver": "algorithm_v1",
-  "score": 150
+  "session_id": "セッションID",
+  ...  // 本家APIへ送信するデータ
 }
 ```
 
-#### パラメータ
-
-- `problem_id` (integer, required): 問題ID
-- `problem_type` (string, optional): 問題タイプ
-- `status` (string, optional): ステータス
-- `solver` (string, required): ソルバー名
-- `score` (integer, optional): スコア
-
-#### レスポンス
-
-**成功時 (200 OK):**
+**レスポンス:**
 ```json
 {
   "success": true,
   "data": {
-    "id": 1,
-    "problem_id": 25,
-    "problem_type": "spaceship",
-    "status": "solved",
-    "solver": "algorithm_v1",
-    "score": 150,
-    "ts": "2025-08-09T12:34:56Z"
+    ...  // 本家APIからのレスポンス内容
   },
-  "message": "Solution created successfully"
+  "message": "Explore request completed"
 }
 ```
 
-**サーバーエラー (500 Internal Server Error):**
+### `POST /guess`
+
+セッションID付きで本家の`/guess`を叩く。リクエストの内容とその本家からのレスポンス内容はDBにも格納される。
+このAPIを叩くとセッションは終了となる。
+
+**リクエスト:**
+```json
+{
+  "session_id": "セッションID",
+  ...  // 本家APIへ送信するデータ
+}
 ```
-HTTP 500 Internal Server Error
-```
 
-## Spaceship Resources API
-
-### GET /api/spaceship/{filename}
-
-Spaceshipリソースディレクトリ内のtxtファイルの内容を取得します。
-
-#### パラメータ
-
-- `filename` (path parameter, required): ファイル名（拡張子なし）
-  - 例: `problem1`, `problem25`
-  - 英数字とハイフンのみ許可（セキュリティ対策）
-
-#### レスポンス
-
-**成功時 (200 OK):**
+**レスポンス:**
 ```json
 {
   "success": true,
   "data": {
-    "filename": "problem1",
-    "content": "1 -1\n1 -3\n2 -5\n2 -8\n3 -10\n\n"
+    ...  // 本家APIからのレスポンス内容
   },
-  "message": "File retrieved successfully"
+  "message": "Guess request completed and session terminated"
 }
 ```
 
-**ファイルが存在しない場合 (404 Not Found):**
-```
-HTTP 404 Not Found
-```
+## エラー処理
 
-**不正なファイル名の場合 (400 Bad Request):**
-```
-HTTP 400 Bad Request
-```
-
-**サーバーエラー (500 Internal Server Error):**
-```
-HTTP 500 Internal Server Error
-```
+- 409 Conflict: 既にアクティブなセッションが存在する場合（`/select`時）
+- 404 Not Found: アクティブなセッションが存在しない場合（`/explore`, `/guess`時）
+- 400 Bad Request: セッションIDの不整合や不正なリクエスト
+- 502 Bad Gateway: 本家APIとの通信エラー
+- 500 Internal Server Error: データベースエラー

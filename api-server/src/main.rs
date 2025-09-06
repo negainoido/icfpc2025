@@ -1,7 +1,7 @@
 use axum::{
     http::{HeaderValue, Method},
     response::Json,
-    routing::{get, post},
+    routing::post,
     Router,
 };
 use serde_json::json;
@@ -10,16 +10,22 @@ use tower_http::cors::CorsLayer;
 
 mod database;
 mod handlers;
+mod icfpc_client;
 mod models;
 
-use database::create_pool;
-use handlers::{create_solution, get_solution, get_solutions, get_spaceship_file};
+use database::{create_pool, init_database};
+use handlers::{explore, guess, select};
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
     let pool = create_pool().await.expect("Failed to create database pool");
+    
+    // Initialize the database schema
+    init_database(&pool)
+        .await
+        .expect("Failed to initialize database");
 
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
@@ -27,25 +33,19 @@ async fn main() {
         .allow_headers([axum::http::header::CONTENT_TYPE]);
 
     let app = Router::new()
-        .route("/", get(health_check))
-        .route("/api/health", get(health_check))
-        .route("/api/spaceship/:filename", get(get_spaceship_file))
-        .route("/api/solutions", get(get_solutions).post(create_solution))
-        .route("/api/solutions/:id", get(get_solution))
+        .route("/select", post(select))
+        .route("/explore", post(explore))
+        .route("/guess", post(guess))
         .with_state(pool)
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    println!("🚀 Server running on http://localhost:8080");
+    println!("🚀 ICFPC 2025 Proxy API Server running on http://localhost:8080");
+    println!("Available endpoints:");
+    println!("  POST /select  - Create new session and call ICFP select API");
+    println!("  POST /explore - Call ICFP explore API with session");
+    println!("  POST /guess   - Call ICFP guess API and terminate session");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn health_check() -> Json<serde_json::Value> {
-    Json(json!({
-        "status": "ok",
-        "message": "ICFPC 2025 API Server is running",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    }))
 }
