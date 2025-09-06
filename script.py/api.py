@@ -31,18 +31,15 @@ class API:
         CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
         USER_NAME = os.environ.get("USER")
 
-        if TEAM_ID and API_HOST and USER_NAME:
+        if TEAM_ID and API_HOST:
             print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
-            api = API(API_HOST, TEAM_ID, None, None, USER_NAME)
+            api = API(API_HOST, TEAM_ID, None, None, None)
         elif CLIENT_ID and CLIENT_SECRET and USER_NAME:
             print(f"Using garasubo.com API access as {CLIENT_ID}")
             api = API(None, None, CLIENT_ID, CLIENT_SECRET, USER_NAME)
-        elif not USER_NAME:
-            print("Error: You have no $USER")
-            sys.exit(1)
         else:
             print(
-                "Error: Set {TEAM_ID and API_HOST} for prod/local , or {CLIENT_ID and CLIENT_SECRET} for garasubo.com"
+                "Error: Set {TEAM_ID and API_HOST} for prod/local , or {CLIENT_ID, CLIENT_SECRET and USER} for garasubo.com"
             )
             sys.exit(1)
 
@@ -85,6 +82,7 @@ class API:
                 "CF-Access-Client-Id": self.client_id,
                 "CF-Access-Client-Secret": self.client_secret,
             }
+            data = {key: val for key, val in data.items() if val}
             response = requests.post(url, json=data, headers=headers)
             response.raise_for_status()
             return response.json()
