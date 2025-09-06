@@ -74,6 +74,10 @@ struct Args {
     /// Probability of random relabel move (low)
     #[arg(long, default_value_t = 0.05_f32)]
     p_relabel: f32,
+
+    /// Probability of 3-edge loop-change rewire move
+    #[arg(long, default_value_t = 0.05_f32)]
+    p_loopmove: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -411,6 +415,7 @@ fn anneal(
     reheat_every: Option<usize>,
     reheat_to: Option<f32>,
     p_relabel: f32,
+    p_loopmove: f32,
 ) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
@@ -435,8 +440,10 @@ fn anneal(
         // randomly choose move
         let mv: f32 = rng.r#gen();
         let p_relabel = p_relabel.clamp(0.0, 1.0);
-        let p_swap = 0.30_f32.min(1.0 - p_relabel);
-        let p_two_opt = (1.0 - p_swap - p_relabel).max(0.0);
+        let p_loopmove = p_loopmove.clamp(0.0, 1.0);
+        let mut p_swap = 0.30_f32;
+        if p_swap + p_relabel + p_loopmove > 1.0 { p_swap = (1.0 - p_relabel - p_loopmove).max(0.0); }
+        let p_two_opt = (1.0 - p_swap - p_relabel - p_loopmove).max(0.0);
         if mv < p_two_opt {
             // 2-opt move (only on two distinct, non-loop edges)
             let p1 = rng.gen_range(0..n_ports);
@@ -517,7 +524,7 @@ fn anneal(
             } else {
                 model.labels.swap(q1, q2);
             }
-        } else {
+        } else if mv < p_two_opt + p_swap + p_relabel {
             // random relabel: pick a room and set a random new label != old
             let q = rng.gen_range(0..inst.n);
             let old_l = model.labels[q];
@@ -541,12 +548,124 @@ fn anneal(
             } else {
                 model.labels[q] = old_l;
             }
+        } else {
+            // loop-change 3-edge move: pair->loops or loops->pair
+            let dir_pair_to_loops: bool = rng.gen_bool(0.5);
+            let mut applied = false;
+
+            if dir_pair_to_loops {
+                // pick two distinct non-loop edges (a-b) and (c-d), all endpoints distinct
+                for _try in 0..16 {
+                    let a = rng.gen_range(0..n_ports);
+                    let b = model.match_to[a];
+                    if a == b { continue; }
+                    let c = rng.gen_range(0..n_ports);
+                    let d = model.match_to[c];
+                    if c == d { continue; }
+                    if a == c || a == d || b == c || b == d { continue; }
+                    // apply: (a-b),(c-d) -> (a-a),(c-c),(b-d)
+                    #[cfg(debug_assertions)]
+                    { debug_assert!(check_involution(model)); }
+                    model.match_to[a] = a;
+                    model.match_to[b] = d;
+                    model.match_to[d] = b;
+                    model.match_to[c] = c;
+                    #[cfg(debug_assertions)]
+                    { debug_assert!(check_involution(model)); }
+                    let new_e = energy(inst, model, lambda_bal);
+                    let d_total = new_e.total - cur.total;
+                    let d_f = d_total as f32;
+                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
+                    if verbose >= 2 {
+                        eprintln!(
+                            "dbg: mv=loopmove dir=pair->loops a={} b={} c={} d={} dE={} T={:.4} acc={} {}->{}",
+                            a, b, c, d, d_total, t, accept, cur.total, new_e.total
+                        );
+                    }
+                    if accept {
+                        cur = new_e;
+                        since_log_accepts += 1;
+                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
+                    } else {
+                        // revert to original: (a-b),(c-d)
+                        model.match_to[a] = b;
+                        model.match_to[b] = a;
+                        model.match_to[c] = d;
+                        model.match_to[d] = c;
+                    }
+                    applied = true;
+                    break;
+                }
+            } else {
+                // loops->pair: pick two loops (a-a),(c-c) and one non-loop (b-d) -> (a-b),(c-d)
+                for _try in 0..16 {
+                    let a = rng.gen_range(0..n_ports);
+                    if model.match_to[a] != a { continue; }
+                    let c = rng.gen_range(0..n_ports);
+                    if c == a || model.match_to[c] != c { continue; }
+                    let b = rng.gen_range(0..n_ports);
+                    let d = model.match_to[b];
+                    if b == d || b == a || b == c || d == a || d == c { continue; }
+                    #[cfg(debug_assertions)]
+                    { debug_assert!(check_involution(model)); }
+                    // apply: (a-a),(c-c),(b-d) -> (a-b),(c-d)
+                    model.match_to[a] = b;
+                    model.match_to[b] = a;
+                    model.match_to[c] = d;
+                    model.match_to[d] = c;
+                    #[cfg(debug_assertions)]
+                    { debug_assert!(check_involution(model)); }
+                    let new_e = energy(inst, model, lambda_bal);
+                    let d_total = new_e.total - cur.total;
+                    let d_f = d_total as f32;
+                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
+                    if verbose >= 2 {
+                        eprintln!(
+                            "dbg: mv=loopmove dir=loops->pair a={} c={} b={} d={} dE={} T={:.4} acc={} {}->{}",
+                            a, c, b, d, d_total, t, accept, cur.total, new_e.total
+                        );
+                    }
+                    if accept {
+                        cur = new_e;
+                        since_log_accepts += 1;
+                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
+                    } else {
+                        // revert to original
+                        model.match_to[a] = a;
+                        model.match_to[c] = c;
+                        model.match_to[b] = d;
+                        model.match_to[d] = b;
+                    }
+                    applied = true;
+                    break;
+                }
+            }
+            if !applied {
+                // fall back: do nothing this iter
+                continue;
+            }
         }
         since_log_moves += 1;
         t *= alpha;
         if t < tmin { t = tmin; }
-        // cheap break if perfect fit on observations
-        if best.obs == 0 { /* keep going to balance */ }
+        // Early stop if we reached perfect total energy
+        if best.total == 0 {
+            // Save an additional snapshot following the same naming rule as other snapshots
+            if let Some(base) = save_base {
+                let save_path = derive_save_path(base, k + 1);
+                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                    if verbose > 0 {
+                        eprintln!("warn: failed to save {}: {}", save_path.display(), e);
+                    }
+                } else if verbose > 0 {
+                    eprintln!("saved {} (E=0)", save_path.display());
+                }
+            }
+            if verbose > 0 {
+                eprintln!("anneal: reached E=0 at it={}", k + 1);
+            }
+            break;
+        }
 
         // Optional reheat if stagnated
         if let Some(r_every) = reheat_every {
@@ -623,37 +742,21 @@ fn emit_output(model: &Model, s0: Room) -> OutputMap {
 }
 
 fn finalize_match_to(model: &mut Model) {
+    // Make mapping safe without changing already valid pairs and self-loops.
     let n_ports = model.match_to.len();
-    let mut used = vec![false; n_ports];
-    let mut pool: Vec<usize> = Vec::new();
     for p in 0..n_ports {
-        if used[p] { continue; }
-        let q0 = model.match_to[p];
-        let q = if q0 < n_ports { q0 } else { p };
-        if q != p && !used[q] {
-            // prefer honoring existing mutual-like pair
-            model.match_to[p] = q;
-            model.match_to[q] = p;
-            used[p] = true;
-            used[q] = true;
-        } else {
-            // defer to pool; we will pair later without self-loops
-            pool.push(p);
-            used[p] = true;
+        let q = model.match_to[p];
+        if q >= n_ports {
+            // Out of range: clamp to self-loop
+            model.match_to[p] = p;
+            continue;
         }
-    }
-    // Pair remaining pool greedily
-    let mut i = 0usize;
-    while i + 1 < pool.len() {
-        let a = pool[i];
-        let b = pool[i + 1];
-        model.match_to[a] = b;
-        model.match_to[b] = a;
-        i += 2;
-    }
-    if i < pool.len() {
-        let a = pool[i];
-        model.match_to[a] = a; // odd leftover should not happen, but keep safe
+        let r = model.match_to[q];
+        if r != p {
+            // Break inconsistent pair by turning both endpoints into self-loops
+            model.match_to[p] = p;
+            if q < n_ports { model.match_to[q] = q; }
+        }
     }
 }
 
@@ -753,6 +856,7 @@ async fn main() -> Result<()> {
             args.reheat_every,
             args.reheat_to,
             args.p_relabel,
+            args.p_loopmove,
         );
         finalize_match_to(&mut m);
         if args.verbose > 0 {
@@ -761,6 +865,12 @@ async fn main() -> Result<()> {
         if best_e.total < best_overall_e.total {
             best_overall_e = best_e;
             best_overall_model = m;
+        }
+        if best_overall_e.total == 0 {
+            if args.verbose > 0 && restarts > 1 {
+                eprintln!("early stop after restart {} (E=0)", r + 1);
+            }
+            break;
         }
     }
 
