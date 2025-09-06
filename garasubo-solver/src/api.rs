@@ -21,6 +21,42 @@ pub struct ExploreResponse {
     pub query_count: i32,
 }
 
+#[derive(Serialize)]
+pub struct GuessRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_name: Option<String>,
+    pub map: GuessMap,
+}
+
+#[derive(Serialize)]
+pub struct GuessMap {
+    pub rooms: Vec<i32>,
+    #[serde(rename = "startingRoom")]
+    pub starting_room: i32,
+    pub connections: Vec<Connection>,
+}
+
+#[derive(Serialize)]
+pub struct Connection {
+    pub from: RoomDoor,
+    pub to: RoomDoor,
+}
+
+#[derive(Serialize)]
+pub struct RoomDoor {
+    pub room: i32,
+    pub door: i32,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GuessResponse {
+    pub session_id: String,
+    pub correct: bool,
+}
+
+#[derive(Clone)]
 pub struct ApiClient {
     client: Client,
     base_url: String,
@@ -116,13 +152,13 @@ impl ApiClient {
     pub(crate) async fn explore(
         &self,
         session_id: &str,
-        plans: Vec<String>,
+        plans: &[String],
     ) -> anyhow::Result<ExploreResponse> {
         let url = format!("{}/api/explore", self.base_url);
         let request = ExploreRequest {
             session_id: Some(session_id.to_string()),
             user_name: None,
-            plans,
+            plans: Vec::from(plans),
         };
 
         let response = self
@@ -149,6 +185,41 @@ impl ApiClient {
                 status,
                 text
             );
+        }
+    }
+
+    pub(crate) async fn guess(
+        &self,
+        session_id: &str,
+        guess_map: GuessMap,
+    ) -> anyhow::Result<GuessResponse> {
+        let url = format!("{}/api/guess", self.base_url);
+        let request = GuessRequest {
+            session_id: Some(session_id.to_string()),
+            user_name: None,
+            map: guess_map,
+        };
+
+        let response = self
+            .add_auth_headers(self.client.post(&url))
+            .json(&request)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send guess request to {}", url))?;
+
+        if response.status().is_success() {
+            let result: GuessResponse = response
+                .json()
+                .await
+                .context("Failed to parse guess response JSON")?;
+            Ok(result)
+        } else {
+            let status = response.status();
+            let text = response
+                .text()
+                .await
+                .context("Failed to read guess error response body")?;
+            anyhow::bail!("Guess API request failed with status {}: {}", status, text);
         }
     }
 }
