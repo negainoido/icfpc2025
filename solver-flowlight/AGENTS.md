@@ -1,5 +1,11 @@
 # Solver-Flowlight Agent Guidelines
 
+## 言語ポリシー（重要）
+- 回答・説明・提案は常に日本語で行うこと。
+- コミットメッセージやPR説明、コメントも原則日本語を用いること。
+- 例外: 外部API仕様、コード識別子、ログの固定英語出力はそのままで可。
+  その場合も補足説明は日本語で記載すること。
+
 ## Auto-Formatting Rule
 
 - After modifying `solver-flowlight/src/main.rs`, always run Rust formatter.
