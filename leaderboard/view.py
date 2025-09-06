@@ -1,32 +1,11 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
 
 RESULTS_DIR = Path("results")
-
-
-def get_target_teams(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Filter for top 20 teams plus negainoido team"""
-    if not data:
-        return []
-
-    # Get top 20 teams
-    target_teams = data[:20]
-
-    # Append negainoido team if not in top 20
-    negainoido_team = None
-    for team in data[20:]:
-        if team.get("teamName", "").lower() == "negainoido":
-            negainoido_team = team
-            break
-    if negainoido_team:
-        target_teams.append(negainoido_team)
-
-    return target_teams
 
 
 def load_data() -> pd.DataFrame:
@@ -46,18 +25,12 @@ def load_data() -> pd.DataFrame:
             timestamp_str = json_file.stem  # MMDD_HHMM
             month_day = timestamp_str[:4]
             hour_min = timestamp_str[5:]
-
-            # Create datetime (assuming current year)
             current_year = datetime.now().year
             dt = datetime.strptime(f"{current_year}{month_day}{hour_min}", "%Y%m%d%H%M")
 
-            # Get target teams for this timestamp
-            target_teams = get_target_teams(data)
-
-            for team in target_teams:
+            for team in data:
                 team_name = team.get("teamName", "Unknown")
                 score = team.get("score", 0)
-
                 all_data.append(
                     {"timestamp": dt, "team_name": team_name, "score": score}
                 )
@@ -88,9 +61,11 @@ def main():
 
     # Default selection: top 10 teams by score + negainoido if not in top 10
     latest_timestamp = df["timestamp"].max()
-    latest_scores = df[df["timestamp"] == latest_timestamp].sort_values("score", ascending=False)
+    latest_scores = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
+        "score", ascending=False
+    )
     top_10_teams = latest_scores["team_name"].head(10).tolist()
-    
+
     default_teams = top_10_teams
     if "negainoido" not in default_teams:
         default_teams.append("negainoido")
@@ -98,26 +73,21 @@ def main():
     selected_teams = st.multiselect(
         "Select teams to display", all_teams, default=default_teams
     )
-
     if not selected_teams:
         st.warning("Please select at least one team")
         return
 
-    # Filter data
+    # Display filter data
     filtered_df = df[df["team_name"].isin(selected_teams)]
-
-    # Pivot data for line chart
     chart_data = filtered_df.pivot(
         index="timestamp", columns="team_name", values="score"
     )
-
-    # Display line chart with highlighting
     st.line_chart(chart_data)
 
     # Show latest scores
     st.subheader("Latest Scores")
     latest_timestamp = df["timestamp"].max()
-    latest_data = df[df["timestamp"] == latest_timestamp].sort_values(
+    latest_data = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
         "score", ascending=False
     )
     latest_data["rank"] = (
@@ -130,7 +100,7 @@ def main():
             return ["background-color: #ffcccc"] * len(row)
         return [""] * len(row)
 
-    styled_data = latest_data[["rank", "team_name", "score"]].rename(
+    styled_data = latest_data[["rank", "team_name", "score"]].rename(  # type: ignore
         columns={"rank": "Rank", "team_name": "Team", "score": "Score"}
     )
     st.dataframe(
