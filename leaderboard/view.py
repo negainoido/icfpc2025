@@ -56,35 +56,22 @@ def main():
         st.error("No data found in results directory")
         return
 
-    # Team selection
-    all_teams = sorted(df["team_name"].unique())
+    # Initialize session state for team selection
+    if "selected_teams" not in st.session_state:
+        # Default selection: top 10 teams by score + negainoido if not in top 10
+        latest_timestamp = df["timestamp"].max()
+        latest_scores = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
+            "score", ascending=False
+        )
+        top_10_teams = latest_scores["team_name"].head(10).tolist()
 
-    # Default selection: top 10 teams by score + negainoido if not in top 10
-    latest_timestamp = df["timestamp"].max()
-    latest_scores = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
-        "score", ascending=False
-    )
-    top_10_teams = latest_scores["team_name"].head(10).tolist()
+        default_teams = set(top_10_teams)
+        if "negainoido" not in default_teams:
+            default_teams.add("negainoido")
 
-    default_teams = top_10_teams
-    if "negainoido" not in default_teams:
-        default_teams.append("negainoido")
+        st.session_state.selected_teams = default_teams
 
-    selected_teams = st.multiselect(
-        "Select teams to display", all_teams, default=default_teams
-    )
-    if not selected_teams:
-        st.warning("Please select at least one team")
-        return
-
-    # Display filter data
-    filtered_df = df[df["team_name"].isin(selected_teams)]
-    chart_data = filtered_df.pivot(
-        index="timestamp", columns="team_name", values="score"
-    )
-    st.line_chart(chart_data)
-
-    # Show latest scores
+    # Show latest scores with checkboxes
     st.subheader("Latest Scores")
     latest_timestamp = df["timestamp"].max()
     latest_data = df[df["timestamp"] == latest_timestamp].sort_values(  # type: ignore
@@ -94,21 +81,59 @@ def main():
         latest_data["score"].rank(method="min", ascending=False).astype(int)
     )
 
-    # Style negainoido team
-    def highlight_negainoido(row):
-        if row.iloc[1].lower() == "negainoido":  # Team column is at index 1
-            return ["background-color: #ffcccc"] * len(row)
-        return [""] * len(row)
+    # Create display data with checkboxes
+    display_data = []
+    for _, row in latest_data.iterrows():
+        team_name = row["team_name"]
+        checked = team_name in st.session_state.selected_teams
+        display_data.append(
+            {
+                "Chart": checked,
+                "Rank": int(row["rank"]),
+                "Team": team_name,
+                "Score": int(row["score"]),
+            }
+        )
 
-    styled_data = latest_data[["rank", "team_name", "score"]].rename(  # type: ignore
-        columns={"rank": "Rank", "team_name": "Team", "score": "Score"}
-    )
-    st.dataframe(
-        styled_data.style.apply(highlight_negainoido, axis=1),
+    display_df = pd.DataFrame(display_data)
+
+    # Display editable dataframe
+    edited_df = st.data_editor(
+        display_df,
+        column_config={
+            "Chart": st.column_config.CheckboxColumn(
+                "Chart",
+                help="Select teams to display in chart",
+                default=False,
+            ),
+            "Rank": st.column_config.NumberColumn("Rank", disabled=True),
+            "Team": st.column_config.TextColumn("Team", disabled=True),
+            "Score": st.column_config.NumberColumn("Score", disabled=True),
+        },
+        disabled=["Rank", "Team", "Score"],
         use_container_width=True,
         hide_index=True,
         height=600,
     )
+
+    # Display chart based on selected teams from the edited dataframe
+    selected_teams = []
+    for _, row in edited_df.iterrows():
+        if row["Chart"]:
+            selected_teams.append(row["Team"])
+
+    if selected_teams:
+        filtered_df = df[df["team_name"].isin(selected_teams)]
+        # Remove duplicates by keeping the last entry for each timestamp-team combination
+        filtered_df = filtered_df.drop_duplicates(
+            subset=["timestamp", "team_name"], keep="last"
+        )
+        chart_data = filtered_df.pivot(
+            index="timestamp", columns="team_name", values="score"
+        )
+        st.line_chart(chart_data)
+    else:
+        st.warning("Please select at least one team to display in the chart")
 
 
 if __name__ == "__main__":
