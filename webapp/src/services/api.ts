@@ -27,7 +27,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new ApiError(`HTTP ${response.status}: ${errorText}`, response.status);
   }
 
-  return await response.json();
+  const contentLength = response.headers.get('content-length');
+  if (contentLength === '0') {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (text.trim() === '') {
+    return undefined as T;
+  }
+
+  return JSON.parse(text);
 }
 
 // APIサーバーは自分と同じドメインで常に動いている

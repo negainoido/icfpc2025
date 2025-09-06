@@ -34,12 +34,8 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 **レスポンス:**
 ```json
 {
-  "success": true,
-  "data": {
-    "session_id": "生成されたUUID",
-    ...  // 本家APIからのレスポンス内容
-  },
-  "message": "Session created and select request completed"
+  "session_id": "生成されたUUID",
+  "problemName": "問題名"
 }
 ```
 
@@ -65,13 +61,9 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 **レスポンス:**
 ```json
 {
-  "success": true,
-  "data": {
-    "session_id": "実際に使用されたセッションID",
-    "results": [[1, 2], [3, 4], ...],
-    "queryCount": 10
-  },
-  "message": "Explore request completed"
+  "session_id": "実際に使用されたセッションID",
+  "results": [[1, 2], [3, 4], ...],
+  "queryCount": 10
 }
 ```
 
@@ -105,12 +97,8 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 **レスポンス:**
 ```json
 {
-  "success": true,
-  "data": {
-    "session_id": "実際に使用されたセッションID",
-    "correct": true
-  },
-  "message": "Guess request completed and session terminated"
+  "session_id": "実際に使用されたセッションID",
+  "correct": true
 }
 ```
 
@@ -121,21 +109,17 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 **レスポンス:**
 ```json
 {
-  "success": true,
-  "data": {
-    "sessions": [
-      {
-        "id": 1,
-        "session_id": "uuid-string",
-        "user_name": "ユーザー名（null可）",
-        "status": "completed",
-        "created_at": "2025-09-06T01:00:00Z",
-        "completed_at": "2025-09-06T01:30:00Z"
-      },
-      ...
-    ]
-  },
-  "message": "Sessions retrieved successfully"
+  "sessions": [
+    {
+      "id": 1,
+      "session_id": "uuid-string",
+      "user_name": "ユーザー名（null可）",
+      "status": "completed",
+      "created_at": "2025-09-06T01:00:00Z",
+      "completed_at": "2025-09-06T01:30:00Z"
+    },
+    ...
+  ]
 }
 ```
 
@@ -143,29 +127,21 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 
 現在のアクティブセッション情報を取得する。
 
-**レスポンス:**
+**レスポンス（アクティブセッションが存在する場合）:**
 ```json
 {
-  "success": true,
-  "data": {
-    "id": 1,
-    "session_id": "uuid-string",
-    "user_name": "ユーザー名（null可）",
-    "status": "active",
-    "created_at": "2025-09-06T01:00:00Z",
-    "completed_at": null
-  },
-  "message": "Current session retrieved successfully"
+  "id": 1,
+  "session_id": "uuid-string",
+  "user_name": "ユーザー名（null可）",
+  "status": "active",
+  "created_at": "2025-09-06T01:00:00Z",
+  "completed_at": null
 }
 ```
 
-アクティブセッションが存在しない場合:
+**レスポンス（アクティブセッションが存在しない場合）:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "No active session"
-}
+null
 ```
 
 ### `GET /api/sessions/{session_id}`
@@ -175,30 +151,26 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 **レスポンス:**
 ```json
 {
-  "success": true,
-  "data": {
-    "session": {
+  "session": {
+    "id": 1,
+    "session_id": "uuid-string",
+    "user_name": "ユーザー名（null可）",
+    "status": "completed",
+    "created_at": "2025-09-06T01:00:00Z",
+    "completed_at": "2025-09-06T01:30:00Z"
+  },
+  "api_logs": [
+    {
       "id": 1,
       "session_id": "uuid-string",
-      "user_name": "ユーザー名（null可）",
-      "status": "completed",
-      "created_at": "2025-09-06T01:00:00Z",
-      "completed_at": "2025-09-06T01:30:00Z"
+      "endpoint": "select",
+      "request_body": "{\"problemName\":\"example\"}",
+      "response_body": "{\"problemName\":\"example\"}",
+      "response_status": 200,
+      "created_at": "2025-09-06T01:00:00Z"
     },
-    "api_logs": [
-      {
-        "id": 1,
-        "session_id": "uuid-string",
-        "endpoint": "select",
-        "request_body": "{\"problemName\":\"example\"}",
-        "response_body": "{\"problemName\":\"example\"}",
-        "response_status": 200,
-        "created_at": "2025-09-06T01:00:00Z"
-      },
-      ...
-    ]
-  },
-  "message": "Session detail retrieved successfully"
+    ...
+  ]
 }
 ```
 
@@ -207,13 +179,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 アクティブなセッションを強制的に中止する。セッションのステータスが`failed`に変更され、`completed_at`が現在時刻に設定される。
 
 **レスポンス（成功時）:**
-```json
-{
-  "success": true,
-  "data": null,
-  "message": "Session aborted successfully"
-}
-```
+HTTP 200 OK（JSONボディなし）
 
 **エラーケース:**
 - 404 Not Found: 指定されたセッションIDが見つからない場合
