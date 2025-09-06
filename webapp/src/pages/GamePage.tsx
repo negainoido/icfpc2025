@@ -21,8 +21,6 @@ export default function GamePage() {
 
   const getPhaseTitle = () => {
     switch (state.phase) {
-      case 'idle':
-        return 'Welcome to ICFPC 2025 Library Explorer';
       case 'problem-selection':
         return 'Select a Problem';
       case 'exploring':
@@ -38,10 +36,8 @@ export default function GamePage() {
 
   const getPhaseDescription = () => {
     switch (state.phase) {
-      case 'idle':
-        return 'Enter your team ID to get started. If you don\'t have one, register first at the official ICFPC website.';
       case 'problem-selection':
-        return 'Choose a library problem to solve. Each problem represents a different library layout to explore.';
+        return 'Choose a library problem to solve. Team authentication is handled automatically by the server.';
       case 'exploring':
         return 'Send exploration plans to gather information about the library structure. Each plan returns room labels you encounter.';
       case 'building-map':

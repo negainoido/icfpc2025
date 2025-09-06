@@ -1,4 +1,4 @@
-export type GamePhase = 'idle' | 'problem-selection' | 'exploring' | 'building-map' | 'completed';
+export type GamePhase = 'problem-selection' | 'exploring' | 'building-map' | 'completed';
 
 export interface SessionState {
   sessionId: string | null;
@@ -6,13 +6,11 @@ export interface SessionState {
   phase: GamePhase;
   explorationResults: number[][];
   queryCount: number;
-  teamId: string;
   isLoading: boolean;
   error: string | null;
 }
 
 export type SessionAction =
-  | { type: 'SET_TEAM_ID'; payload: string }
   | { type: 'START_SESSION'; payload: { sessionId: string; problemName: string } }
   | { type: 'ADD_EXPLORATION_RESULTS'; payload: { results: number[][]; queryCount: number } }
   | { type: 'SET_PHASE'; payload: GamePhase }
@@ -23,18 +21,15 @@ export type SessionAction =
 export const initialState: SessionState = {
   sessionId: null,
   problemName: null,
-  phase: 'idle',
+  phase: 'problem-selection',
   explorationResults: [],
   queryCount: 0,
-  teamId: '',
   isLoading: false,
   error: null,
 };
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
-    case 'SET_TEAM_ID':
-      return { ...state, teamId: action.payload, phase: 'problem-selection' };
     case 'START_SESSION':
       return {
         ...state,
@@ -56,7 +51,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case 'SET_ERROR':
       return { ...state, error: action.payload, isLoading: false };
     case 'RESET_SESSION':
-      return { ...initialState, teamId: state.teamId };
+      return initialState;
     default:
       return state;
   }

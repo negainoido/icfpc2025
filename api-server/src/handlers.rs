@@ -73,12 +73,12 @@ pub async fn explore(
         return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
     }
 
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    
     let upstream_request = ExploreUpstreamRequest {
-        id: payload.id,
+        id: icfp_client.get_team_id(),
         plans: payload.plans,
     };
-
-    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
     let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
     
     let upstream_response = icfp_client
@@ -122,12 +122,12 @@ pub async fn guess(
         return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
     }
 
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    
     let upstream_request = GuessUpstreamRequest {
-        id: payload.id,
+        id: icfp_client.get_team_id(),
         map: payload.map,
     };
-
-    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
     let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
     
     let upstream_response = icfp_client

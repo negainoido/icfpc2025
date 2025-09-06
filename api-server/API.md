@@ -18,7 +18,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 
 ## API エンドポイント
 
-### `POST /select`
+### `POST /api/select`
 
 本家の`/select`に代理で投げるAPI。すでに進行中のセッションがある場合はエラー（409 Conflict）を返す。
 そうでない場合は新たなセッション番号を発行した上で`/select`を投げ、セッションを進行中にする。
@@ -35,7 +35,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 }
 ```
 
-### `POST /explore`
+### `POST /api/explore`
 
 セッションID付きで本家の`/explore`を叩く。リクエストの内容とその本家からのレスポンスの内容はDBにも格納される。
 
@@ -58,7 +58,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 }
 ```
 
-### `POST /guess`
+### `POST /api/guess`
 
 セッションID付きで本家の`/guess`を叩く。リクエストの内容とその本家からのレスポンス内容はDBにも格納される。
 このAPIを叩くとセッションは終了となる。

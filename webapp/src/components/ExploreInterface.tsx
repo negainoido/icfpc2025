@@ -19,7 +19,7 @@ export default function ExploreInterface() {
   };
 
   const handleExplore = async () => {
-    if (!state.sessionId || !state.teamId) {
+    if (!state.sessionId) {
       dispatch({ type: 'SET_ERROR', payload: 'No active session' });
       return;
     }
@@ -36,7 +36,6 @@ export default function ExploreInterface() {
 
       const response = await api.explore({
         session_id: state.sessionId,
-        id: state.teamId,
         plans: validPlans,
       });
 

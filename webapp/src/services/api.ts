@@ -8,7 +8,6 @@ import {
   GuessResponse,
 } from '../types';
 
-const API_BASE_URL = 'http://localhost:8080';
 
 class ApiError extends Error {
   constructor(
@@ -36,7 +35,7 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
 
 export const api = {
   async select(request: SelectRequest): Promise<SelectResponse> {
-    const response = await fetch(`${API_BASE_URL}/select`, {
+    const response = await fetch(`/api/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +48,7 @@ export const api = {
   },
 
   async explore(request: ExploreRequest): Promise<ExploreResponse> {
-    const response = await fetch(`${API_BASE_URL}/explore`, {
+    const response = await fetch(`/api/explore`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -62,7 +61,7 @@ export const api = {
   },
 
   async guess(request: GuessRequest): Promise<GuessResponse> {
-    const response = await fetch(`${API_BASE_URL}/guess`, {
+    const response = await fetch(`/api/guess`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

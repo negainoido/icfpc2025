@@ -49,6 +49,12 @@ pub struct ApiLog {
 // Select API types
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SelectRequest {
+    #[serde(rename = "problemName")]
+    pub problem_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SelectUpstreamRequest {
     pub id: String,
     #[serde(rename = "problemName")]
     pub problem_name: String,
@@ -71,7 +77,6 @@ pub struct SelectResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExploreRequest {
     pub session_id: String,
-    pub id: String,
     pub plans: Vec<String>,
 }
 
@@ -120,7 +125,6 @@ pub struct Map {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GuessRequest {
     pub session_id: String,
-    pub id: String,
     pub map: Map,
 }
 

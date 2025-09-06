@@ -15,7 +15,6 @@ export interface Session {
 
 // Select API Types
 export interface SelectRequest {
-  id: string;
   problemName: string;
 }
 
@@ -27,7 +26,6 @@ export interface SelectResponse {
 // Explore API Types
 export interface ExploreRequest {
   session_id: string;
-  id: string;
   plans: string[];
 }
 
@@ -56,7 +54,6 @@ export interface Map {
 
 export interface GuessRequest {
   session_id: string;
-  id: string;
   map: Map;
 }
 

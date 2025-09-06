@@ -13,7 +13,7 @@ export default function GuessInterface({ map }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmitGuess = async () => {
-    if (!state.sessionId || !state.teamId) {
+    if (!state.sessionId) {
       dispatch({ type: 'SET_ERROR', payload: 'No active session' });
       return;
     }
@@ -24,7 +24,6 @@ export default function GuessInterface({ map }: Props) {
 
       const response = await api.guess({
         session_id: state.sessionId,
-        id: state.teamId,
         map,
       });
 

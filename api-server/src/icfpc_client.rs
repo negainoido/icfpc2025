@@ -1,4 +1,4 @@
-use crate::models::{ApiError, SelectRequest, SelectUpstreamResponse, ExploreUpstreamRequest, ExploreUpstreamResponse, GuessUpstreamRequest, GuessUpstreamResponse};
+use crate::models::{ApiError, SelectRequest, SelectUpstreamRequest, SelectUpstreamResponse, ExploreUpstreamRequest, ExploreUpstreamResponse, GuessUpstreamRequest, GuessUpstreamResponse};
 use reqwest::Client;
 use std::env;
 
@@ -23,15 +23,25 @@ impl IcfpClient {
         })
     }
 
+    pub fn get_team_id(&self) -> String {
+        self.auth_token.clone()
+    }
+
     pub async fn select(&self, request: &SelectRequest) -> Result<SelectUpstreamResponse, ApiError> {
         let url = format!("{}/select", self.base_url);
+        
+        // Create upstream request with team ID from environment variable
+        let upstream_request = crate::models::SelectUpstreamRequest {
+            id: self.auth_token.clone(),
+            problem_name: request.problem_name.clone(),
+        };
         
         let response = self
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.auth_token))
             .header("Content-Type", "application/json")
-            .json(request)
+            .json(&upstream_request)
             .send()
             .await?;
 

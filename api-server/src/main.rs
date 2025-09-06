@@ -31,18 +31,18 @@ async fn main() {
         .allow_headers([axum::http::header::CONTENT_TYPE]);
 
     let app = Router::new()
-        .route("/select", post(select))
-        .route("/explore", post(explore))
-        .route("/guess", post(guess))
+        .route("/api/select", post(select))
+        .route("/api/explore", post(explore))
+        .route("/api/guess", post(guess))
         .with_state(pool)
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     println!("🚀 ICFPC 2025 Proxy API Server running on http://localhost:8080");
     println!("Available endpoints:");
-    println!("  POST /select  - Create new session and call ICFP select API");
-    println!("  POST /explore - Call ICFP explore API with session");
-    println!("  POST /guess   - Call ICFP guess API and terminate session");
+    println!("  POST /api/select  - Create new session and call ICFP select API");
+    println!("  POST /api/explore - Call ICFP explore API with session");
+    println!("  POST /api/guess   - Call ICFP guess API and terminate session");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
