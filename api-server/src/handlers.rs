@@ -4,15 +4,16 @@ use tracing::error;
 
 use crate::{
     database::{
-        abort_session, complete_session, create_session_if_no_active, create_session_or_enqueue, fail_session, get_active_session,
-        get_active_session_by_user, get_all_sessions, get_api_logs_for_session, get_session_by_id,
-        log_api_request, save_pending_request, get_pending_request, delete_pending_request,
+        abort_session, complete_session, create_session_if_no_active, create_session_or_enqueue,
+        delete_pending_request, fail_session, get_active_session, get_active_session_by_user,
+        get_all_sessions, get_api_logs_for_session, get_session_by_id, log_api_request,
+        save_pending_request,
     },
     icfpc_client::IcfpClient,
     models::{
-        ApiError, ErrorResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest,
-        GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session, SessionDetail,
-        SessionsListResponse,
+        ApiError, ErrorResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
+        GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
+        SessionDetail, SessionsListResponse,
     },
 };
 
@@ -44,15 +45,13 @@ impl From<ApiError> for (StatusCode, Json<ErrorResponse>) {
                 "SessionNotFound",
                 "Session not found".to_string(),
             ),
-            ApiError::InvalidRequest(ref msg) => (
-                StatusCode::BAD_REQUEST,
-                "InvalidRequest",
-                msg.clone(),
-            ),
+            ApiError::InvalidRequest(ref msg) => {
+                (StatusCode::BAD_REQUEST, "InvalidRequest", msg.clone())
+            }
         };
 
         error!("API Error: {} (Status: {})", err, status_code.as_u16());
-        
+
         let error_response = ErrorResponse {
             error: error_type.to_string(),
             message,
@@ -84,7 +83,7 @@ pub async fn select(
         save_pending_request(&pool, &session.session_id, &payload.problem_name)
             .await
             .map_err(ApiError::from)?;
-            
+
         let response = SelectResponse {
             session_id: session.session_id,
             problem_name: None,
@@ -94,7 +93,7 @@ pub async fn select(
     }
 
     let icfp_client = IcfpClient::new()?;
-    
+
     // セッション作成成功後にICFPCのAPIを呼び出し
     match icfp_client.select(&payload).await {
         Ok(upstream_response) => {
@@ -121,7 +120,7 @@ pub async fn select(
         Err(api_error) => {
             // ICFPC API呼び出し失敗時はセッションをfailedステータスに変更
             let _ = fail_session(&pool, &session.session_id).await;
-            
+
             // エラーログを記録
             let error_msg = format!("{}", api_error);
             let status_code = match api_error {
@@ -131,7 +130,7 @@ pub async fn select(
                 ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
                 ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             };
-            
+
             // エラーログを記録（セッションはfailedになっているので外部キー制約は問題なし）
             let _ = log_api_request(
                 &pool,
@@ -142,7 +141,7 @@ pub async fn select(
                 Some(status_code.as_u16() as i32),
             )
             .await;
-            
+
             Err(api_error.into())
         }
     }
@@ -162,9 +161,7 @@ pub async fn explore(
                 .ok_or_else(|| ApiError::NoActiveSession)?;
 
             if session.session_id != *session_id {
-                return Err(ApiError::InvalidRequest(
-                    "Session ID mismatch".to_string(),
-                ).into());
+                return Err(ApiError::InvalidRequest("Session ID mismatch".to_string()).into());
             }
             session
         }
@@ -178,7 +175,8 @@ pub async fn explore(
         (None, None) => {
             return Err(ApiError::InvalidRequest(
                 "Either session_id or user_name must be specified".to_string(),
-            ).into());
+            )
+            .into());
         }
     };
 
@@ -248,9 +246,7 @@ pub async fn guess(
                 .ok_or_else(|| ApiError::NoActiveSession)?;
 
             if session.session_id != *session_id {
-                return Err(ApiError::InvalidRequest(
-                    "Session ID mismatch".to_string(),
-                ).into());
+                return Err(ApiError::InvalidRequest("Session ID mismatch".to_string()).into());
             }
             session
         }
@@ -264,7 +260,8 @@ pub async fn guess(
         (None, None) => {
             return Err(ApiError::InvalidRequest(
                 "Either session_id or user_name must be specified".to_string(),
-            ).into());
+            )
+            .into());
         }
     };
 
@@ -292,7 +289,7 @@ pub async fn guess(
             let next_session = complete_session(&pool, &session.session_id)
                 .await
                 .map_err(ApiError::from)?;
-                
+
             // 次のセッションがアクティベートされた場合は自動実行
             if let Some((next_session_id, user_name)) = next_session {
                 let _ = execute_pending_select(&pool, &next_session_id, Some(&user_name)).await;
@@ -374,9 +371,7 @@ pub async fn abort_session_handler(
         .ok_or_else(|| ApiError::SessionNotFound)?;
 
     if session.status != "active" {
-        return Err(ApiError::InvalidRequest(
-            "Session is not active".to_string(),
-        ).into());
+        return Err(ApiError::InvalidRequest("Session is not active".to_string()).into());
     }
 
     let next_session = abort_session(&pool, &session_id)
@@ -402,17 +397,20 @@ pub async fn abort_session_handler(
     Ok(StatusCode::OK)
 }
 
-async fn execute_pending_select(pool: &MySqlPool, session_id: &str, user_name: Option<&str>) -> Result<(), ApiError> {
+async fn execute_pending_select(
+    pool: &MySqlPool,
+    session_id: &str,
+    user_name: Option<&str>,
+) -> Result<(), ApiError> {
     let mut tx = pool.begin().await?;
-    
+
     // トランザクション内でセッションがactiveであることを確認
-    let session_status: Option<String> = sqlx::query_scalar(
-        "SELECT status FROM sessions WHERE session_id = ? FOR UPDATE"
-    )
-    .bind(session_id)
-    .fetch_optional(&mut *tx)
-    .await?;
-    
+    let session_status: Option<String> =
+        sqlx::query_scalar("SELECT status FROM sessions WHERE session_id = ? FOR UPDATE")
+            .bind(session_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+
     match session_status {
         Some(status) if status == "active" => {
             // セッションがactiveの場合のみ処理を続行
@@ -423,26 +421,27 @@ async fn execute_pending_select(pool: &MySqlPool, session_id: &str, user_name: O
             return Ok(());
         }
     }
-    
+
     // pending requestを取得
     let problem_name = match sqlx::query_scalar::<_, String>(
-        "SELECT problem_name FROM pending_requests WHERE session_id = ?"
+        "SELECT problem_name FROM pending_requests WHERE session_id = ?",
     )
     .bind(session_id)
     .fetch_optional(&mut *tx)
-    .await? {
+    .await?
+    {
         Some(problem_name) => problem_name,
         None => {
             tx.rollback().await?;
             return Ok(()); // 保存されたリクエストがない場合はスキップ
         }
     };
-    
+
     // コミットしてトランザクション終了
     tx.commit().await?;
 
     let icfp_client = IcfpClient::new()?;
-    
+
     let payload = SelectRequest {
         problem_name: problem_name.clone(),
         user_name: user_name.map(String::from),
@@ -462,14 +461,14 @@ async fn execute_pending_select(pool: &MySqlPool, session_id: &str, user_name: O
                 Some(200),
             )
             .await;
-            
+
             // pending requestを削除
             let _ = delete_pending_request(pool, session_id).await;
         }
         Err(_api_error) => {
             // ICFPC API呼び出し失敗時はセッションをfailedステータスに変更
             let _ = fail_session(pool, session_id).await;
-            
+
             // pending requestを削除
             let _ = delete_pending_request(pool, session_id).await;
         }
