@@ -197,7 +197,13 @@ fn apply_label_flip(st: &mut State, rng: &mut StdRng) {
 }
 
 // 焼きなまし本体
-fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> (State, usize) {
+fn sa_solve(
+    plan: &[usize],
+    results: &[u8],
+    time_limit: Duration,
+    seed: u64,
+    verbose: u8,
+) -> (State, usize) {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut cur = init_route_respecting_ring(plan, results, &mut rng);
     let mut cur_score = simulate_and_score(&cur, plan, results);
@@ -208,6 +214,15 @@ fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> 
     let mut t = 3.0f64; // 初期温度
     let alpha = 0.9996f64; // 減衰率
 
+    if verbose > 0 {
+        println!(
+            "[init] initialized state: score={} (time={:.2}s)",
+            cur_score,
+            start.elapsed().as_secs_f32()
+        );
+    }
+
+    let mut iter: u64 = 0;
     while start.elapsed() < time_limit {
         // ムーブ選択: 2-opt 70%, ラベル 30%
         let use_two_opt = rng.gen_bool(0.7);
@@ -221,11 +236,31 @@ fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> 
         let next_score = simulate_and_score(&next, plan, results);
         let delta = (next_score as i64) - (cur_score as i64);
         if delta <= 0 {
+            // 改善・同等受理
+            let prev_cur_score = cur_score;
             cur = next;
             cur_score = next_score;
+            if verbose > 1 && next_score < prev_cur_score {
+                println!(
+                    "[improve] iter={} time={:.2}s temp={:.4} cur: {} -> {}",
+                    iter,
+                    start.elapsed().as_secs_f32(),
+                    t,
+                    prev_cur_score,
+                    next_score
+                );
+            }
             if cur_score < best_score {
                 best = cur.clone();
                 best_score = cur_score;
+                if verbose > 0 {
+                    println!(
+                        "[best]    iter={} time={:.2}s score={}",
+                        iter,
+                        start.elapsed().as_secs_f32(),
+                        best_score
+                    );
+                }
             }
         } else {
             let p = (-(delta as f64) / t).exp();
@@ -235,6 +270,7 @@ fn sa_solve(plan: &[usize], results: &[u8], time_limit: Duration, seed: u64) -> 
             }
         }
         t *= alpha;
+        iter += 1;
         if best_score == 0 {
             break;
         }
@@ -272,7 +308,13 @@ async fn main() -> Result<()> {
     );
 
     let seed = args.seed.unwrap_or(20250906);
-    let (state, best_score) = sa_solve(&plan, &results, Duration::from_secs(args.time_limit), seed);
+    let (state, best_score) = sa_solve(
+        &plan,
+        &results,
+        Duration::from_secs(args.time_limit),
+        seed,
+        args.verbose,
+    );
 
     if args.verbose > 0 {
         println!(
