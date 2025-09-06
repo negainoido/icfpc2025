@@ -6,7 +6,7 @@ use crate::{
     database::{
         abort_session, complete_session, create_session, get_active_session,
         get_active_session_by_user, get_all_sessions, get_api_logs_for_session, get_session_by_id,
-        has_active_session, log_api_request,
+        has_active_session, log_api_request, acquire_select_lock, release_select_lock,
     },
     icfpc_client::IcfpClient,
     models::{
@@ -73,60 +73,72 @@ pub async fn select(
     State(pool): State<MySqlPool>,
     Json(payload): Json<SelectRequest>,
 ) -> Result<Json<SelectResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if has_active_session(&pool).await.map_err(ApiError::from)? {
+    // Serialize select requests using a DB-level named lock to avoid duplicate upstream calls
+    if !acquire_select_lock(&pool).await.map_err(ApiError::from)? {
         return Err(ApiError::SessionAlreadyActive.into());
     }
 
     let icfp_client = IcfpClient::new()?;
-    
-    match icfp_client.select(&payload).await {
-        Ok(upstream_response) => {
-            let session = create_session(&pool, payload.user_name.as_deref())
-                .await
-                .map_err(ApiError::from)?;
 
-            log_api_request(
-                &pool,
-                &session.session_id,
-                "select",
-                Some(&serde_json::to_string(&payload).unwrap_or_default()),
-                Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
-                Some(200),
-            )
-            .await
-            .map_err(ApiError::from)?;
-
-            let response = SelectResponse {
-                session_id: session.session_id,
-                problem_name: upstream_response.problem_name,
-            };
-
-            Ok(Json(response))
+    let result = async {
+        // Re-check under lock to avoid TOCTOU
+        if has_active_session(&pool).await.map_err(ApiError::from)? {
+            return Err::<Json<SelectResponse>, (StatusCode, Json<ErrorResponse>)>(ApiError::SessionAlreadyActive.into());
         }
-        Err(api_error) => {
-            // エラーの場合でも一時的なセッションを作成してログを記録
-            if let Ok(session) = create_session(&pool, payload.user_name.as_deref()).await {
-                let error_msg = format!("{}", api_error);
-                let status_code = match api_error {
-                    ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-                    ApiError::Http(_) => StatusCode::BAD_GATEWAY,
-                    ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
-                    ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
-                    ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-                };
-                let _ = log_api_request(
+
+        match icfp_client.select(&payload).await {
+            Ok(upstream_response) => {
+                let session = create_session(&pool, payload.user_name.as_deref())
+                    .await
+                    .map_err(ApiError::from)?;
+
+                log_api_request(
                     &pool,
                     &session.session_id,
                     "select",
                     Some(&serde_json::to_string(&payload).unwrap_or_default()),
-                    Some(&error_msg),
-                    Some(status_code.as_u16() as i32),
+                    Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
+                    Some(200),
                 )
-                .await;
+                .await
+                .map_err(ApiError::from)?;
+
+                let response = SelectResponse {
+                    session_id: session.session_id,
+                    problem_name: upstream_response.problem_name,
+                };
+
+                Ok(Json(response))
             }
-            Err(api_error.into())
+            Err(api_error) => {
+                // エラーの場合でも一時的なセッションを作成してログを記録
+                if let Ok(session) = create_session(&pool, payload.user_name.as_deref()).await {
+                    let error_msg = format!("{}", api_error);
+                    let status_code = match api_error {
+                        ApiError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                        ApiError::Http(_) => StatusCode::BAD_GATEWAY,
+                        ApiError::SessionAlreadyActive => StatusCode::CONFLICT,
+                        ApiError::NoActiveSession | ApiError::SessionNotFound => StatusCode::NOT_FOUND,
+                        ApiError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+                    };
+                    let _ = log_api_request(
+                        &pool,
+                        &session.session_id,
+                        "select",
+                        Some(&serde_json::to_string(&payload).unwrap_or_default()),
+                        Some(&error_msg),
+                        Some(status_code.as_u16() as i32),
+                    )
+                    .await;
+                }
+                Err(api_error.into())
+            }
         }
-    }
+    }.await;
+
+    // Always release the lock
+    let _ = release_select_lock(&pool).await;
+    result
 }
 
 pub async fn explore(
