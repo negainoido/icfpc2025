@@ -204,11 +204,12 @@ def cegar_solve(
             j = problem.start_nodes[b]
             s.add(mvars.var(i, j))  # unit
 
+    # Quick lookup maps for steps (used by R2 and optional seeding)
+    door_at: Dict[int, int] = {st.src: st.door for st in problem.steps}
+    dest_of: Dict[int, int] = {st.src: st.dst for st in problem.steps}
+
     # (B) optional local determinism seed: door[i]=door[j] ⇒ m[i+1,j+1]
     if seed_local_det:
-        # Build quick lookup: for each step index (src), door
-        door_at: Dict[int, int] = {st.src: st.door for st in problem.steps}
-        dest_of: Dict[int, int] = {st.src: st.dst for st in problem.steps}
         for i in range(n):
             if i not in door_at:
                 continue
@@ -235,8 +236,8 @@ def cegar_solve(
 
     # CEGAR loop
     iteration = 0
-    # Track which specific R2 clauses we've already added to avoid duplicates
-    added_r2: Set[Tuple[int, int]] = set()
+    # Track which (component,door) we've already unified to avoid re-adding
+    added_comp_door: Set[Tuple[int, int]] = set()
     while True:
         iteration += 1
         if verbose or progress_stdout:
@@ -264,87 +265,105 @@ def cegar_solve(
         for (i, j), v in mvars.items():
             if bool(model.eval(v, model_completion=True)):
                 dsu.union(i, j)
-        # witnesses for determinism
-        # map (classA, door) -> (classB, witness_src_idx)
-        trans: Dict[Tuple[int, int], Tuple[int, int]] = {}
-        conflict_R2: Optional[Tuple[int, int]] = (
-            None  # (i,j) such that m[i,j] must imply m[i+1,j+1]
-        )
+        # Detect determinism conflicts grouped by (component,door)
+        # For each (A,d), record target classes set and example sources
+        targets_by_ad: Dict[Tuple[int, int], Set[int]] = {}
+        sources_by_ad: Dict[Tuple[int, int], List[int]] = {}
         for st in problem.steps:
             A = dsu.find(st.src)
             B = dsu.find(st.dst)
             key = (A, st.door)
-            prev = trans.get(key)
-            if prev is None:
-                trans[key] = (B, st.src)
-            else:
-                B2, i_prev = prev
-                if B2 != B:
-                    # determinism violated: same (A,door) goes to different classes B and B2
-                    # witness (i_prev, st.src)
-                    conflict_R2 = (i_prev, st.src)
+            targets_by_ad.setdefault(key, set()).add(B)
+            sources_by_ad.setdefault(key, []).append(st.src)
+
+        selected_ad: Optional[Tuple[int, int]] = None
+        # prefer a not-yet-handled conflict
+        for key, Bs in targets_by_ad.items():
+            if len(Bs) > 1 and key not in added_comp_door:
+                selected_ad = key
+                break
+        # if all conflicts already handled, still pick one to try tightening again
+        if selected_ad is None:
+            for key, Bs in targets_by_ad.items():
+                if len(Bs) > 1:
+                    selected_ad = key
                     break
-        if conflict_R2 is not None:
-            i, j = conflict_R2
-            ii, jj = min(i, j), max(i, j)
-            # Build adjacency of currently true equalities to capture the actual
-            # class connectivity used by the model, then extract a path between ii and jj
-            # and guard all those edges in a single clause implying m[ii+1, jj+1].
-            # This prevents the solver from escaping the cut by flipping m[ii,jj] to False
-            # while keeping ii and jj connected via other edges.
+        if selected_ad is not None:
+            A, d = selected_ad
+            # Build adjacency of m-true equalities in current model
             adj = [[] for _ in range(n)]
-            edges = []
             for (a, b), v in mvars.items():
                 if bool(model.eval(v, model_completion=True)):
                     adj[a].append(b)
                     adj[b].append(a)
-                    edges.append((a, b))
-            # BFS for a path ii -> jj
+
             from collections import deque
-            prev = [-1] * n
-            q = deque([ii])
-            prev[ii] = ii
-            while q and prev[jj] == -1:
-                u = q.popleft()
-                for v in adj[u]:
-                    if prev[v] == -1:
-                        prev[v] = u
-                        q.append(v)
-            clause = []
-            path_len = 0
-            if prev[jj] != -1:
-                # reconstruct path
-                u = jj
-                verts = []
-                while u != ii:
-                    verts.append(u)
-                    u = prev[u]
-                verts.append(ii)
-                verts.reverse()
-                # add guards for each edge on the path
-                for x, y in zip(verts, verts[1:]):
-                    a, b = (x, y) if x < y else (y, x)
-                    clause.append(Not(mvars.var(a, b)))
-                    path_len += 1
-            else:
-                # Fallback to the simple 2-literal guard
-                clause.append(Not(mvars.var(ii, jj)))
-            clause.append(mvars.var(ii + 1, jj + 1))
-            s.add(Or(*clause))
+
+            def path_guard(u: int, v: int):
+                # BFS on current adj to extract tree path u->v, returning list of ~m-edge literals
+                prev = [-1] * n
+                q = deque([u])
+                prev[u] = u
+                while q and prev[v] == -1:
+                    x = q.popleft()
+                    for y in adj[x]:
+                        if prev[y] == -1:
+                            prev[y] = x
+                            q.append(y)
+                if prev[v] == -1:
+                    return []
+                lits = []
+                x = v
+                while x != u:
+                    p = prev[x]
+                    a, b = (p, x) if p < x else (x, p)
+                    lits.append(Not(mvars.var(a, b)))
+                    x = p
+                return lits
+
+            # Collect S = {x in A | has step with door d}
+            S = [src for src in sources_by_ad.get((A, d), []) if dsu.find(src) == A]
+            if len(S) <= 1:
+                # trivial fallback: simple guarded clause
+                # choose two distinct sources if available
+                if len(S) == 1:
+                    x0 = S[0]
+                    # find another node in A with same door by scanning steps
+                    y = None
+                    for st in problem.steps:
+                        if st.door == d and dsu.find(st.src) == A and st.src != x0:
+                            y = st.src
+                            break
+                    if y is None:
+                        # cannot find pair; nothing to add this round
+                        # do not mark handled to avoid stall
+                        pass
+                    else:
+                        ii, jj = min(x0, y), max(x0, y)
+                        s.add(Or(Not(mvars.var(ii, jj)), mvars.var(ii + 1, jj + 1)))
+                        added_comp_door.add((A, d))
+                else:
+                    # no sources (?) unexpected; skip without marking
+                    pass
+                continue
+            x0 = min(S)
+            added = 0
+            for y in S:
+                if y == x0:
+                    continue
+                guard = path_guard(x0, y)
+                ii, jj = min(dest_of[x0], dest_of[y]), max(dest_of[x0], dest_of[y])
+                clause = guard + [mvars.var(ii, jj)]
+                s.add(Or(*clause))
+                added += 1
+            added_comp_door.add((A, d))
             if verbose or progress_stdout:
                 stream = sys.stdout if progress_stdout else sys.stderr
-                if path_len > 0:
-                    print(
-                        f"[K={K}] R2-path len={path_len} implies m[{ii+1},{jj+1}]",
-                        file=stream,
-                        flush=True,
-                    )
-                else:
-                    print(
-                        f"[K={K}] R2 add  (~m[{ii},{jj}] ∨ m[{ii+1},{jj+1}])",
-                        file=stream,
-                        flush=True,
-                    )
+                print(
+                    f"[K={K}] R2 unify (A={A}, d={d}) with {added} clauses",
+                    file=stream,
+                    flush=True,
+                )
             continue
 
         # R1: transitivity: find i<j<k with m[i,j] & m[j,k] & !m[i,k]
