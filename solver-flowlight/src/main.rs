@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::time::{Duration, Instant};
 
 // 問題サイズ（固定）
@@ -191,6 +193,92 @@ fn simulate_and_score(st: &State, plan: &[usize], results: &[u8]) -> usize {
     mismatches
 }
 
+// 挿入操作（任意のドアを開けて1歩進む、コスト=1）を
+// 任意回適用した結果の最小コストを多源ダイクストラで求める
+fn relax_insertions(st: &State, base: &[usize], inf: usize) -> Vec<usize> {
+    let mut dist = base.to_vec();
+    let mut pq: BinaryHeap<(Reverse<usize>, usize)> = BinaryHeap::new();
+    for v in 0..N {
+        if dist[v] < inf {
+            pq.push((Reverse(dist[v]), v));
+        }
+    }
+    while let Some((Reverse(c), v)) = pq.pop() {
+        if c != dist[v] {
+            continue;
+        }
+        for d in 0..6 {
+            let to = st.neighbors[v][d].0;
+            let nc = c.saturating_add(1);
+            if nc < dist[to] {
+                dist[to] = nc;
+                pq.push((Reverse(nc), to));
+            }
+        }
+    }
+    dist
+}
+
+// 編集距離風の動的計画に基づくスコア
+// 操作コスト:
+//  - ラベル不一致: 1
+//  - プランステップの読み飛ばし（削除）: 1
+//  - 任意のドアを開けて1歩進む（挿入）: 1
+fn score_edit_distance(st: &State, plan: &[usize], results: &[u8]) -> usize {
+    let l = plan.len();
+    debug_assert_eq!(results.len(), l + 1);
+    const INF: usize = 1_000_000_000; // 十分大きい有限値
+
+    // dp[j][v]: 先頭j個のラベルを処理し終えた時点でノードvにいる最小コスト
+    let mut cur = vec![INF; N];
+    cur[0] = 0; // 開始ノードは0
+
+    for j in 0..l {
+        // jの処理前に、任意回の挿入を閉じる
+        let ins = relax_insertions(st, &cur, INF);
+        let mut next = vec![INF; N];
+
+        for v in 0..N {
+            let base = ins[v];
+            if base >= INF {
+                continue;
+            }
+            let label_cost = if st.labels[v] == results[j] { 0 } else { 1 };
+
+            // 削除（読み飛ばし）: その場でjを消費
+            let del_cost = base + label_cost + 1;
+            if del_cost < next[v] {
+                next[v] = del_cost;
+            }
+
+            // 一致（プランに従って移動）: ポート plan[j] を使って遷移
+            let d = plan[j] as usize;
+            let to = st.neighbors[v][d].0;
+            let mv_cost = base + label_cost;
+            if mv_cost < next[to] {
+                next[to] = mv_cost;
+            }
+        }
+        cur = next;
+    }
+
+    // 最終ラベル（j = l）についても、事前に挿入を許可
+    let ins = relax_insertions(st, &cur, INF);
+    let mut best = INF;
+    for v in 0..N {
+        let base = ins[v];
+        if base >= INF {
+            continue;
+        }
+        let label_cost = if st.labels[v] == results[l] { 0 } else { 1 };
+        let total = base + label_cost;
+        if total < best {
+            best = total;
+        }
+    }
+    best
+}
+
 // 2-opt ポート交換（双方向不変を保つ）
 fn apply_two_opt_swap(st: &mut State, rng: &mut StdRng) {
     let a1 = rng.gen_range(0..N);
@@ -225,6 +313,7 @@ fn sa_solve(
     seed: u64,
     verbose: u8,
     random_init: bool,
+    edit_eval: bool,
 ) -> (State, usize) {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut cur = if random_init {
@@ -232,7 +321,11 @@ fn sa_solve(
     } else {
         init_route_respecting_ring(plan, results, &mut rng)
     };
-    let mut cur_score = simulate_and_score(&cur, plan, results);
+    let mut cur_score = if edit_eval {
+        score_edit_distance(&cur, plan, results)
+    } else {
+        simulate_and_score(&cur, plan, results)
+    };
     let mut best = cur.clone();
     let mut best_score = cur_score;
 
@@ -259,7 +352,11 @@ fn sa_solve(
             apply_label_flip(&mut next, &mut rng);
         }
 
-        let next_score = simulate_and_score(&next, plan, results);
+        let next_score = if edit_eval {
+            score_edit_distance(&next, plan, results)
+        } else {
+            simulate_and_score(&next, plan, results)
+        };
         let delta = (next_score as i64) - (cur_score as i64);
         if delta <= 0 {
             // 改善・同等受理
@@ -323,6 +420,10 @@ struct Args {
     /// 初期状態を完全ランダムにする
     #[arg(long, default_value_t = false)]
     random_init: bool,
+
+    /// 編集距離風の評価関数を使う
+    #[arg(long, default_value_t = false)]
+    edit_eval: bool,
 }
 
 #[tokio::main]
@@ -345,6 +446,7 @@ async fn main() -> Result<()> {
         seed,
         args.verbose,
         args.random_init,
+        args.edit_eval,
     );
 
     if args.verbose > 0 {
