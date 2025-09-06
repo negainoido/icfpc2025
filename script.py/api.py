@@ -16,6 +16,38 @@ from dotenv import load_dotenv
 
 
 class API:
+    @staticmethod
+    def build():
+        """環境変数からAPIクライアントを構築する
+
+        - TEAM_ID, API_HOST, USER が設定されていれば本番直接/ローカルモックサーバに接続
+        - CLIENT_ID, CLIENT_SECRET, USER が設定されていればgarasubo.com経由で接続
+        - どちらも設定されていなければエラー終了
+        """
+        load_dotenv()
+        TEAM_ID = os.environ.get("TEAM_ID")
+        API_HOST = os.environ.get("API_HOST")
+        CLIENT_ID = os.environ.get("CLIENT_ID")
+        CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+        USER_NAME = os.environ.get("USER")
+
+        if TEAM_ID and API_HOST and USER_NAME:
+            print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
+            api = API(API_HOST, TEAM_ID, None, None, USER_NAME)
+        elif CLIENT_ID and CLIENT_SECRET and USER_NAME:
+            print(f"Using garasubo.com API access as {CLIENT_ID}")
+            api = API(None, None, CLIENT_ID, CLIENT_SECRET, USER_NAME)
+        elif not USER_NAME:
+            print("Error: You have no $USER")
+            sys.exit(1)
+        else:
+            print(
+                "Error: Set {TEAM_ID and API_HOST} for prod/local , or {CLIENT_ID and CLIENT_SECRET} for garasubo.com"
+            )
+            sys.exit(1)
+
+        return api
+
     def __init__(
         self,
         base_url: str | None,
@@ -128,27 +160,7 @@ class API:
         return self.make_put_request(f"/sessions/{session_id}/abort")
 
 
-load_dotenv()
-TEAM_ID = os.environ.get("TEAM_ID")
-API_HOST = os.environ.get("API_HOST")
-CLIENT_ID = os.environ.get("CLIENT_ID")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-USER_NAME = os.environ.get("USER")
-
-if TEAM_ID and API_HOST and USER_NAME:
-    print(f"Using direct API access to {API_HOST} as {TEAM_ID}")
-    api = API(API_HOST, TEAM_ID, None, None, USER_NAME)
-elif CLIENT_ID and CLIENT_SECRET and USER_NAME:
-    print(f"Using garasubo.com API access as {CLIENT_ID}")
-    api = API(None, None, CLIENT_ID, CLIENT_SECRET, USER_NAME)
-elif not USER_NAME:
-    print("Error: You have no $USER")
-    sys.exit(1)
-else:
-    print(
-        "Error: Set {TEAM_ID and API_HOST} for prod/local , or {CLIENT_ID and CLIENT_SECRET} for garasubo.com"
-    )
-    sys.exit(1)
+api = API.build()
 
 
 @click.group()
