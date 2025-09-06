@@ -4,6 +4,7 @@ ICFPコンテスト2025 エディフィキウム図書館マッピング モッ�
 FastAPIを使用してすべてのプロトコルを実装
 """
 
+import copy
 import logging
 import random
 import uuid
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+
+from plan import Goto, Paint, Plan
 
 logger = logging.getLogger("uvicorn")
 app = FastAPI(title="エディフィキウム図書館マッピング API", version="1.0.0")
@@ -233,36 +236,34 @@ def generate_json_graph(problem: Problem) -> str:
     return json.dumps(graph_data, ensure_ascii=False, separators=(",", ":"))
 
 
-def simulate_exploration(problem: Problem, plans: list[str]) -> list[list[int]]:
+def simulate_exploration(problem: Problem, plans: list[Plan]) -> list[list[int]]:
     """ルートプランを実行して観察結果を返す"""
     results = []
 
     for plan in plans:
         observations = []
         current_room = problem.starting_room
+        problem_copy = copy.deepcopy(problem)
 
         # 開始部屋のラベルを記録
-        observations.append(problem.rooms[current_room].label)
+        observations.append(problem_copy.rooms[current_room].label)
 
-        # 各ドアを通過
-        for door_char in plan:
-            try:
-                door_id = int(door_char)
-                if door_id < 0 or door_id > 5:
-                    raise ValueError(f"Invalid door: {door_id}")
-
+        # 各アクションを実行
+        for action in plan.actions:
+            if isinstance(action, Goto):
+                door_id = action.door
                 # 現在の部屋の指定されたドアを通過
-                if door_id in problem.rooms[current_room].doors:
-                    next_room, _ = problem.rooms[current_room].doors[door_id]
+                if door_id in problem_copy.rooms[current_room].doors:
+                    next_room, _ = problem_copy.rooms[current_room].doors[door_id]
                     current_room = next_room
-                    observations.append(problem.rooms[current_room].label)
+                    observations.append(problem_copy.rooms[current_room].label)
                 else:
                     # ドアが存在しない場合（通常はすべてのドアが存在するはず）
-                    observations.append(problem.rooms[current_room].label)
-
-            except ValueError:
-                # 無効な文字は無視
-                continue
+                    observations.append(problem_copy.rooms[current_room].label)
+            elif isinstance(action, Paint):
+                # 現在の部屋のラベルを指定した色に変更
+                problem_copy.rooms[current_room].label = action.color
+                observations.append(problem_copy.rooms[current_room].label)
 
         results.append(observations)
 
@@ -301,9 +302,10 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
             plan = "".join(str(random.randint(0, 5)) for _ in range(plan_length))
             test_plans.append(plan)
 
-    for plan in test_plans:
+    for plan_str in test_plans:
+        plan = Plan.from_string(plan_str)
         original_results = simulate_exploration(problem, [plan])
-        submitted_results = simulate_submitted_map(submitted_map, [plan])
+        submitted_results = simulate_submitted_map(submitted_map, [plan_str])
 
         if original_results != submitted_results:
             logger.warning(f"プラン '{plan}' で結果が一致しない")
@@ -314,9 +316,10 @@ def maps_are_equivalent(problem: Problem, submitted_map: MapData) -> bool:
     return True
 
 
-def simulate_submitted_map(map_data: MapData, plans: list[str]) -> list[list[int]]:
+def simulate_submitted_map(map_data: MapData, plan_strs: list[str]) -> list[list[int]]:
     """提出された地図でルートプランをシミュレート"""
     problem = Problem.from_map_data(map_data)
+    plans = [Plan.from_string(plan_str) for plan_str in plan_strs]
     return simulate_exploration(problem, plans)
 
 
@@ -382,7 +385,8 @@ async def explore(request: ExploreRequest):
             )
 
     # ルートプランを実行
-    results = simulate_exploration(team.current_problem, request.plans)
+    plans = [Plan.from_string(plan_str) for plan_str in request.plans]
+    results = simulate_exploration(team.current_problem, plans)
 
     # クエリカウントを更新（プラン数 + リクエストペナルティ1）
     team.query_count += len(request.plans) + 1
