@@ -66,6 +66,7 @@ class API:
         if "session_id" in result:
             self.session_id = result["session_id"]
             print(f"SessionId: {self.session_id}")
+            print(f"run guess or solve with: -s '{self.session_id}'")
         return result
 
     def explore(self, plans: list[str]):
