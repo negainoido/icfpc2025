@@ -47,11 +47,18 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 
 セッションID付きで本家の`/explore`を叩く。リクエストの内容とその本家からのレスポンスの内容はDBにも格納される。
 
+セッションの指定方法：
+- `session_id`を指定：従来通りの動作
+- `user_name`を指定：そのユーザーのアクティブセッションを使用
+- 両方指定された場合：`session_id`を優先
+- どちらも指定されていない場合：エラー
+
 **リクエスト:**
 ```json
 {
-  "session_id": "セッションID",
-  ...  // 本家APIへ送信するデータ
+  "session_id": "セッションID（省略可能）",
+  "user_name": "ユーザー名（省略可能）",
+  "plans": ["plan1", "plan2", ...]
 }
 ```
 
@@ -60,7 +67,9 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 {
   "success": true,
   "data": {
-    ...  // 本家APIからのレスポンス内容
+    "session_id": "実際に使用されたセッションID",
+    "results": [[1, 2], [3, 4], ...],
+    "queryCount": 10
   },
   "message": "Explore request completed"
 }
@@ -71,11 +80,25 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 セッションID付きで本家の`/guess`を叩く。リクエストの内容とその本家からのレスポンス内容はDBにも格納される。
 このAPIを叩くとセッションは終了となる。
 
+セッションの指定方法：
+- `session_id`を指定：従来通りの動作
+- `user_name`を指定：そのユーザーのアクティブセッションを使用
+- 両方指定された場合：`session_id`を優先
+- どちらも指定されていない場合：エラー
+
 **リクエスト:**
 ```json
 {
-  "session_id": "セッションID",
-  ...  // 本家APIへ送信するデータ
+  "session_id": "セッションID（省略可能）",
+  "user_name": "ユーザー名（省略可能）",
+  "map": {
+    "rooms": [1, 2, 3, ...],
+    "startingRoom": 1,
+    "connections": [
+      {"from": {"room": 1, "door": 0}, "to": {"room": 2, "door": 1}},
+      ...
+    ]
+  }
 }
 ```
 
@@ -84,7 +107,8 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 {
   "success": true,
   "data": {
-    ...  // 本家APIからのレスポンス内容
+    "session_id": "実際に使用されたセッションID",
+    "correct": true
   },
   "message": "Guess request completed and session terminated"
 }

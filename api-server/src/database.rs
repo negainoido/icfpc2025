@@ -92,6 +92,17 @@ pub async fn get_active_session(pool: &MySqlPool) -> Result<Option<Session>, Api
     Ok(session)
 }
 
+pub async fn get_active_session_by_user(pool: &MySqlPool, user_name: &str) -> Result<Option<Session>, ApiError> {
+    let session = sqlx::query_as::<_, Session>(
+        "SELECT * FROM sessions WHERE status = 'active' AND user_name = ? LIMIT 1"
+    )
+    .bind(user_name)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(session)
+}
+
 pub async fn complete_session(pool: &MySqlPool, session_id: &str) -> Result<(), ApiError> {
     sqlx::query(
         "UPDATE sessions SET status = 'completed', completed_at = NOW() WHERE session_id = ?",
