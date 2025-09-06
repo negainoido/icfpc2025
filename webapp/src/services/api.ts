@@ -6,6 +6,9 @@ import {
   ExploreResponse,
   GuessRequest,
   GuessResponse,
+  Session,
+  SessionDetail,
+  SessionsListResponse,
 } from '../types';
 
 
@@ -33,9 +36,11 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   return result;
 }
 
+const API_BASE_URL = 'http://localhost:8080';
+
 export const api = {
   async select(request: SelectRequest): Promise<SelectResponse> {
-    const response = await fetch(`/api/select`, {
+    const response = await fetch(`${API_BASE_URL}/api/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,7 +53,7 @@ export const api = {
   },
 
   async explore(request: ExploreRequest): Promise<ExploreResponse> {
-    const response = await fetch(`/api/explore`, {
+    const response = await fetch(`${API_BASE_URL}/api/explore`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,7 +66,7 @@ export const api = {
   },
 
   async guess(request: GuessRequest): Promise<GuessResponse> {
-    const response = await fetch(`/api/guess`, {
+    const response = await fetch(`${API_BASE_URL}/api/guess`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,6 +75,33 @@ export const api = {
     });
 
     const result = await handleResponse<GuessResponse>(response);
+    return result.data!;
+  },
+
+  async getSessions(): Promise<SessionsListResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/sessions`, {
+      method: 'GET',
+    });
+
+    const result = await handleResponse<SessionsListResponse>(response);
+    return result.data!;
+  },
+
+  async getCurrentSession(): Promise<Session | null> {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/current`, {
+      method: 'GET',
+    });
+
+    const result = await handleResponse<Session | null>(response);
+    return result.data || null;
+  },
+
+  async getSessionDetail(sessionId: string): Promise<SessionDetail> {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/${sessionId}`, {
+      method: 'GET',
+    });
+
+    const result = await handleResponse<SessionDetail>(response);
     return result.data!;
   },
 };

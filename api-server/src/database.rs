@@ -1,4 +1,4 @@
-use crate::models::{ApiError, Session};
+use crate::models::{ApiError, Session, ApiLog};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
 use uuid::Uuid;
@@ -124,4 +124,36 @@ pub async fn log_api_request(
     .await?;
     
     Ok(())
+}
+
+pub async fn get_all_sessions(pool: &MySqlPool) -> Result<Vec<Session>, ApiError> {
+    let sessions = sqlx::query_as::<_, Session>(
+        "SELECT * FROM sessions ORDER BY created_at DESC"
+    )
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(sessions)
+}
+
+pub async fn get_session_by_id(pool: &MySqlPool, session_id: &str) -> Result<Option<Session>, ApiError> {
+    let session = sqlx::query_as::<_, Session>(
+        "SELECT * FROM sessions WHERE session_id = ?"
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await?;
+    
+    Ok(session)
+}
+
+pub async fn get_api_logs_for_session(pool: &MySqlPool, session_id: &str) -> Result<Vec<ApiLog>, ApiError> {
+    let logs = sqlx::query_as::<_, ApiLog>(
+        "SELECT * FROM api_logs WHERE session_id = ? ORDER BY created_at ASC"
+    )
+    .bind(session_id)
+    .fetch_all(pool)
+    .await?;
+    
+    Ok(logs)
 }

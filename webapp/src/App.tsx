@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import GamePage from './pages/GamePage';
+import SessionsPage from './pages/SessionsPage';
 import { SessionProvider } from './context/SessionContext';
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/game" element={<GamePage />} />
+            <Route path="/sessions" element={<SessionsPage />} />
           </Routes>
         </div>
       </Router>
@@ -47,7 +49,7 @@ function HomePage() {
           Use the proxy API to safely interact with the ICFPC contest system.
         </p>
 
-        <div style={{ marginBottom: '30px' }}>
+        <div style={{ marginBottom: '30px', display: 'flex', gap: '15px', justifyContent: 'center' }}>
           <Link
             to="/game"
             style={{
@@ -63,6 +65,22 @@ function HomePage() {
             }}
           >
             Start Exploring
+          </Link>
+          <Link
+            to="/sessions"
+            style={{
+              padding: '15px 30px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              display: 'inline-block',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              transition: 'background-color 0.3s',
+            }}
+          >
+            View Sessions
           </Link>
         </div>
 

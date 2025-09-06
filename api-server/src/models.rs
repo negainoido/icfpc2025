@@ -145,6 +145,18 @@ pub struct GuessResponse {
     pub correct: bool,
 }
 
+// Session detail response types
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionDetail {
+    pub session: Session,
+    pub api_logs: Vec<ApiLog>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionsListResponse {
+    pub sessions: Vec<Session>,
+}
+
 impl<T> ApiResponse<T> {
     pub fn success(data: T, message: Option<String>) -> Self {
         Self {

@@ -61,3 +61,25 @@ export interface GuessResponse {
   session_id: string;
   correct: boolean;
 }
+
+// API Logs
+export interface ApiLog {
+  id: number;
+  session_id: string;
+  endpoint: string;
+  request_body?: string;
+  response_body?: string;
+  response_status?: number;
+  created_at: string;
+}
+
+// Session details with logs
+export interface SessionDetail {
+  session: Session;
+  api_logs: ApiLog[];
+}
+
+// Sessions list response
+export interface SessionsListResponse {
+  sessions: Session[];
+}

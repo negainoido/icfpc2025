@@ -9,9 +9,10 @@ use tracing::error;
 use crate::{
     database::{
         complete_session, create_session, get_active_session, has_active_session, log_api_request,
+        get_all_sessions, get_session_by_id, get_api_logs_for_session,
     },
     icfpc_client::IcfpClient,
-    models::{ApiError, ApiResponse, SelectRequest, SelectResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest},
+    models::{ApiError, ApiResponse, SelectRequest, SelectResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest, SessionDetail, SessionsListResponse, Session},
 };
 
 impl From<ApiError> for StatusCode {
@@ -162,5 +163,53 @@ pub async fn guess(
     Ok(Json(ApiResponse::success(
         response,
         Some("Guess request completed and session terminated".to_string()),
+    )))
+}
+
+pub async fn get_sessions(
+    State(pool): State<MySqlPool>,
+) -> Result<Json<ApiResponse<SessionsListResponse>>, StatusCode> {
+    let sessions = get_all_sessions(&pool).await.map_err(StatusCode::from)?;
+
+    let response = SessionsListResponse { sessions };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Sessions retrieved successfully".to_string()),
+    )))
+}
+
+pub async fn get_current_session(
+    State(pool): State<MySqlPool>,
+) -> Result<Json<ApiResponse<Option<Session>>>, StatusCode> {
+    let session = get_active_session(&pool).await.map_err(StatusCode::from)?;
+
+    let message = if session.is_some() {
+        Some("Current session retrieved successfully".to_string())
+    } else {
+        Some("No active session".to_string())
+    };
+
+    Ok(Json(ApiResponse::success(session, message)))
+}
+
+pub async fn get_session_detail(
+    State(pool): State<MySqlPool>,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<ApiResponse<SessionDetail>>, StatusCode> {
+    let session = get_session_by_id(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::SessionNotFound))?;
+
+    let api_logs = get_api_logs_for_session(&pool, &session_id)
+        .await
+        .map_err(StatusCode::from)?;
+
+    let response = SessionDetail { session, api_logs };
+
+    Ok(Json(ApiResponse::success(
+        response,
+        Some("Session detail retrieved successfully".to_string()),
     )))
 }

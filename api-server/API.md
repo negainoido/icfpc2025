@@ -82,10 +82,95 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 }
 ```
 
+### `GET /api/sessions`
+
+全セッションの一覧を取得する。最新のものから順に返される。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "id": 1,
+        "session_id": "uuid-string",
+        "status": "completed",
+        "created_at": "2025-09-06T01:00:00Z",
+        "completed_at": "2025-09-06T01:30:00Z"
+      },
+      ...
+    ]
+  },
+  "message": "Sessions retrieved successfully"
+}
+```
+
+### `GET /api/sessions/current`
+
+現在のアクティブセッション情報を取得する。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "session_id": "uuid-string",
+    "status": "active",
+    "created_at": "2025-09-06T01:00:00Z",
+    "completed_at": null
+  },
+  "message": "Current session retrieved successfully"
+}
+```
+
+アクティブセッションが存在しない場合:
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "No active session"
+}
+```
+
+### `GET /api/sessions/{session_id}`
+
+特定のセッションの詳細情報とAPIログ履歴を取得する。
+
+**レスポンス:**
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "id": 1,
+      "session_id": "uuid-string",
+      "status": "completed",
+      "created_at": "2025-09-06T01:00:00Z",
+      "completed_at": "2025-09-06T01:30:00Z"
+    },
+    "api_logs": [
+      {
+        "id": 1,
+        "session_id": "uuid-string",
+        "endpoint": "select",
+        "request_body": "{\"problemName\":\"example\"}",
+        "response_body": "{\"problemName\":\"example\"}",
+        "response_status": 200,
+        "created_at": "2025-09-06T01:00:00Z"
+      },
+      ...
+    ]
+  },
+  "message": "Session detail retrieved successfully"
+}
+```
+
 ## エラー処理
 
 - 409 Conflict: 既にアクティブなセッションが存在する場合（`/select`時）
-- 404 Not Found: アクティブなセッションが存在しない場合（`/explore`, `/guess`時）
+- 404 Not Found: アクティブなセッションが存在しない場合（`/explore`, `/guess`時）、またはセッションが見つからない場合（`/sessions/{id}`時）
 - 400 Bad Request: セッションIDの不整合や不正なリクエスト
 - 502 Bad Gateway: 本家APIとの通信エラー
 - 500 Internal Server Error: データベースエラー

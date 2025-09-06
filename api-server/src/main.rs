@@ -1,6 +1,6 @@
 use axum::{
     http::{HeaderValue, Method},
-    routing::post,
+    routing::{get, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -12,7 +12,7 @@ mod icfpc_client;
 mod models;
 
 use database::{create_pool, init_database};
-use handlers::{explore, guess, select};
+use handlers::{explore, guess, select, get_sessions, get_current_session, get_session_detail};
 
 #[tokio::main]
 async fn main() {
@@ -38,15 +38,21 @@ async fn main() {
         .route("/api/select", post(select))
         .route("/api/explore", post(explore))
         .route("/api/guess", post(guess))
+        .route("/api/sessions", get(get_sessions))
+        .route("/api/sessions/current", get(get_current_session))
+        .route("/api/sessions/:session_id", get(get_session_detail))
         .with_state(pool)
         .layer(cors);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     println!("🚀 ICFPC 2025 Proxy API Server running on http://localhost:8080");
     println!("Available endpoints:");
-    println!("  POST /api/select  - Create new session and call ICFP select API");
-    println!("  POST /api/explore - Call ICFP explore API with session");
-    println!("  POST /api/guess   - Call ICFP guess API and terminate session");
+    println!("  POST /api/select           - Create new session and call ICFP select API");
+    println!("  POST /api/explore          - Call ICFP explore API with session");
+    println!("  POST /api/guess            - Call ICFP guess API and terminate session");
+    println!("  GET  /api/sessions         - Get all sessions");
+    println!("  GET  /api/sessions/current - Get current active session");
+    println!("  GET  /api/sessions/:id     - Get session details and logs");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
