@@ -36,7 +36,9 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   return result;
 }
 
-const API_BASE_URL = 'http://localhost:8080';
+// APIサーバーは自分と同じドメインで常に動いている
+// localで動かしているときはvite.config.tsの設定によりプロキシされる
+const API_BASE_URL = '';
 
 export const api = {
   async select(request: SelectRequest): Promise<SelectResponse> {
