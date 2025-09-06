@@ -19,6 +19,12 @@ pub enum ApiError {
     InvalidRequest(String),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Session {
     pub id: i32,

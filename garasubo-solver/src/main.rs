@@ -1,6 +1,6 @@
 mod api;
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use api::ApiClient;
@@ -17,7 +17,7 @@ struct Cli {
     #[arg(long)]
     user_name: Option<String>,
 
-    #[arg(long, default_value = "http://negainoido.garasubo.com")]
+    #[arg(long, default_value = "https://negainoido.garasubo.com")]
     api_base_url: String,
 }
 
@@ -62,7 +62,8 @@ impl SessionManager {
     }
 
     async fn start_session(&self, problem_name: String, user_name: Option<String>) -> Result<SelectResponse> {
-        let response = self.api_client.select(problem_name, user_name).await?;
+        let response = self.api_client.select(problem_name.clone(), user_name.clone()).await
+            .with_context(|| format!("Failed to start session for problem '{}'", problem_name))?;
         
         let mut session = self.current_session.lock().await;
         *session = Some(response.session_id.clone());
@@ -74,7 +75,7 @@ impl SessionManager {
         let session = self.current_session.lock().await;
         if let Some(ref session_id) = *session {
             if let Err(e) = self.api_client.abort_session(session_id).await {
-                eprintln!("Warning: Failed to abort session {}: {}", session_id, e);
+                eprintln!("Warning: Failed to abort session {}: {:#}", session_id, e);
             } else {
                 println!("Session {} aborted successfully", session_id);
             }
@@ -90,7 +91,7 @@ async fn main() -> Result<()> {
     let session_manager = SessionManager::new(ApiClient::new(cli.api_base_url));
 
     let session_manager_for_signal = session_manager.current_session.clone();
-    let api_client_for_signal = ApiClient::new("http://negainoido.garasubo.com".to_string());
+    let api_client_for_signal = ApiClient::new("https://negainoido.garasubo.com".to_string());
 
     tokio::spawn(async move {
         if let Ok(()) = signal::ctrl_c().await {
@@ -98,9 +99,9 @@ async fn main() -> Result<()> {
             let session = session_manager_for_signal.lock().await;
             if let Some(ref session_id) = *session {
                 if let Err(e) = api_client_for_signal.abort_session(session_id).await {
-                    eprintln!("Warning: Failed to abort session {}: {}", session_id, e);
+                    eprintln!("Warning: Failed to abort session {} on Ctrl+C: {:#}", session_id, e);
                 } else {
-                    println!("Session {} aborted successfully", session_id);
+                    println!("Session {} aborted successfully on Ctrl+C", session_id);
                 }
             }
             std::process::exit(130); // Exit with SIGINT status
@@ -124,8 +125,10 @@ async fn main() -> Result<()> {
             println!("Work completed successfully");
         }
         Err(e) => {
-            eprintln!("Error: {}", e);
-            session_manager.abort_current_session().await?;
+            eprintln!("Fatal error during session startup: {:#}", e);
+            if let Err(abort_error) = session_manager.abort_current_session().await {
+                eprintln!("Additional error during cleanup: {:#}", abort_error);
+            }
             std::process::exit(1);
         }
     }
