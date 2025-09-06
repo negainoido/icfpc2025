@@ -10,7 +10,7 @@ use crate::{
         complete_session, create_session, get_active_session, has_active_session, log_api_request,
     },
     icfpc_client::IcfpClient,
-    models::{ApiError, ApiResponse, ExploreRequest, GuessRequest, SelectResponse},
+    models::{ApiError, ApiResponse, SelectRequest, SelectResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest},
 };
 
 impl From<ApiError> for StatusCode {
@@ -27,30 +27,31 @@ impl From<ApiError> for StatusCode {
 
 pub async fn select(
     State(pool): State<MySqlPool>,
+    Json(payload): Json<SelectRequest>,
 ) -> Result<Json<ApiResponse<SelectResponse>>, StatusCode> {
-    if has_active_session(&pool).await.map_err(|e| e.into())? {
-        return Err(ApiError::SessionAlreadyActive.into());
+    if has_active_session(&pool).await.map_err(StatusCode::from)? {
+        return Err(StatusCode::from(ApiError::SessionAlreadyActive));
     }
 
-    let icfp_client = IcfpClient::new().map_err(|e| e.into())?;
-    let upstream_response = icfp_client.select().await.map_err(|e| e.into())?;
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    let upstream_response = icfp_client.select(&payload).await.map_err(StatusCode::from)?;
 
-    let session = create_session(&pool).await.map_err(|e| e.into())?;
+    let session = create_session(&pool).await.map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,
         &session.session_id,
         "select",
-        None,
+        Some(&serde_json::to_string(&payload).unwrap_or_default()),
         Some(&serde_json::to_string(&upstream_response).unwrap_or_default()),
         Some(200),
     )
     .await
-    .map_err(|e| e.into())?;
+    .map_err(StatusCode::from)?;
 
     let response = SelectResponse {
         session_id: session.session_id,
-        upstream_response,
+        problem_name: upstream_response.problem_name,
     };
 
     Ok(Json(ApiResponse::success(
@@ -62,23 +63,28 @@ pub async fn select(
 pub async fn explore(
     State(pool): State<MySqlPool>,
     Json(payload): Json<ExploreRequest>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+) -> Result<Json<ApiResponse<ExploreResponse>>, StatusCode> {
     let session = get_active_session(&pool)
         .await
-        .map_err(|e| e.into())?
-        .ok_or(ApiError::NoActiveSession)?;
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
 
     if session.session_id != payload.session_id {
-        return Err(ApiError::InvalidRequest("Session ID mismatch".to_string()).into());
+        return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
     }
 
-    let icfp_client = IcfpClient::new().map_err(|e| e.into())?;
-    let request_body = serde_json::to_string(&payload.explore_data).unwrap_or_default();
+    let upstream_request = ExploreUpstreamRequest {
+        id: payload.id,
+        plans: payload.plans,
+    };
+
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
     
     let upstream_response = icfp_client
-        .explore(payload.explore_data)
+        .explore(&upstream_request)
         .await
-        .map_err(|e| e.into())?;
+        .map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,
@@ -89,10 +95,16 @@ pub async fn explore(
         Some(200),
     )
     .await
-    .map_err(|e| e.into())?;
+    .map_err(StatusCode::from)?;
+
+    let response = ExploreResponse {
+        session_id: payload.session_id,
+        results: upstream_response.results,
+        query_count: upstream_response.query_count,
+    };
 
     Ok(Json(ApiResponse::success(
-        upstream_response,
+        response,
         Some("Explore request completed".to_string()),
     )))
 }
@@ -100,23 +112,28 @@ pub async fn explore(
 pub async fn guess(
     State(pool): State<MySqlPool>,
     Json(payload): Json<GuessRequest>,
-) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+) -> Result<Json<ApiResponse<GuessResponse>>, StatusCode> {
     let session = get_active_session(&pool)
         .await
-        .map_err(|e| e.into())?
-        .ok_or(ApiError::NoActiveSession)?;
+        .map_err(StatusCode::from)?
+        .ok_or_else(|| StatusCode::from(ApiError::NoActiveSession))?;
 
     if session.session_id != payload.session_id {
-        return Err(ApiError::InvalidRequest("Session ID mismatch".to_string()).into());
+        return Err(StatusCode::from(ApiError::InvalidRequest("Session ID mismatch".to_string())));
     }
 
-    let icfp_client = IcfpClient::new().map_err(|e| e.into())?;
-    let request_body = serde_json::to_string(&payload.guess_data).unwrap_or_default();
+    let upstream_request = GuessUpstreamRequest {
+        id: payload.id,
+        map: payload.map,
+    };
+
+    let icfp_client = IcfpClient::new().map_err(StatusCode::from)?;
+    let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
     
     let upstream_response = icfp_client
-        .guess(payload.guess_data)
+        .guess(&upstream_request)
         .await
-        .map_err(|e| e.into())?;
+        .map_err(StatusCode::from)?;
 
     log_api_request(
         &pool,
@@ -127,14 +144,19 @@ pub async fn guess(
         Some(200),
     )
     .await
-    .map_err(|e| e.into())?;
+    .map_err(StatusCode::from)?;
 
     complete_session(&pool, &session.session_id)
         .await
-        .map_err(|e| e.into())?;
+        .map_err(StatusCode::from)?;
+
+    let response = GuessResponse {
+        session_id: payload.session_id,
+        correct: upstream_response.correct,
+    };
 
     Ok(Json(ApiResponse::success(
-        upstream_response,
+        response,
         Some("Guess request completed and session terminated".to_string()),
     )))
 }

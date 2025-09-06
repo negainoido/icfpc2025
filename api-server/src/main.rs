@@ -1,10 +1,8 @@
 use axum::{
     http::{HeaderValue, Method},
-    response::Json,
     routing::post,
     Router,
 };
-use serde_json::json;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 

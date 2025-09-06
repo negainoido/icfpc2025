@@ -1,6 +1,5 @@
-use crate::models::ApiError;
+use crate::models::{ApiError, SelectRequest, SelectUpstreamResponse, ExploreUpstreamRequest, ExploreUpstreamResponse, GuessUpstreamRequest, GuessUpstreamResponse};
 use reqwest::Client;
-use serde_json::Value;
 use std::env;
 
 pub struct IcfpClient {
@@ -24,7 +23,7 @@ impl IcfpClient {
         })
     }
 
-    pub async fn select(&self) -> Result<Value, ApiError> {
+    pub async fn select(&self, request: &SelectRequest) -> Result<SelectUpstreamResponse, ApiError> {
         let url = format!("{}/select", self.base_url);
         
         let response = self
@@ -32,20 +31,22 @@ impl IcfpClient {
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.auth_token))
             .header("Content-Type", "application/json")
+            .json(request)
             .send()
             .await?;
 
         let status = response.status().as_u16();
-        let body = response.json::<Value>().await?;
-
+        
         if status != 200 {
-            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, body)));
+            let error_text = response.text().await?;
+            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, error_text)));
         }
 
+        let body = response.json::<SelectUpstreamResponse>().await?;
         Ok(body)
     }
 
-    pub async fn explore(&self, explore_data: Value) -> Result<Value, ApiError> {
+    pub async fn explore(&self, request: &ExploreUpstreamRequest) -> Result<ExploreUpstreamResponse, ApiError> {
         let url = format!("{}/explore", self.base_url);
         
         let response = self
@@ -53,21 +54,22 @@ impl IcfpClient {
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.auth_token))
             .header("Content-Type", "application/json")
-            .json(&explore_data)
+            .json(request)
             .send()
             .await?;
 
         let status = response.status().as_u16();
-        let body = response.json::<Value>().await?;
-
+        
         if status != 200 {
-            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, body)));
+            let error_text = response.text().await?;
+            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, error_text)));
         }
 
+        let body = response.json::<ExploreUpstreamResponse>().await?;
         Ok(body)
     }
 
-    pub async fn guess(&self, guess_data: Value) -> Result<Value, ApiError> {
+    pub async fn guess(&self, request: &GuessUpstreamRequest) -> Result<GuessUpstreamResponse, ApiError> {
         let url = format!("{}/guess", self.base_url);
         
         let response = self
@@ -75,17 +77,18 @@ impl IcfpClient {
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.auth_token))
             .header("Content-Type", "application/json")
-            .json(&guess_data)
+            .json(request)
             .send()
             .await?;
 
         let status = response.status().as_u16();
-        let body = response.json::<Value>().await?;
-
+        
         if status != 200 {
-            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, body)));
+            let error_text = response.text().await?;
+            return Err(ApiError::InvalidRequest(format!("ICFP API returned status {}: {}", status, error_text)));
         }
 
+        let body = response.json::<GuessUpstreamResponse>().await?;
         Ok(body)
     }
 }

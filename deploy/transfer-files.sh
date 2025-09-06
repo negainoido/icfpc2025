@@ -36,6 +36,5 @@ rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
 echo "Transferring configuration files..."
 scp "$SCRIPT_DIR/nginx.conf" "$SERVER":~/nginx.conf
 scp "$SCRIPT_DIR/icfpc2025-api.service" "$SERVER":~/icfpc2025-api.service
-scp "$SCRIPT_DIR/.env.production" "$SERVER":~/api-server/.env
 
 echo "✅ File transfer completed"

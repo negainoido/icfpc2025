@@ -1,5 +1,5 @@
-use crate::models::{ApiError, ApiLog, Session};
-use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
+use crate::models::{ApiError, Session};
+use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
 use uuid::Uuid;
 
