@@ -357,17 +357,21 @@ async def select(request: SelectRequest):
 @app.post("/explore", response_model=ExploreResponse)
 async def explore(request: ExploreRequest):
     """エディフィキウムを探検する"""
+
+    logger.info("Explore request received: %s", request)
+
     if request.id not in teams:
         raise HTTPException(status_code=404, detail="Team not found")
 
     team = teams[request.id]
+    logger.info("Team found: %s", team)
 
     if team.current_problem is None:
         raise HTTPException(status_code=400, detail="No problem selected")
 
-    # プランの長さは最大 3*n (v1.2)
+    # プランの長さは最大 18*n (v1.2)
     n = len(team.current_problem.rooms)
-    max_plan_length = 3 * n
+    max_plan_length = 18 * n
     for plan in request.plans:
         if len(plan) > max_plan_length:
             raise HTTPException(
