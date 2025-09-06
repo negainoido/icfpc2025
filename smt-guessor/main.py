@@ -265,10 +265,15 @@ def main():
     ap.add_argument("--minN", type=int, default=1, help="Min N to try if sweeping")
     ap.add_argument("--maxN", type=int, default=128, help="Max N to try if sweeping")
     ap.add_argument(
-        "--verbose", type=int, default=0, help="Set Z3 solver verbosity level (default: 0)"
+        "--verbose",
+        type=int,
+        default=0,
+        help="Set Z3 solver verbosity level (default: 0)",
     )
     ap.add_argument(
-        "--check-unique", action="store_true", help="Check if the found solution is unique"
+        "--check-unique",
+        action="store_true",
+        help="Check if the found solution is unique",
     )
     args = ap.parse_args()
 
@@ -280,7 +285,13 @@ def main():
     plans, results, N_in, starting = parse_input(data)
 
     N, labels, dmap, is_unique = try_solve(
-        plans, results, starting, args.N or N_in, args.minN, args.maxN, args.check_unique
+        plans,
+        results,
+        starting,
+        args.N or N_in,
+        args.minN,
+        args.maxN,
+        args.check_unique,
     )
     mjson = build_map_json(N, labels, dmap, starting)
 
