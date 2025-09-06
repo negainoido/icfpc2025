@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id VARCHAR(255) UNIQUE NOT NULL,
     user_name VARCHAR(255) NULL,
-    status ENUM('active', 'completed', 'failed') NOT NULL DEFAULT 'active',
+    status ENUM('active', 'completed', 'failed', 'pending') NOT NULL DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NULL
 );
@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS api_logs (
     response_status INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_session_id (session_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+
+-- Queue table for storing pending select requests
+CREATE TABLE IF NOT EXISTS pending_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id VARCHAR(255) UNIQUE NOT NULL,
+    problem_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
 
