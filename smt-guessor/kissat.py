@@ -35,13 +35,24 @@ def build_cnf(
     N: int,
     D: int = 6,
     progress: bool = False,
+    prefix_steps: Optional[int] = None,
 ) -> Tuple[SatCNF, Dict[str, any]]:
-    # Normalize inputs
-    for room_id, (from_pid, r) in enumerate(zip(plans, results)):
-        if len(r) != len(from_pid) + 1:
+    # Validate and optionally truncate to prefix_steps
+    used_plans: List[List[int]] = []
+    used_results: List[List[int]] = []
+    for idx, (plan, r) in enumerate(zip(plans, results)):
+        if prefix_steps is None:
+            T = len(plan)
+        else:
+            if prefix_steps < 0:
+                raise ValueError("prefix_steps must be non-negative")
+            T = min(prefix_steps, len(plan))
+        if len(r) < T + 1:
             raise ValueError(
-                f"Plan/results length mismatch at {room_id}: len(plan)={len(from_pid)} vs len(results)={len(r)}"
+                f"results[{idx}] too short for requested prefix: need {T+1}, got {len(r)}"
             )
+        used_plans.append(plan[:T])
+        used_results.append(r[: T + 1])
 
     P = D * N
     cnf = SatCNF()
@@ -75,23 +86,17 @@ def build_cnf(
         enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
         cnf.extend(enc.clauses)
 
-    # For the starting room, fix the label to results[0][0]
-    r0_bits = results[0][0]
-    cnf.append([label_assign_var(STARTING_ROOM_ID, r0_bits)])
+    # For the starting room, fix the label to each plan's first observation
+    for obs in used_results:
+        cnf.append([label_assign_var(STARTING_ROOM_ID, int(obs[0]))])
 
-    # Balance the labels: each label should appear at least N/4 times
-    label_counts = [0, 0, 0, 0]
-    label_counts[r0_bits] += 1
-    min_label_count = N // 4
-    for room_id in range(1, N):
-        label_to_assign = None
+    # Balanced distribution: for each label bits in {0,1,2,3}, enforce at least floor(N/4)
+    base = N // 4
+    if base > 0:
         for bits in range(4):
-            if label_counts[bits] < min_label_count:
-                label_to_assign = bits
-                break
-        if label_to_assign is not None:
-            cnf.append([label_assign_var(room_id, label_to_assign)])
-            label_counts[label_to_assign] += 1
+            lits = [label_assign_var(rid, bits) for rid in range(N)]
+            enc = CardEnc.atleast(lits=lits, bound=base, vpool=pool, encoding=EncType.seqcounter)
+            cnf.extend(enc.clauses)
 
 
     # print the number of variables and clauses created for label constraints
@@ -140,8 +145,7 @@ def build_cnf(
 
     # Location variables per plan/time/room
     X: List[List[List[int]]] = []
-    for trace_id, (plan, obs) in enumerate(zip(plans, results)):
-        print(trace_id, plan, obs)
+    for trace_id, (plan, obs) in enumerate(zip(used_plans, used_results)):
 
         T = len(plan)
         x_plan: List[List[int]] = []
@@ -175,7 +179,37 @@ def build_cnf(
                 for to_rid in range(N):
                     m = move_possibility_var(from_pid, to_rid)
                     cnf.append([-X[trace_id][t][from_rid], -m, X[trace_id][t + 1][to_rid]])
-                    # cnf.append([-X[trace_id][t][from_rid], -X[trace_id][t + 1][to_rid]], m)
+                    cnf.append([-X[trace_id][t][from_rid], -X[trace_id][t + 1][to_rid], m])
+                    
+        # Knowledge-based pruning: if the future identical action prefixes diverge in labels,
+        # then positions immediately after t1 and t2 cannot be the same room.
+        added = 0
+        T = len(plan)
+        for t1 in range(T):
+            for t2 in range(t1 + 1, T):
+                if obs[t1 + 1] != obs[t2 + 1]:
+                    continue
+                # find longest k >= 1 such that plan[t1+1..t1+k] == plan[t2+1..t2+k]
+                k = 0
+                j = 1
+                while (t1 + j) < T and (t2 + j) < T and plan[t1 + j] == plan[t2 + j]:
+                    k += 1
+                    j += 1
+                if k == 0:
+                    continue
+                # if any idx in 1..k yields differing observed labels, enforce inequality at t1+1 vs t2+1
+                differing = False
+                for i in range(1, k + 1):
+                    if int(obs[t1 + 1 + i]) != int(obs[t2 + 1 + i]):
+                        differing = True
+                        break
+                if not differing:
+                    continue
+                for rid in range(N):
+                    cnf.append([-X[trace_id][t1 + 1][rid], -X[trace_id][t2 + 1][rid]])
+                    added += 1
+        if progress and added:
+            print(f"[kissat] added {added} pruning binary clauses for trace {trace_id}")
 
 
 
@@ -185,8 +219,8 @@ def build_cnf(
         "N": N,
         "D": D,
         "P": P,
-        "plans": plans,
-        "results": results,
+        "plans": used_plans,
+        "results": used_results,
         "starting_room": 0,
         "pool": pool,
         "port_matching_keys": port_matching_keys,
@@ -200,6 +234,7 @@ def solve_with_kissat(
     cnf: SatCNF,
     time_limit_s: Optional[float] = None,
     progress: bool = False,
+    seed: Optional[int] = None,
 ) -> Tuple[str, Dict[int, bool]]:
     """Solve CNF with external 'kissat' binary. Returns (status, assignment). status in {SAT, UNSAT, UNKNOWN}"""
 
@@ -207,11 +242,14 @@ def solve_with_kissat(
         cnf_path = os.path.join(td, "problem.cnf")
         # write DIMACS using PySAT utility
         cnf.to_file(cnf_path)
-        cmd = ["kissat", "-q", cnf_path]
+        cmd = ["kissat", "-q"]
         # Try to pass time limit if supported
         if time_limit_s and time_limit_s > 0:
             # Many builds support '--time=SECONDS'
-            cmd = ["kissat", f"--time={int(time_limit_s)}", cnf_path]
+            cmd.append(f"--time={int(time_limit_s)}")
+        if seed is not None:
+            cmd.append(f"--seed={int(seed)}")
+        cmd.append(cnf_path)
         if progress:
             print("[kissat] Running:", " ".join(cmd))
         try:
@@ -233,7 +271,6 @@ def solve_with_kissat(
     # parse 'v ' model lines
     model_lits: List[int] = []
     for line in stdout.splitlines():
-        print(line)
         line = line.strip()
         if line.startswith("v ") or line.startswith("V "):
             parts = line[1:].split()
@@ -370,6 +407,8 @@ def main() -> None:
     parser.add_argument("--input", "-i", type=str, help="Input JSON (stdin if omitted)")
     parser.add_argument("--output", "-o", type=str, help="Output JSON (stdout if omitted)")
     parser.add_argument("--time", type=float, default=600.0, help="Time limit in seconds")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed passed to Kissat (--seed)")
+    parser.add_argument("--prefix-steps", type=int, default=None, help="Use only the first K steps of each plan when building CNF")
     parser.add_argument("--progress", "-p", action="store_true", help="Print progress logs")
     args = parser.parse_args()
 
@@ -385,13 +424,16 @@ def main() -> None:
 
     if args.progress:
         print(f"[kissat] Building CNF… N={N}, plans={len(plans)}, time={args.time}s")
-    cnf, meta = build_cnf(plans, results, N, progress=args.progress)
+    if args.progress and args.prefix_steps is not None:
+        print(f"[kissat] Using only the first {args.prefix_steps} steps of each plan")
+    cnf, meta = build_cnf(plans, results, N, progress=args.progress, prefix_steps=args.prefix_steps)
     if args.progress:
         print("[kissat] Solving…")
     status, assign = solve_with_kissat(
         cnf,
         time_limit_s=args.time,
         progress=args.progress,
+        seed=args.seed,
     )
     if args.progress:
         print(f"[kissat] Solve status: {status}")
@@ -400,7 +442,9 @@ def main() -> None:
         out = {"status": 0, "error": f"Kissat returned {status}"}
     else:
         out = extract_solution(meta, assign)
-        # Post-verify the solution against input plans/results
+        # Post-verify against FULL plans/results (not truncated by --prefix-steps)
+        if args.progress and args.prefix_steps is not None:
+            print("[verify] Using full plans/results for verification (ignoring prefix truncation).")
         ok, errs = verify_solution(plans, results, N, out, progress=args.progress)
         out["verified"] = bool(ok)
         if not ok:
