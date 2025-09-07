@@ -8,6 +8,7 @@ import json
 import os
 import random
 import sys
+import time
 from typing import Any
 
 import click
@@ -74,23 +75,38 @@ class API:
         self.client_secret = client_secret
         self.user_name = user_name
 
-    def make_request(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
-        """APIリクエストを送信し、レスポンスを返す"""
+    def make_request(
+        self,
+        endpoint: str,
+        data: dict[str, Any],
+        max_retries: int = 10,
+    ) -> dict[str, Any] | None:
+        """APIリクエストを送信し、レスポンスを返す
+
+        500系エラーに限って max_retries 回までリトライする
+        """
         url = f"{self.base_url}{endpoint}"
-        try:
-            headers = {
-                "CF-Access-Client-Id": self.client_id,
-                "CF-Access-Client-Secret": self.client_secret,
-            }
-            data = {key: val for key, val in data.items() if val}
-            response = requests.post(url, json=data, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            click.secho(e, err=True, fg="red")
-            if e.response is not None:
-                click.secho(f"{e.response.text}", err=True, fg="red")
-            sys.exit(1)
+        headers = {
+            "CF-Access-Client-Id": self.client_id,
+            "CF-Access-Client-Secret": self.client_secret,
+        }
+        data = {key: val for key, val in data.items() if val}
+        for _try in range(max_retries):
+            try:
+                response = requests.post(url, json=data, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                click.secho(e, err=True, fg="red")
+                if e.response is not None:
+                    click.secho(f"{e.response.text}", err=True, fg="red")
+                    if e.response.status_code >= 500:
+                        click.secho(
+                            f"Retrying... [{_try}/{max_retries}]", err=True, fg="yellow"
+                        )
+                        time.sleep(0.1)
+                        continue
+                sys.exit(1)
 
     def select(self, problem_name: str) -> dict[str, Any]:
         data = {
