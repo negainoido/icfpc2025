@@ -229,30 +229,22 @@ def solve_with_kissat(
     cnf: CNF,
     time_limit_s: Optional[float] = None,
     progress: bool = False,
-    kissat_bin: Optional[str] = None,
 ) -> Tuple[str, Dict[int, bool]]:
     """Solve CNF with external 'kissat' binary. Returns (status, assignment). status in {SAT, UNSAT, UNKNOWN}"""
     # Locate kissat binary
-    bin_path: Optional[str] = None
-    if kissat_bin:
-        if os.path.isfile(kissat_bin) and os.access(kissat_bin, os.X_OK):
-            bin_path = kissat_bin
-        else:
-            raise RuntimeError(f"Specified --kissat-bin is not executable: {kissat_bin}")
-    else:
-        bin_path = shutil.which("kissat")
-        if not bin_path:
-            # Try alongside current Python (venv bin)
-            py_dir = os.path.dirname(sys.executable)
-            cand = os.path.join(py_dir, "kissat")
-            if os.path.isfile(cand) and os.access(cand, os.X_OK):
-                bin_path = cand
-        if not bin_path:
-            raise RuntimeError(
-                "'kissat' binary not found. Install it (e.g., 'brew install kissat' on macOS, 'apt install kissat' on Debian/Ubuntu),\n"
-                "or 'pip install passagemath-kissat' (which provides a 'kissat' console script),\n"
-                "or pass its path via --kissat-bin /path/to/kissat."
-            )
+    bin_path = shutil.which("kissat")
+    if not bin_path:
+        # Try alongside current Python (venv bin)
+        py_dir = os.path.dirname(sys.executable)
+        cand = os.path.join(py_dir, "kissat")
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            bin_path = cand
+    if not bin_path:
+        raise RuntimeError(
+            "'kissat' binary not found. Install it (e.g., 'brew install kissat' on macOS, 'apt install kissat' on Debian/Ubuntu),\n"
+            "or 'pip install passagemath-kissat' (which provides a 'kissat' console script),\n"
+            "or pass its path via --kissat-bin /path/to/kissat."
+        )
 
     dimacs = cnf_to_dimacs(cnf)
     with tempfile.TemporaryDirectory() as td:
@@ -343,10 +335,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Ædificium SAT solver via Kissat")
     parser.add_argument("--input", "-i", type=str, help="Input JSON (stdin if omitted)")
     parser.add_argument("--output", "-o", type=str, help="Output JSON (stdout if omitted)")
-    parser.add_argument("--N", type=int, help="Override N (rooms)")
-    parser.add_argument("--start", type=int, default=None, help="Override startingRoom")
     parser.add_argument("--time", type=float, default=600.0, help="Time limit in seconds")
-    parser.add_argument("--kissat-bin", type=str, default=None, help="Path to kissat binary (overrides PATH search)")
     parser.add_argument("--progress", "-p", action="store_true", help="Print progress logs")
     args = parser.parse_args()
 
@@ -358,10 +347,8 @@ def main() -> None:
 
     plans = data["plans"]
     results = data["results"]
-    N = args.N if args.N is not None else data.get("N")
-    if N is None:
-        raise SystemExit("N must be provided")
-    starting_room = args.start if args.start is not None else data.get("startingRoom", 0)
+    N = data["N"]
+    starting_room = 0
 
     if args.progress:
         print(f"[kissat] Building CNF… N={N}, plans={len(plans)}, time={args.time}s")
@@ -372,7 +359,6 @@ def main() -> None:
         cnf,
         time_limit_s=args.time,
         progress=args.progress,
-        kissat_bin=args.kissat_bin,
     )
     if args.progress:
         print(f"[kissat] Solve status: {status}")
