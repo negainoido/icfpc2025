@@ -30,16 +30,14 @@ def normalize_plan(plan: str) -> List[int]:
 
 
 def build_cnf(
-    plans: List[str],
+    plans: List[List[int]],
     results: List[List[int]],
     N: int,
     D: int = 6,
     progress: bool = False,
 ) -> Tuple[SatCNF, Dict[str, any]]:
     # Normalize inputs
-    norm_plans = [normalize_plan(p) for p in plans]
-    print(norm_plans)
-    for room_id, (from_pid, r) in enumerate(zip(norm_plans, results)):
+    for room_id, (from_pid, r) in enumerate(zip(plans, results)):
         if len(r) != len(from_pid) + 1:
             raise ValueError(
                 f"Plan/results length mismatch at {room_id}: len(plan)={len(from_pid)} vs len(results)={len(r)}"
@@ -140,7 +138,7 @@ def build_cnf(
 
     # Location variables per plan/time/room
     X: List[List[List[int]]] = []
-    for trace_id, (plan, obs) in enumerate(zip(norm_plans, results)):
+    for trace_id, (plan, obs) in enumerate(zip(plans, results)):
         print(trace_id, plan, obs)
 
         T = len(plan)
@@ -185,7 +183,7 @@ def build_cnf(
         "N": N,
         "D": D,
         "P": P,
-        "plans": norm_plans,
+        "plans": plans,
         "results": results,
         "starting_room": 0,
         "pool": pool,
@@ -308,7 +306,7 @@ def main() -> None:
     else:
         data = json.load(sys.stdin)
 
-    plans = data["plans"]
+    plans = [normalize_plan(p) for p in data["plans"]]
     results = data["results"]
     N = data["N"]
 
