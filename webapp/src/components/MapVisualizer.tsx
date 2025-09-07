@@ -28,8 +28,11 @@ export default function MapVisualizer({
 
   // Calculate layout and hexagons
   const { hexagons, bounds, hexRadius } = useMemo(() => {
-    const containerWidth = 800;
-    const containerHeight = 400;
+    // Use a virtual canvas scaled by room count so large maps spread out.
+    const n = Math.max(1, map.rooms.length);
+    const scale = Math.sqrt(n / 12); // baseline at 12 rooms
+    const containerWidth = Math.round(1200 * scale);
+    const containerHeight = Math.round(900 * scale);
     const roomLayout = calculateRoomLayout(
       map,
       containerWidth,
