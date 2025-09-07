@@ -403,6 +403,15 @@ const SessionsPage = () => {
                     <th
                       style={{
                         padding: '12px',
+                        textAlign: 'right',
+                        borderBottom: '2px solid #dee2e6',
+                      }}
+                    >
+                      スコア
+                    </th>
+                    <th
+                      style={{
+                        padding: '12px',
                         textAlign: 'left',
                         borderBottom: '2px solid #dee2e6',
                       }}
@@ -467,6 +476,17 @@ const SessionsPage = () => {
                       </td>
                       <td style={{ padding: '12px' }}>
                         {session.user_name || '-'}
+                      </td>
+                      <td
+                        style={{
+                          padding: '12px',
+                          textAlign: 'right',
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {session.score != null
+                          ? session.score.toLocaleString()
+                          : '-'}
                       </td>
                       <td style={{ padding: '12px' }}>
                         <span

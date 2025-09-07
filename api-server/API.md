@@ -140,6 +140,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
       "session_id": "uuid-string",
       "user_name": "ユーザー名（null可）",
       "problem_name": "問題名（null可）",
+      "score": 100,
       "status": "completed",
       "created_at": "2025-09-06T01:00:00Z",
       "completed_at": "2025-09-06T01:30:00Z"
