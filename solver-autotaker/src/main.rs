@@ -3,6 +3,7 @@ use clap::Parser;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -47,6 +48,14 @@ struct Args {
     #[arg(long)]
     save_every: Option<usize>,
 
+    /// JSONL log file path (append). If set, emits run_start/tick/hist/stop events.
+    #[arg(long)]
+    jsonl_log: Option<String>,
+
+    /// JSONL stats window (ticks every this many proposals). If omitted, uses --log-every; fallback 100000.
+    #[arg(long)]
+    jsonl_window: Option<usize>,
+
     /// Initial temperature
     #[arg(long, default_value_t = 1.0_f32)]
     t0: f32,
@@ -70,10 +79,6 @@ struct Args {
     /// Temperature to reset to on reheat
     #[arg(long)]
     reheat_to: Option<f32>,
-
-    /// Probability of random relabel move (low)
-    #[arg(long, default_value_t = 0.05_f32)]
-    p_relabel: f32,
 
     /// Probability of 3-edge loop-change rewire move
     #[arg(long, default_value_t = 0.05_f32)]
@@ -128,7 +133,6 @@ struct Instance {
 
 #[derive(Clone)]
 struct Model {
-    labels: Vec<Label>,     // λ(q)
     match_to: Vec<usize>,   // μ: involution on 0..6N-1, μ[μ[p]]==p
 }
 
@@ -213,25 +217,8 @@ fn validate_instance(n: usize, s0: usize, plans: &[Vec<Door>], results: &[Vec<La
     Ok(())
 }
 
-fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
+fn build_initial(inst: &Instance, _rng: &mut StdRng) -> Model {
     let n = inst.n;
-    // Balanced labels (±1)
-    let mut labels = vec![0u8; n];
-    let m = (n / 4) as usize;
-    let r = (n % 4) as usize;
-    let mut pool: Vec<Label> = Vec::with_capacity(n);
-    for l in 0..4u8 {
-        let cnt = m + if (l as usize) < r { 1 } else { 0 };
-        for _ in 0..cnt { pool.push(l); }
-    }
-    pool.shuffle(rng);
-    for (i, &v) in pool.iter().enumerate() { labels[i] = v; }
-
-    // Optionally enforce starting room label to match observed (use first plan's first label if any)
-    if let Some(first) = inst.results.get(0).and_then(|v| v.first()).copied() {
-        if first <= 3 { labels[inst.s0] = first; }
-    }
-
     // match_to initialized to invalid
     let mut match_to = vec![usize::MAX; n * 6];
     // free bitmask per room: 6 bits set means free
@@ -260,11 +247,10 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
         match_to[j] = i;
     }
 
-    // Build by tracing plans: wire (q, a) -> some q_to whose label matches next observed label
-    for (plan, obs) in inst.plans.iter().zip(inst.results.iter()) {
+    // Build by tracing plans: wire (q, a) to some available destination port greedily
+    for plan in inst.plans.iter() {
         let mut q = inst.s0;
-        for (i, &a) in plan.iter().enumerate() {
-            let want = obs[i + 1];
+        for &a in plan.iter() {
             let p_from = to_port(q, a);
             // ensure from port is still free, otherwise skip (will close later)
             let from_free = (free[q] & (1u8 << a)) != 0;
@@ -279,16 +265,9 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
                 }
                 continue;
             }
-
-            // choose destination room with label want and free port
+            // choose any destination room with a free port
             let mut q_to: Option<usize> = None;
-            for cand in 0..n {
-                if labels[cand] == want && free[cand] != 0 { q_to = Some(cand); break; }
-            }
-            if q_to.is_none() {
-                // fallback: any room with free port
-                for cand in 0..n { if free[cand] != 0 { q_to = Some(cand); break; } }
-            }
+            for cand in 0..n { if free[cand] != 0 { q_to = Some(cand); break; } }
             if let Some(q2) = q_to {
                 // pick destination port, prefer opposite
                 let pref = ((a as u8 + 3) % 6) as u8;
@@ -332,49 +311,80 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
         match_to[p] = p;
     }
 
-    Model { labels, match_to }
+    Model { match_to }
 }
 
-fn simulate(model: &Model, s0: Room, plan: &[Door]) -> Vec<Label> {
+fn trace_rooms(match_to: &[usize], s0: Room, plan: &[Door]) -> Vec<Room> {
     let mut q = s0;
     let mut out = Vec::with_capacity(plan.len() + 1);
-    out.push(model.labels[q]);
+    out.push(q);
+    let n_ports = match_to.len();
     for &a in plan {
         let p = to_port(q, a);
-        let p2 = model.match_to[p.0];
-        if p2 >= model.match_to.len() { // sanitize on the fly (shouldn't happen after finalize)
-            // treat as self-loop to stay in the same room
-            out.push(model.labels[q]);
-            continue;
-        }
+        let p2 = if p.0 < n_ports { match_to[p.0] } else { p.0 };
+        let p2 = if p2 < n_ports { p2 } else { p.0 };
         let (q2, _c2) = from_port(PortIdx(p2));
         q = q2;
-        out.push(model.labels[q]);
+        out.push(q);
     }
     out
 }
 
-fn energy(inst: &Instance, m: &Model, lambda_bal: f32) -> Energy {
-    // obs mismatch
+// Infer labels greedily by following all traces, enforcing strict quotas N//4 (+1 for first N%4 labels)
+fn infer_labels(inst: &Instance, match_to: &[usize]) -> Vec<Label> {
+    let n = inst.n;
+    let mut labels: Vec<Option<Label>> = vec![None; n];
+    let base = (n / 4) as i32;
+    let rem = (n % 4) as usize;
+    let mut remain = [0i32; 4];
+    for l in 0..4usize { remain[l] = base + if l < rem { 1 } else { 0 }; }
+
+    // helper to assign label if not set
+    let mut set_label = |q: usize, want: Label| {
+        if labels[q].is_some() { return; }
+        let wl = want as usize;
+        if remain[wl] > 0 { labels[q] = Some(want); remain[wl] -= 1; return; }
+        // pick any other label with remaining quota
+        for l in 0..4usize {
+            if l == wl { continue; }
+            if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; return; }
+        }
+        // as a last resort (shouldn't happen), assign the first label
+        if labels[q].is_none() { labels[q] = Some(0); }
+    };
+
+    // Traverse all plans and assign greedily
+    for (plan, expect) in inst.plans.iter().zip(inst.results.iter()) {
+        let path = trace_rooms(match_to, inst.s0, plan);
+        for (room, lab) in path.into_iter().zip(expect.iter().copied()) {
+            set_label(room, lab);
+        }
+    }
+
+    // Fill any remaining unlabeled rooms with leftover quotas
+    for q in 0..n {
+        if labels[q].is_none() {
+            for l in 0..4usize {
+                if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; break; }
+            }
+            if labels[q].is_none() { labels[q] = Some(0); }
+        }
+    }
+
+    labels.into_iter().map(|x| x.unwrap_or(0)).collect()
+}
+
+fn energy(inst: &Instance, m: &Model, _lambda_bal: f32) -> Energy {
+    // Greedily infer labels with strict quotas, then count observation mismatches
+    let labels = infer_labels(inst, &m.match_to);
     let mut obs: i32 = 0;
     for (plan, expect) in inst.plans.iter().zip(inst.results.iter()) {
-        let got = simulate(m, inst.s0, plan);
-        for (g, &e) in got.iter().zip(expect.iter()) { if *g != e { obs += 1; } }
+        let path = trace_rooms(&m.match_to, inst.s0, plan);
+        for (room, &e) in path.into_iter().zip(expect.iter()) {
+            if labels[room] != e { obs += 1; }
+        }
     }
-    // balance
-    let mut cnt = [0i32; 4];
-    for &l in &m.labels { cnt[l as usize] += 1; }
-    let n = inst.n as i32;
-    let base = n / 4;
-    let rem = (n % 4) as usize;
-    let mut balance = 0i32;
-    for l in 0..4usize {
-        let target = base + if l < rem as usize { 1 } else { 0 };
-        let d = cnt[l] - target;
-        balance += d * d;
-    }
-    let balance = ((lambda_bal * balance as f32).round() as i32).max(0);
-    Energy { obs, balance, total: obs + balance }
+    Energy { obs, balance: 0, total: obs }
 }
 
 fn two_opt(m: &mut Model, p1: usize, p2: usize) {
@@ -398,6 +408,203 @@ fn two_opt_b(m: &mut Model, p1: usize, p2: usize) {
 
 // removed unused swap_labels helper
 
+#[inline]
+fn should_accept(d_total: i32, t: f32, rng: &mut StdRng) -> bool {
+    let d = d_total as f32;
+    d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp()
+}
+
+#[inline]
+fn update_after_accept(
+    new_e: Energy,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    model: &Model,
+    last_best_iter: &mut usize,
+    k: usize,
+    since_log_accepts: &mut usize,
+) {
+    *cur = new_e;
+    *since_log_accepts += 1;
+    if new_e.total < best.total {
+        *best = new_e;
+        *best_model = model.clone();
+        *last_best_iter = k;
+    }
+}
+
+fn try_two_opt(
+    inst: &Instance,
+    model: &mut Model,
+    rng: &mut StdRng,
+    t: f32,
+    verbose: u8,
+    lambda_bal: f32,
+    k: usize,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    last_best_iter: &mut usize,
+    since_log_accepts: &mut usize,
+    ws: Option<&mut WindowStats>,
+) -> bool {
+    let n_ports = inst.n * 6;
+    let p1 = rng.gen_range(0..n_ports);
+    let mut p2 = rng.gen_range(0..n_ports);
+    if p2 == p1 { p2 = (p2 + 1) % n_ports; }
+
+    let a = p1;
+    let b = model.match_to[a];
+    let c = p2;
+    let d = model.match_to[c];
+
+    // Skip if either edge is a self-loop or edges overlap (would break involution)
+    if a == b || c == d || a == c || a == d || b == c || b == d {
+        return false;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
+    }
+
+    let old_a = b;
+    let old_c = d;
+    let pattern_b: bool = rng.gen_bool(0.5);
+    if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
+
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
+    }
+    let new_e = energy(inst, model, lambda_bal);
+    let d_total = new_e.total - cur.total;
+    let accept = should_accept(d_total, t, rng);
+    if verbose >= 2 {
+        eprintln!(
+            "dbg: mv=2opt patB={} a={} b={} c={} d={} dE={} T={:.4} acc={} cur->new {}->{}",
+            pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
+        );
+    }
+    if let Some(w) = ws { w.record("two_opt", d_total, accept); }
+    if accept {
+        update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+    } else {
+        // revert
+        model.match_to[a] = old_a;
+        model.match_to[old_a] = a;
+        model.match_to[c] = old_c;
+        model.match_to[old_c] = c;
+
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(check_involution(model), "post two_opt revert: involution broken");
+        }
+    }
+    true
+}
+
+fn try_loopmove(
+    inst: &Instance,
+    model: &mut Model,
+    rng: &mut StdRng,
+    t: f32,
+    verbose: u8,
+    lambda_bal: f32,
+    k: usize,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    last_best_iter: &mut usize,
+    since_log_accepts: &mut usize,
+    ws: Option<&mut WindowStats>,
+) -> bool {
+    let n_ports = inst.n * 6;
+    let dir_pair_to_loops: bool = rng.gen_bool(0.5);
+    if dir_pair_to_loops {
+        for _try in 0..16 {
+            let a = rng.gen_range(0..n_ports);
+            let b = model.match_to[a];
+            if a == b { continue; }
+            let c = rng.gen_range(0..n_ports);
+            let d = model.match_to[c];
+            if c == d { continue; }
+            if a == c || a == d || b == c || b == d { continue; }
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            // (a-b),(c-d) -> (a-a),(c-c),(b-d)
+            model.match_to[a] = a;
+            model.match_to[b] = d;
+            model.match_to[d] = b;
+            model.match_to[c] = c;
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            let new_e = energy(inst, model, lambda_bal);
+            let d_total = new_e.total - cur.total;
+            let accept = should_accept(d_total, t, rng);
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=loopmove dir=pair->loops a={} b={} c={} d={} dE={} T={:.4} acc={} {}->{}",
+                    a, b, c, d, d_total, t, accept, cur.total, new_e.total
+                );
+            }
+            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
+            if accept {
+                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+            } else {
+                // revert
+                model.match_to[a] = b;
+                model.match_to[b] = a;
+                model.match_to[c] = d;
+                model.match_to[d] = c;
+            }
+            return true;
+        }
+        false
+    } else {
+        for _try in 0..16 {
+            let a = rng.gen_range(0..n_ports);
+            if model.match_to[a] != a { continue; }
+            let c = rng.gen_range(0..n_ports);
+            if c == a || model.match_to[c] != c { continue; }
+            let b = rng.gen_range(0..n_ports);
+            let d = model.match_to[b];
+            if b == d || b == a || b == c || d == a || d == c { continue; }
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            // (a-a),(c-c),(b-d) -> (a-b),(c-d)
+            model.match_to[a] = b;
+            model.match_to[b] = a;
+            model.match_to[c] = d;
+            model.match_to[d] = c;
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            let new_e = energy(inst, model, lambda_bal);
+            let d_total = new_e.total - cur.total;
+            let accept = should_accept(d_total, t, rng);
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=loopmove dir=loops->pair a={} c={} b={} d={} dE={} T={:.4} acc={} {}->{}",
+                    a, c, b, d, d_total, t, accept, cur.total, new_e.total
+                );
+            }
+            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
+            if accept {
+                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+            } else {
+                // revert
+                model.match_to[a] = a;
+                model.match_to[c] = c;
+                model.match_to[b] = d;
+                model.match_to[d] = b;
+            }
+            return true;
+        }
+        false
+    }
+}
+
 fn anneal(
     inst: &Instance,
     model: &mut Model,
@@ -414,8 +621,9 @@ fn anneal(
     tmin: f32,
     reheat_every: Option<usize>,
     reheat_to: Option<f32>,
-    p_relabel: f32,
     p_loopmove: f32,
+    mut jsonl: Option<&mut JsonlLogger>,
+    run_seed: Option<u64>,
 ) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
@@ -429,6 +637,13 @@ fn anneal(
     let mut since_log_moves: usize = 0;
     let mut since_log_accepts: usize = 0;
     let mut last_best_iter: usize = 0;
+    // JSONL run_start
+    let mut ws_opt: Option<WindowStats> = None;
+    if let Some(lg) = jsonl.as_mut() {
+        lg.run_start(iters, t0, tmin, run_seed);
+        let edges = lg.edges.clone();
+        ws_opt = Some(WindowStats::new(edges));
+    }
     if verbose > 0 {
         eprintln!(
             "anneal: start E={} (obs={}, bal={}), N={}, ports={}",
@@ -436,213 +651,44 @@ fn anneal(
         );
     }
     for k in 0..iters {
-        if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
-        // randomly choose move
+        if let Some(limit) = time_limit { if start_t.elapsed() >= limit { 
+            if let Some(lg) = jsonl.as_mut() {
+                if let Some(ws) = ws_opt.as_ref() {
+                    if ws.total_prop > 0 {
+                        let mut ws_tmp = ws.clone();
+                        let elapsed_ms = start_t.elapsed().as_millis();
+                        lg.tick(k, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                        lg.hist(k, t, &ws_tmp);
+                    }
+                }
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.stop("time_budget", k, t, cur.total, best.total, elapsed_ms);
+            }
+            break; 
+        } }
         let mv: f32 = rng.r#gen();
-        let p_relabel = p_relabel.clamp(0.0, 1.0);
         let p_loopmove = p_loopmove.clamp(0.0, 1.0);
-        let mut p_swap = 0.30_f32;
-        if p_swap + p_relabel + p_loopmove > 1.0 { p_swap = (1.0 - p_relabel - p_loopmove).max(0.0); }
-        let p_two_opt = (1.0 - p_swap - p_relabel - p_loopmove).max(0.0);
-        if mv < p_two_opt {
-            // 2-opt move (only on two distinct, non-loop edges)
-            let p1 = rng.gen_range(0..n_ports);
-            let mut p2 = rng.gen_range(0..n_ports);
-            if p2 == p1 { p2 = (p2 + 1) % n_ports; }
-
-            let a = p1;
-            let b = model.match_to[a];
-            let c = p2;
-            let d = model.match_to[c];
-
-            // Skip if either edge is a self-loop or edges overlap (would break involution)
-            // Edges must be (a<->b) and (c<->d) with all of a,b,c,d pairwise distinct
-            if a == b || c == d || a == c || a == d || b == c || b == d {
-                continue;
-            }
-
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
-            }
-
-            let old_a = b;
-            let old_c = d;
-            let pattern_b: bool = rng.gen_bool(0.5);
-            if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
-
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
-            }
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=2opt patB={} a={} b={} c={} d={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                // revert
-                model.match_to[a] = old_a;
-                model.match_to[old_a] = a;
-                model.match_to[c] = old_c;
-                model.match_to[old_c] = c;
-
-                #[cfg(debug_assertions)]
-                {
-                    debug_assert!(check_involution(model), "post two_opt revert: involution broken");
-                }
-            }
-        } else if mv < p_two_opt + p_swap {
-            // label swap
-            let q1 = rng.gen_range(0..inst.n);
-            let mut q2 = rng.gen_range(0..inst.n);
-            if q2 == q1 { q2 = (q2 + 1) % inst.n; }
-            model.labels.swap(q1, q2);
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=swap q1={} q2={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    q1, q2, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                model.labels.swap(q1, q2);
-            }
-        } else if mv < p_two_opt + p_swap + p_relabel {
-            // random relabel: pick a room and set a random new label != old
-            let q = rng.gen_range(0..inst.n);
-            let old_l = model.labels[q];
-            let r: u8 = rng.gen_range(1..=3); // 1..=3 then add to old and mod 4 ensures != old
-            let new_l: u8 = ((old_l as u8 + r) % 4) as u8;
-            model.labels[q] = new_l;
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=relabel q={} old={} new={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    q, old_l, new_l, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                model.labels[q] = old_l;
-            }
+        let applied = if mv >= p_loopmove {
+            try_two_opt(
+                inst, model, rng, t, verbose, lambda_bal, k,
+                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
+                ws_opt.as_mut()
+            )
         } else {
-            // loop-change 3-edge move: pair->loops or loops->pair
-            let dir_pair_to_loops: bool = rng.gen_bool(0.5);
-            let mut applied = false;
-
-            if dir_pair_to_loops {
-                // pick two distinct non-loop edges (a-b) and (c-d), all endpoints distinct
-                for _try in 0..16 {
-                    let a = rng.gen_range(0..n_ports);
-                    let b = model.match_to[a];
-                    if a == b { continue; }
-                    let c = rng.gen_range(0..n_ports);
-                    let d = model.match_to[c];
-                    if c == d { continue; }
-                    if a == c || a == d || b == c || b == d { continue; }
-                    // apply: (a-b),(c-d) -> (a-a),(c-c),(b-d)
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    model.match_to[a] = a;
-                    model.match_to[b] = d;
-                    model.match_to[d] = b;
-                    model.match_to[c] = c;
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    let new_e = energy(inst, model, lambda_bal);
-                    let d_total = new_e.total - cur.total;
-                    let d_f = d_total as f32;
-                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
-                    if verbose >= 2 {
-                        eprintln!(
-                            "dbg: mv=loopmove dir=pair->loops a={} b={} c={} d={} dE={} T={:.4} acc={} {}->{}",
-                            a, b, c, d, d_total, t, accept, cur.total, new_e.total
-                        );
-                    }
-                    if accept {
-                        cur = new_e;
-                        since_log_accepts += 1;
-                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-                    } else {
-                        // revert to original: (a-b),(c-d)
-                        model.match_to[a] = b;
-                        model.match_to[b] = a;
-                        model.match_to[c] = d;
-                        model.match_to[d] = c;
-                    }
-                    applied = true;
-                    break;
-                }
-            } else {
-                // loops->pair: pick two loops (a-a),(c-c) and one non-loop (b-d) -> (a-b),(c-d)
-                for _try in 0..16 {
-                    let a = rng.gen_range(0..n_ports);
-                    if model.match_to[a] != a { continue; }
-                    let c = rng.gen_range(0..n_ports);
-                    if c == a || model.match_to[c] != c { continue; }
-                    let b = rng.gen_range(0..n_ports);
-                    let d = model.match_to[b];
-                    if b == d || b == a || b == c || d == a || d == c { continue; }
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    // apply: (a-a),(c-c),(b-d) -> (a-b),(c-d)
-                    model.match_to[a] = b;
-                    model.match_to[b] = a;
-                    model.match_to[c] = d;
-                    model.match_to[d] = c;
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    let new_e = energy(inst, model, lambda_bal);
-                    let d_total = new_e.total - cur.total;
-                    let d_f = d_total as f32;
-                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
-                    if verbose >= 2 {
-                        eprintln!(
-                            "dbg: mv=loopmove dir=loops->pair a={} c={} b={} d={} dE={} T={:.4} acc={} {}->{}",
-                            a, c, b, d, d_total, t, accept, cur.total, new_e.total
-                        );
-                    }
-                    if accept {
-                        cur = new_e;
-                        since_log_accepts += 1;
-                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-                    } else {
-                        // revert to original
-                        model.match_to[a] = a;
-                        model.match_to[c] = c;
-                        model.match_to[b] = d;
-                        model.match_to[d] = b;
-                    }
-                    applied = true;
-                    break;
-                }
-            }
-            if !applied {
-                // fall back: do nothing this iter
-                continue;
+            try_loopmove(
+                inst, model, rng, t, verbose, lambda_bal, k,
+                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
+                ws_opt.as_mut()
+            )
+        };
+        if !applied { continue; }
+        // JSONL: emit tick+hist per window proposals
+        if let (Some(lg), Some(ws)) = (jsonl.as_mut(), ws_opt.as_mut()) {
+            if ws.total_prop >= lg.window {
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.tick(k + 1, t, cur.total, best.total, elapsed_ms, ws);
+                lg.hist(k + 1, t, ws);
+                ws.reset();
             }
         }
         since_log_moves += 1;
@@ -653,7 +699,7 @@ fn anneal(
             // Save an additional snapshot following the same naming rule as other snapshots
             if let Some(base) = save_base {
                 let save_path = derive_save_path(base, k + 1);
-                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                if let Err(e) = write_output_path(inst, &best_model, inst.s0 as usize, &save_path) {
                     if verbose > 0 {
                         eprintln!("warn: failed to save {}: {}", save_path.display(), e);
                     }
@@ -663,6 +709,18 @@ fn anneal(
             }
             if verbose > 0 {
                 eprintln!("anneal: reached E=0 at it={}", k + 1);
+            }
+            if let Some(lg) = jsonl.as_mut() {
+                if let Some(ws) = ws_opt.as_ref() {
+                    if ws.total_prop > 0 {
+                        let mut ws_tmp = ws.clone();
+                        let elapsed_ms = start_t.elapsed().as_millis();
+                        lg.tick(k + 1, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                        lg.hist(k + 1, t, &ws_tmp);
+                    }
+                }
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.stop("reached_optimum", k + 1, t, cur.total, best.total, elapsed_ms);
             }
             break;
         }
@@ -705,7 +763,7 @@ fn anneal(
             if every > 0 && (k + 1) % every == 0 {
                 // Save best-so-far
                 let save_path = derive_save_path(base, k + 1);
-                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                if let Err(e) = write_output_path(inst, &best_model, inst.s0 as usize, &save_path) {
                     if verbose > 0 {
                         eprintln!("warn: failed to save {}: {}", save_path.display(), e);
                     }
@@ -722,11 +780,24 @@ fn anneal(
             best.total, best.obs, best.balance, start_t.elapsed().as_secs_f32()
         );
     }
+    if let Some(lg) = jsonl.as_mut() {
+        if let Some(ws) = ws_opt.as_ref() {
+            if ws.total_prop > 0 {
+                let mut ws_tmp = ws.clone();
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.tick(iters, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                lg.hist(iters, t, &ws_tmp);
+            }
+        }
+        let elapsed_ms = start_t.elapsed().as_millis();
+        lg.stop("completed", iters, t, cur.total, best.total, elapsed_ms);
+    }
     best
 }
 
-fn emit_output(model: &Model, s0: Room) -> OutputMap {
-    let n = model.labels.len();
+fn emit_output(inst: &Instance, model: &Model, s0: Room) -> OutputMap {
+    let n = inst.n;
+    let labels = infer_labels(inst, &model.match_to);
     let mut conns: Vec<Connection> = Vec::new();
     for p in 0..(n * 6) {
         let q = model.match_to[p];
@@ -738,7 +809,7 @@ fn emit_output(model: &Model, s0: Room) -> OutputMap {
             to: PortRef { room: rq2, door: dc2 as usize },
         });
     }
-    OutputMap { rooms: model.labels.clone(), starting_room: s0, connections: conns }
+    OutputMap { rooms: labels, starting_room: s0, connections: conns }
 }
 
 fn finalize_match_to(model: &mut Model) {
@@ -768,13 +839,180 @@ fn derive_save_path(base: &Path, iter: usize) -> PathBuf {
     dir.join(name)
 }
 
-fn write_output_path(model: &Model, s0: usize, path: &Path) -> Result<()> {
-    let out = emit_output(model, s0);
+fn write_output_path(inst: &Instance, model: &Model, s0: usize, path: &Path) -> Result<()> {
+    let out = emit_output(inst, model, s0);
     let serialized = serde_json::to_string_pretty(&out)?;
     if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { fs::create_dir_all(parent)?; } }
     fs::write(path, serialized)?;
     Ok(())
 }
+
+// --- Minimal JSONL logging -------------------------------------------------
+
+#[derive(Default, Clone)]
+struct NeighborAgg { prop: usize, acc: usize, sum_de: i64 }
+
+#[derive(Clone)]
+struct WindowStats {
+    total_prop: usize,
+    total_acc: usize,
+    two_opt: NeighborAgg,
+    loopmove: NeighborAgg,
+    edges: Vec<f64>,
+    hist_prop: Vec<u64>,
+    hist_acc: Vec<u64>,
+}
+
+impl WindowStats {
+    fn new(edges: Vec<f64>) -> Self {
+        let m = edges.len().saturating_sub(1).max(1);
+        Self {
+            total_prop: 0,
+            total_acc: 0,
+            two_opt: NeighborAgg::default(),
+            loopmove: NeighborAgg::default(),
+            edges,
+            hist_prop: vec![0; m],
+            hist_acc: vec![0; m],
+        }
+    }
+    fn reset(&mut self) {
+        self.total_prop = 0;
+        self.total_acc = 0;
+        self.two_opt = NeighborAgg::default();
+        self.loopmove = NeighborAgg::default();
+        self.hist_prop.fill(0);
+        self.hist_acc.fill(0);
+    }
+    fn bin_index(&self, de: f64) -> usize {
+        let n = self.edges.len();
+        for i in 0..(n - 1) {
+            if de <= self.edges[i + 1] { return i; }
+        }
+        n - 2
+    }
+    fn record(&mut self, kind: &str, de: i32, accepted: bool) {
+        self.total_prop += 1;
+        let de_f = de as f64;
+        let idx = self.bin_index(de_f);
+        self.hist_prop[idx] += 1;
+        if accepted { self.total_acc += 1; self.hist_acc[idx] += 1; }
+        let agg = match kind { "two_opt" => &mut self.two_opt, _ => &mut self.loopmove };
+        agg.prop += 1;
+        if accepted { agg.acc += 1; }
+        agg.sum_de += de as i64;
+    }
+}
+
+struct JsonlLogger {
+    file: File,
+    window: usize,
+    edges: Vec<f64>,
+}
+
+fn iso8601_utc_now() -> String {
+    // Simple UTC formatter: YYYY-MM-DDTHH:MM:SS.mmmZ
+    let now = std::time::SystemTime::now();
+    let dur = now.duration_since(std::time::UNIX_EPOCH).unwrap_or(Duration::from_secs(0));
+    let secs = dur.as_secs() as i64;
+    let millis = (dur.subsec_millis()) as u32;
+    // civil_from_days algorithm to convert days to date in proleptic Gregorian calendar
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400) as i64;
+    let mut z = days + 719468; // shift to civil origin
+    let era = if z >= 0 { z / 146097 } else { (z - 146096) / 146097 };
+    let doe = z - era * 146097;                          // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
+    let mut y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);   // [0, 365]
+    let mp = (5 * doy + 2) / 153;                        // [0, 11]
+    let d = doy - (153 * mp + 2) / 5 + 1;                // [1, 31]
+    let m = mp + if mp < 10 { 3 } else { -9 };           // [1, 12]
+    y += if m <= 2 { 1 } else { 0 };
+    let year = y;
+    let month = m as i64;
+    let day = d as i64;
+    let hh = sod / 3600;
+    let mm = (sod % 3600) / 60;
+    let ss = sod % 60;
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        year, month, day, hh, mm, ss, millis
+    )
+}
+
+impl JsonlLogger {
+    fn new(file: File, window: usize, edges: Vec<f64>) -> Self { Self { file, window, edges } }
+    fn write_line(&mut self, v: &serde_json::Value) {
+        if let Ok(s) = serde_json::to_string(v) { let _ = writeln!(self.file, "{}", s); }
+    }
+    fn run_start(&mut self, iters: usize, t0: f32, tmin: f32, seed: Option<u64>) {
+        let v = serde_json::json!({
+            "event":"run_start",
+            "ts": iso8601_utc_now(),
+            "iters": iters,
+            "t0": t0,
+            "tmin": tmin,
+            "window": self.window as i64,
+            "seed": seed.map(|x| x as i64),
+        });
+        self.write_line(&v);
+    }
+    fn tick(&mut self, it: usize, t: f32, cur_e: i32, best_e: i32, elapsed_ms: u128, ws: &WindowStats) {
+        let mut neighbor_stats = Vec::new();
+        if ws.two_opt.prop > 0 {
+            neighbor_stats.push(serde_json::json!({
+                "name":"two_opt", "prop": ws.two_opt.prop, "acc": ws.two_opt.acc,
+                "mean_de": (ws.two_opt.sum_de as f64) / (ws.two_opt.prop as f64)
+            }));
+        }
+        if ws.loopmove.prop > 0 {
+            neighbor_stats.push(serde_json::json!({
+                "name":"loopmove", "prop": ws.loopmove.prop, "acc": ws.loopmove.acc,
+                "mean_de": (ws.loopmove.sum_de as f64) / (ws.loopmove.prop as f64)
+            }));
+        }
+        let v = serde_json::json!({
+            "event":"tick",
+            "it": it as i64, "t": t,
+            "cur_e": cur_e, "best_e": best_e,
+            "acc": if ws.total_prop>0 { (ws.total_acc as f64)/(ws.total_prop as f64) } else { 0.0 },
+            "prop": ws.total_prop as i64, "acc_cnt": ws.total_acc as i64,
+            "elapsed_ms": elapsed_ms as i64,
+            "neighbor_stats": neighbor_stats,
+        });
+        self.write_line(&v);
+    }
+    fn hist(&mut self, it: usize, t: f32, ws: &WindowStats) {
+        let v = serde_json::json!({
+            "event":"hist",
+            "it": it as i64, "t": t,
+            "window": self.window as i64,
+            "de_hist": {
+                "edges": ws.edges,
+                "proposed": ws.hist_prop,
+                "accepted": ws.hist_acc,
+            }
+        });
+        self.write_line(&v);
+    }
+    fn stop(&mut self, reason: &str, it: usize, t: f32, cur_e: i32, best_e: i32, time_ms: u128) {
+        let v = serde_json::json!({
+            "event":"stop",
+            "reason": reason,
+            "it": it as i64,
+            "t": t,
+            "cur_e": cur_e,
+            "best_e": best_e,
+            "time_ms": time_ms as i64,
+        });
+        self.write_line(&v);
+    }
+}
+
+const DEFAULT_HIST_EDGES: [f64; 9] = [
+    -1_000_000_000.0, -10.0, -5.0, -1.0, 0.0, 1.0, 5.0, 10.0, 1_000_000_000.0
+];
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -814,12 +1052,21 @@ async fn main() -> Result<()> {
     let save_base = if args.output != "-" { Some(Path::new(&args.output)) } else { None };
     if let Some(base) = save_base {
         let p0 = derive_save_path(base, 0);
-        write_output_path(&model, inst.s0 as usize, &p0)?;
+        write_output_path(&inst, &model, inst.s0 as usize, &p0)?;
         if args.verbose > 0 { eprintln!("saved {} (initial)", p0.display()); }
     }
 
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
     let log_every = if args.verbose > 0 { args.log_every.or(Some(10_000)) } else { None };
+
+    // JSONL logger (optional)
+    let mut jsonl_logger_opt: Option<JsonlLogger> = if let Some(path) = &args.jsonl_log {
+        let f = File::create(path)
+            .with_context(|| format!("failed to create jsonl log: {}", path))?;
+        // Decide window: prefer explicit jsonl_window, else CLI log_every, else fallback 100000
+        let eff_window = args.jsonl_window.or(args.log_every).unwrap_or(100_000);
+        Some(JsonlLogger::new(f, eff_window, DEFAULT_HIST_EDGES.to_vec()))
+    } else { None };
 
     // Multi-start annealing (restarts)
     let restarts = args.restarts.max(1);
@@ -855,8 +1102,9 @@ async fn main() -> Result<()> {
             args.tmin,
             args.reheat_every,
             args.reheat_to,
-            args.p_relabel,
             args.p_loopmove,
+            jsonl_logger_opt.as_mut().map(|x| x),
+            Some(restart_seed),
         );
         finalize_match_to(&mut m);
         if args.verbose > 0 {
@@ -875,7 +1123,7 @@ async fn main() -> Result<()> {
     }
 
     // Use best-overall model
-    let out = emit_output(&best_overall_model, inst.s0);
+    let out = emit_output(&inst, &best_overall_model, inst.s0);
 
     let serialized = serde_json::to_string_pretty(&out)?;
 
