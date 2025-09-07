@@ -80,22 +80,17 @@ function forceDirectedLayout(
   const roomCount = map.rooms.length;
   const layout: RoomLayout[] = [];
 
-  // Initialize positions on one or two concentric circles to avoid heavy overlap
+  // Initialize positions using sunflower (Fermat spiral) to spread nodes
   const centerX = containerWidth / 2;
   const centerY = containerHeight / 2;
-  const outerRadius = Math.min(containerWidth, containerHeight) * 0.35;
-  const innerRadius = outerRadius * 0.6;
-  const split = Math.ceil(roomCount / 2);
-
+  const phi = (Math.sqrt(5) - 1) / 2; // ~0.618
+  const maxR = Math.min(containerWidth, containerHeight) * 0.45;
   for (let i = 0; i < roomCount; i++) {
-    const isOuter = i < split;
-    const idx = isOuter ? i : i - split;
-    const nInRing = isOuter ? split : roomCount - split;
-    const angle = (idx * 2 * Math.PI) / Math.max(1, nInRing) - Math.PI / 2;
-    const r = isOuter ? outerRadius : innerRadius;
-    const jitter = 10;
-    const x = centerX + r * Math.cos(angle) + (Math.random() - 0.5) * jitter;
-    const y = centerY + r * Math.sin(angle) + (Math.random() - 0.5) * jitter;
+    const t = i + 0.5;
+    const r = maxR * Math.sqrt(t / roomCount);
+    const theta = 2 * Math.PI * t * (1 - phi);
+    const x = centerX + r * Math.cos(theta);
+    const y = centerY + r * Math.sin(theta);
     layout.push({ roomIndex: i, position: { x, y }, label: map.rooms[i] });
   }
 
@@ -106,13 +101,15 @@ function forceDirectedLayout(
     adjacent.add(`${conn.to.room}-${conn.from.room}`);
   }
 
-  // Run simulation
-  const iterations = 200;
-  const dt = 0.08;
-  const repulsionStrength = 20000; // push nodes apart more strongly
-  const attractionStrength = 20; // keep connections reasonably tight
-  const idealDistance = 180; // target connection length
-  const minSeparation = 130; // hard minimum center-to-center distance
+  // Run simulation (scaled by area and node count)
+  const area = containerWidth * containerHeight;
+  const baseDist = Math.sqrt(area / Math.max(1, roomCount));
+  const iterations = Math.min(600, 200 + roomCount * 4);
+  const dt = 0.06;
+  const repulsionStrength = baseDist * baseDist * 2.5;
+  const attractionStrength = baseDist * 0.12;
+  const idealDistance = baseDist * 1.2;
+  const minSeparation = baseDist * 0.9;
 
   for (let iter = 0; iter < iterations; iter++) {
     const forces: Point[] = layout.map(() => ({ x: 0, y: 0 }));
@@ -144,8 +141,7 @@ function forceDirectedLayout(
       const dy = layout[j].position.y - layout[i].position.y;
       const distance = Math.sqrt(dx * dx + dy * dy) + 0.01;
 
-      const force =
-        (attractionStrength * (distance - idealDistance)) / distance;
+      const force = (attractionStrength * (distance - idealDistance)) / distance;
       const fx = (dx / distance) * force;
       const fy = (dy / distance) * force;
 
@@ -161,7 +157,7 @@ function forceDirectedLayout(
       layout[i].position.y += forces[i].y * dt;
 
       // Keep within bounds
-      const margin = 100;
+      const margin = Math.min(300, Math.max(100, baseDist));
       layout[i].position.x = Math.max(
         margin,
         Math.min(containerWidth - margin, layout[i].position.x)
@@ -188,7 +184,7 @@ function forceDirectedLayout(
           layout[j].position.y += ny * overlap;
 
           // Constrain again
-          const margin = 100;
+          const margin = Math.min(300, Math.max(100, baseDist));
           layout[i].position.x = Math.max(
             margin,
             Math.min(containerWidth - margin, layout[i].position.x)

@@ -27,9 +27,12 @@ export default function MapVisualizer({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate layout and hexagons
-  const { hexagons, bounds } = useMemo(() => {
-    const containerWidth = 800;
-    const containerHeight = 400;
+  const { hexagons, bounds, hexRadius } = useMemo(() => {
+    // Use a virtual canvas scaled by room count so large maps spread out.
+    const n = Math.max(1, map.rooms.length);
+    const scale = Math.sqrt(n / 12); // baseline at 12 rooms
+    const containerWidth = Math.round(1200 * scale);
+    const containerHeight = Math.round(900 * scale);
     const roomLayout = calculateRoomLayout(
       map,
       containerWidth,
@@ -49,7 +52,7 @@ export default function MapVisualizer({
     }
     if (!isFinite(minNeighborDist)) minNeighborDist = 120;
     const hexRadius = Math.max(
-      18,
+      28,
       Math.min(60, Math.floor(minNeighborDist * 0.28))
     );
 
@@ -61,6 +64,7 @@ export default function MapVisualizer({
     return {
       hexagons: roomHexagons,
       bounds: layoutBounds,
+      hexRadius,
     };
   }, [map]);
 
@@ -76,6 +80,40 @@ export default function MapVisualizer({
       height,
     };
   }, [bounds]);
+
+  // Scale-dependent sizes (SVG units) derived from hex radius
+  const sizes = useMemo(() => {
+    const doorRadius = Math.max(7, Math.min(14, hexRadius * 0.22));
+    const roomLabelFont = Math.max(14, Math.min(22, hexRadius * 0.6));
+    const indexFont = Math.max(10, Math.min(16, hexRadius * 0.42));
+    const chalkBadgeRadius = Math.max(10, Math.min(16, hexRadius * 0.32));
+    const pathWidth = Math.max(3, Math.min(6, hexRadius * 0.12));
+    const stepCircleRadius = Math.max(8, Math.min(14, hexRadius * 0.28));
+    const borderWidthBase = Math.max(2, Math.min(6, hexRadius * 0.12));
+    return {
+      doorRadius,
+      roomLabelFont,
+      indexFont,
+      chalkBadgeRadius,
+      pathWidth,
+      stepCircleRadius,
+      borderWidthBase,
+    };
+  }, [hexRadius]);
+
+  // Auto-zoom to ensure rooms remain readable (min on-screen hex radius)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pxPerUnitX = rect.width / viewBox.width;
+    const currentHexPx = hexRadius * pxPerUnitX * zoom;
+    const minHexPx = 34;
+    if (currentHexPx < minHexPx) {
+      const neededZoom = Math.min(5, Math.max(zoom, minHexPx / (hexRadius * pxPerUnitX)));
+      if (Math.abs(neededZoom - zoom) > 0.01) setZoom(neededZoom);
+    }
+  }, [hexRadius, viewBox.width]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -279,7 +317,7 @@ export default function MapVisualizer({
                     <path
                       d={curvePath}
                       stroke="#495057"
-                      strokeWidth="3"
+                      strokeWidth={sizes.pathWidth}
                       fill="none"
                       strokeLinecap="round"
                       opacity="0.7"
@@ -328,7 +366,7 @@ export default function MapVisualizer({
                     <path
                       d={curvePath}
                       stroke={pathColor}
-                      strokeWidth="5"
+                      strokeWidth={sizes.pathWidth + 2}
                       fill="none"
                       strokeLinecap="round"
                       opacity="0.8"
@@ -338,7 +376,7 @@ export default function MapVisualizer({
                     <circle
                       cx={(fromDoor.x + toCenter.x) / 2}
                       cy={(fromDoor.y + toCenter.y) / 2}
-                      r="12"
+                      r={sizes.stepCircleRadius}
                       fill={pathColor}
                       opacity="0.9"
                     />
@@ -347,7 +385,7 @@ export default function MapVisualizer({
                       y={(fromDoor.y + toCenter.y) / 2}
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fontSize="10"
+                      fontSize={Math.max(10, sizes.stepCircleRadius * 0.9)}
                       fontWeight="bold"
                       fill="white"
                       style={{ pointerEvents: 'none' }}
@@ -374,14 +412,14 @@ export default function MapVisualizer({
 
               // Determine border color and width
               let borderColor = getRoomBorderColor(room.label);
-              let borderWidth = 2;
+              let borderWidth = sizes.borderWidthBase;
 
               if (isCurrentRoom) {
                 borderColor = '#ffc107'; // Amber for current room
-                borderWidth = 6;
+                borderWidth = sizes.borderWidthBase + 2;
               } else if (isStartingRoom) {
                 borderColor = '#dc3545'; // Red for starting room
-                borderWidth = 4;
+                borderWidth = sizes.borderWidthBase + 1;
               }
 
               return (
@@ -409,12 +447,12 @@ export default function MapVisualizer({
                   {/* Chalk mark background */}
                   {hasChalkMark && (
                     <circle
-                      cx={room.position.x + 20}
-                      cy={room.position.y - 20}
-                      r="12"
+                      cx={room.position.x + sizes.chalkBadgeRadius + 8}
+                      cy={room.position.y - sizes.chalkBadgeRadius - 8}
+                      r={sizes.chalkBadgeRadius}
                       fill="#28a745"
                       stroke="white"
-                      strokeWidth="2"
+                      strokeWidth={Math.max(1, sizes.chalkBadgeRadius * 0.16)}
                       opacity="0.9"
                     />
                   )}
@@ -425,7 +463,7 @@ export default function MapVisualizer({
                     y={room.position.y - 5}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fontSize="16"
+                    fontSize={sizes.roomLabelFont}
                     fontWeight="bold"
                     fill={hasChalkMark ? '#28a745' : '#343a40'}
                     style={{ pointerEvents: 'none' }}
@@ -436,10 +474,10 @@ export default function MapVisualizer({
                   {/* Room index */}
                   <text
                     x={room.position.x}
-                    y={room.position.y + 10}
+                    y={room.position.y + sizes.indexFont * 0.8}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fontSize="12"
+                    fontSize={sizes.indexFont}
                     fill="#6c757d"
                     style={{ pointerEvents: 'none' }}
                   >
@@ -481,11 +519,11 @@ export default function MapVisualizer({
                   {/* Chalk mark indicator */}
                   {hasChalkMark && (
                     <text
-                      x={room.position.x + 20}
-                      y={room.position.y - 20}
+                      x={room.position.x + sizes.chalkBadgeRadius + 8}
+                      y={room.position.y - sizes.chalkBadgeRadius - 8}
                       textAnchor="middle"
                       dominantBaseline="middle"
-                      fontSize="10"
+                      fontSize={Math.max(10, sizes.chalkBadgeRadius * 0.8)}
                       fontWeight="bold"
                       fill="white"
                       style={{ pointerEvents: 'none' }}
@@ -500,17 +538,17 @@ export default function MapVisualizer({
                       <circle
                         cx={doorPos.x}
                         cy={doorPos.y}
-                        r="8"
+                        r={sizes.doorRadius}
                         fill="white"
                         stroke={getRoomBorderColor(room.label)}
-                        strokeWidth="2"
+                        strokeWidth={Math.max(1.5, sizes.doorRadius * 0.25)}
                       />
                       <text
                         x={doorPos.x}
                         y={doorPos.y}
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fontSize="10"
+                        fontSize={Math.max(9, sizes.doorRadius * 0.9)}
                         fontWeight="bold"
                         fill={getRoomBorderColor(room.label)}
                         style={{ pointerEvents: 'none' }}
