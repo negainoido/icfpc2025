@@ -121,8 +121,14 @@ const SessionsPage = () => {
   const handleVisualizeMap = (log: any) => {
     const map = extractMapFromGuessLog(log);
     if (map) {
-      navigate('/visualize', { state: { map, sessionId: log.session_id, logId: log.id } });
+      navigate('/visualize', {
+        state: { map, sessionId: log.session_id, logId: log.id },
+      });
     }
+  };
+
+  const handleVisualizeSessionMap = (sessionId: string) => {
+    navigate('/visualize', { state: { sessionId } });
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -508,6 +514,23 @@ const SessionsPage = () => {
                           >
                             JSON出力
                           </button>
+                          <button
+                            onClick={() =>
+                              handleVisualizeSessionMap(session.session_id)
+                            }
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#6f42c1',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                            }}
+                            title="マップをビジュアライズ"
+                          >
+                            🗺️ 可視化
+                          </button>
                           {session.status === 'active' && (
                             <button
                               onClick={() =>
@@ -679,7 +702,13 @@ const SessionsPage = () => {
                           marginBottom: '10px',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                          }}
+                        >
                           <div>
                             <strong
                               style={{
