@@ -399,6 +399,198 @@ fn two_opt_b(m: &mut Model, p1: usize, p2: usize) {
 
 // removed unused swap_labels helper
 
+#[inline]
+fn should_accept(d_total: i32, t: f32, rng: &mut StdRng) -> bool {
+    let d = d_total as f32;
+    d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp()
+}
+
+#[inline]
+fn update_after_accept(
+    new_e: Energy,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    model: &Model,
+    last_best_iter: &mut usize,
+    k: usize,
+    since_log_accepts: &mut usize,
+) {
+    *cur = new_e;
+    *since_log_accepts += 1;
+    if new_e.total < best.total {
+        *best = new_e;
+        *best_model = model.clone();
+        *last_best_iter = k;
+    }
+}
+
+fn try_two_opt(
+    inst: &Instance,
+    model: &mut Model,
+    rng: &mut StdRng,
+    t: f32,
+    verbose: u8,
+    lambda_bal: f32,
+    k: usize,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    last_best_iter: &mut usize,
+    since_log_accepts: &mut usize,
+) -> bool {
+    let n_ports = inst.n * 6;
+    let p1 = rng.gen_range(0..n_ports);
+    let mut p2 = rng.gen_range(0..n_ports);
+    if p2 == p1 { p2 = (p2 + 1) % n_ports; }
+
+    let a = p1;
+    let b = model.match_to[a];
+    let c = p2;
+    let d = model.match_to[c];
+
+    // Skip if either edge is a self-loop or edges overlap (would break involution)
+    if a == b || c == d || a == c || a == d || b == c || b == d {
+        return false;
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
+    }
+
+    let old_a = b;
+    let old_c = d;
+    let pattern_b: bool = rng.gen_bool(0.5);
+    if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
+
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
+    }
+    let new_e = energy(inst, model, lambda_bal);
+    let d_total = new_e.total - cur.total;
+    let accept = should_accept(d_total, t, rng);
+    if verbose >= 2 {
+        eprintln!(
+            "dbg: mv=2opt patB={} a={} b={} c={} d={} dE={} T={:.4} acc={} cur->new {}->{}",
+            pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
+        );
+    }
+    if accept {
+        update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+    } else {
+        // revert
+        model.match_to[a] = old_a;
+        model.match_to[old_a] = a;
+        model.match_to[c] = old_c;
+        model.match_to[old_c] = c;
+
+        #[cfg(debug_assertions)]
+        {
+            debug_assert!(check_involution(model), "post two_opt revert: involution broken");
+        }
+    }
+    true
+}
+
+fn try_loopmove(
+    inst: &Instance,
+    model: &mut Model,
+    rng: &mut StdRng,
+    t: f32,
+    verbose: u8,
+    lambda_bal: f32,
+    k: usize,
+    cur: &mut Energy,
+    best: &mut Energy,
+    best_model: &mut Model,
+    last_best_iter: &mut usize,
+    since_log_accepts: &mut usize,
+) -> bool {
+    let n_ports = inst.n * 6;
+    let dir_pair_to_loops: bool = rng.gen_bool(0.5);
+    if dir_pair_to_loops {
+        for _try in 0..16 {
+            let a = rng.gen_range(0..n_ports);
+            let b = model.match_to[a];
+            if a == b { continue; }
+            let c = rng.gen_range(0..n_ports);
+            let d = model.match_to[c];
+            if c == d { continue; }
+            if a == c || a == d || b == c || b == d { continue; }
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            // (a-b),(c-d) -> (a-a),(c-c),(b-d)
+            model.match_to[a] = a;
+            model.match_to[b] = d;
+            model.match_to[d] = b;
+            model.match_to[c] = c;
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            let new_e = energy(inst, model, lambda_bal);
+            let d_total = new_e.total - cur.total;
+            let accept = should_accept(d_total, t, rng);
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=loopmove dir=pair->loops a={} b={} c={} d={} dE={} T={:.4} acc={} {}->{}",
+                    a, b, c, d, d_total, t, accept, cur.total, new_e.total
+                );
+            }
+            if accept {
+                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+            } else {
+                // revert
+                model.match_to[a] = b;
+                model.match_to[b] = a;
+                model.match_to[c] = d;
+                model.match_to[d] = c;
+            }
+            return true;
+        }
+        false
+    } else {
+        for _try in 0..16 {
+            let a = rng.gen_range(0..n_ports);
+            if model.match_to[a] != a { continue; }
+            let c = rng.gen_range(0..n_ports);
+            if c == a || model.match_to[c] != c { continue; }
+            let b = rng.gen_range(0..n_ports);
+            let d = model.match_to[b];
+            if b == d || b == a || b == c || d == a || d == c { continue; }
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            // (a-a),(c-c),(b-d) -> (a-b),(c-d)
+            model.match_to[a] = b;
+            model.match_to[b] = a;
+            model.match_to[c] = d;
+            model.match_to[d] = c;
+            #[cfg(debug_assertions)]
+            { debug_assert!(check_involution(model)); }
+            let new_e = energy(inst, model, lambda_bal);
+            let d_total = new_e.total - cur.total;
+            let accept = should_accept(d_total, t, rng);
+            if verbose >= 2 {
+                eprintln!(
+                    "dbg: mv=loopmove dir=loops->pair a={} c={} b={} d={} dE={} T={:.4} acc={} {}->{}",
+                    a, c, b, d, d_total, t, accept, cur.total, new_e.total
+                );
+            }
+            if accept {
+                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+            } else {
+                // revert
+                model.match_to[a] = a;
+                model.match_to[c] = c;
+                model.match_to[b] = d;
+                model.match_to[d] = b;
+            }
+            return true;
+        }
+        false
+    }
+}
+
 fn anneal(
     inst: &Instance,
     model: &mut Model,
@@ -437,163 +629,14 @@ fn anneal(
     }
     for k in 0..iters {
         if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
-        // randomly choose move
         let mv: f32 = rng.r#gen();
         let p_loopmove = p_loopmove.clamp(0.0, 1.0);
-        if mv >= p_loopmove {
-            // 2-opt move (only on two distinct, non-loop edges)
-            let p1 = rng.gen_range(0..n_ports);
-            let mut p2 = rng.gen_range(0..n_ports);
-            if p2 == p1 { p2 = (p2 + 1) % n_ports; }
-
-            let a = p1;
-            let b = model.match_to[a];
-            let c = p2;
-            let d = model.match_to[c];
-
-            // Skip if either edge is a self-loop or edges overlap (would break involution)
-            // Edges must be (a<->b) and (c<->d) with all of a,b,c,d pairwise distinct
-            if a == b || c == d || a == c || a == d || b == c || b == d {
-                continue;
-            }
-
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
-            }
-
-            let old_a = b;
-            let old_c = d;
-            let pattern_b: bool = rng.gen_bool(0.5);
-            if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
-
-            #[cfg(debug_assertions)]
-            {
-                debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
-            }
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=2opt patB={} a={} b={} c={} d={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                // revert
-                model.match_to[a] = old_a;
-                model.match_to[old_a] = a;
-                model.match_to[c] = old_c;
-                model.match_to[old_c] = c;
-
-                #[cfg(debug_assertions)]
-                {
-                    debug_assert!(check_involution(model), "post two_opt revert: involution broken");
-                }
-            }
+        let applied = if mv >= p_loopmove {
+            try_two_opt(inst, model, rng, t, verbose, lambda_bal, k, &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts)
         } else {
-            // loop-change 3-edge move: pair->loops or loops->pair
-            let dir_pair_to_loops: bool = rng.gen_bool(0.5);
-            let mut applied = false;
-
-            if dir_pair_to_loops {
-                // pick two distinct non-loop edges (a-b) and (c-d), all endpoints distinct
-                for _try in 0..16 {
-                    let a = rng.gen_range(0..n_ports);
-                    let b = model.match_to[a];
-                    if a == b { continue; }
-                    let c = rng.gen_range(0..n_ports);
-                    let d = model.match_to[c];
-                    if c == d { continue; }
-                    if a == c || a == d || b == c || b == d { continue; }
-                    // apply: (a-b),(c-d) -> (a-a),(c-c),(b-d)
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    model.match_to[a] = a;
-                    model.match_to[b] = d;
-                    model.match_to[d] = b;
-                    model.match_to[c] = c;
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    let new_e = energy(inst, model, lambda_bal);
-                    let d_total = new_e.total - cur.total;
-                    let d_f = d_total as f32;
-                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
-                    if verbose >= 2 {
-                        eprintln!(
-                            "dbg: mv=loopmove dir=pair->loops a={} b={} c={} d={} dE={} T={:.4} acc={} {}->{}",
-                            a, b, c, d, d_total, t, accept, cur.total, new_e.total
-                        );
-                    }
-                    if accept {
-                        cur = new_e;
-                        since_log_accepts += 1;
-                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-                    } else {
-                        // revert to original: (a-b),(c-d)
-                        model.match_to[a] = b;
-                        model.match_to[b] = a;
-                        model.match_to[c] = d;
-                        model.match_to[d] = c;
-                    }
-                    applied = true;
-                    break;
-                }
-            } else {
-                // loops->pair: pick two loops (a-a),(c-c) and one non-loop (b-d) -> (a-b),(c-d)
-                for _try in 0..16 {
-                    let a = rng.gen_range(0..n_ports);
-                    if model.match_to[a] != a { continue; }
-                    let c = rng.gen_range(0..n_ports);
-                    if c == a || model.match_to[c] != c { continue; }
-                    let b = rng.gen_range(0..n_ports);
-                    let d = model.match_to[b];
-                    if b == d || b == a || b == c || d == a || d == c { continue; }
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    // apply: (a-a),(c-c),(b-d) -> (a-b),(c-d)
-                    model.match_to[a] = b;
-                    model.match_to[b] = a;
-                    model.match_to[c] = d;
-                    model.match_to[d] = c;
-                    #[cfg(debug_assertions)]
-                    { debug_assert!(check_involution(model)); }
-                    let new_e = energy(inst, model, lambda_bal);
-                    let d_total = new_e.total - cur.total;
-                    let d_f = d_total as f32;
-                    let accept = d_f <= 0.0 || rng.r#gen::<f32>() < (-d_f / t.max(1e-6)).exp();
-                    if verbose >= 2 {
-                        eprintln!(
-                            "dbg: mv=loopmove dir=loops->pair a={} c={} b={} d={} dE={} T={:.4} acc={} {}->{}",
-                            a, c, b, d, d_total, t, accept, cur.total, new_e.total
-                        );
-                    }
-                    if accept {
-                        cur = new_e;
-                        since_log_accepts += 1;
-                        if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-                    } else {
-                        // revert to original
-                        model.match_to[a] = a;
-                        model.match_to[c] = c;
-                        model.match_to[b] = d;
-                        model.match_to[d] = b;
-                    }
-                    applied = true;
-                    break;
-                }
-            }
-            if !applied {
-                // fall back: do nothing this iter
-                continue;
-            }
-        }
+            try_loopmove(inst, model, rng, t, verbose, lambda_bal, k, &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts)
+        };
+        if !applied { continue; }
         since_log_moves += 1;
         t *= alpha;
         if t < tmin { t = tmin; }
