@@ -33,7 +33,7 @@ class RegisterResponse(BaseModel):
 
 
 class SelectRequest(BaseModel):
-    id: str
+    id: str = ""
     problemName: str
 
 
@@ -42,7 +42,7 @@ class SelectResponse(BaseModel):
 
 
 class ExploreRequest(BaseModel):
-    id: str
+    id: str = ""
     plans: list[str]
 
 
@@ -71,7 +71,7 @@ class MapData(BaseModel):
 
 
 class GuessRequest(BaseModel):
-    id: str
+    id: str = ""
     map: MapData
 
 
