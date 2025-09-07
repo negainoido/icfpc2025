@@ -64,6 +64,7 @@ Zのラベルが(label_x+1)%4で塗られていたらZはXと同じ
 class Graph:
     def __init__(self, N):
         self.N = N
+        self.M = N * 6  # Total number of possible edges
         self.graph = [[None] * 6 for _ in range(N)]
         self.reverse_door = [[None] * 6 for _ in range(N)]
         self.graph_labels = [None for _ in range(N)]
@@ -252,7 +253,10 @@ def solve(problem_name: str):
     graph = Graph(N)
     graph.add_new_node(graph.get_node_label(0))
 
+    edge_num = 0
     while True:
+        edge_num += 1
+        click.echo(f"辺数: {edge_num}")
         if not graph.check_one_edge():
             break
 
