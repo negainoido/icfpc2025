@@ -105,8 +105,11 @@ async fn main() -> Result<()> {
     println!("Explore response: {:?}", explore_response);
 
     let suffixes = vec!["0000100020003000".to_string()];
-    let guess_map =
-        guess_map::build_map_fixed_tail(&de_bruijn_seq, &explore_response.results, &suffixes)?;
+    let guess_map = guess_map::build_map_fixed_tail(
+        &de_bruijn_seq,
+        explore_response.results.as_slice(),
+        &suffixes,
+    )?;
     println!("Generated guess map: {:?}", guess_map);
 
     println!("Sending guess request...");

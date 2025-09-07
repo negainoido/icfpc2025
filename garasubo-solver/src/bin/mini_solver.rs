@@ -51,13 +51,33 @@ impl Room {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone)]
+struct NewPrefix {
+    parent: RoomId,
+    a: Port,
+    prefix: Prefix, // fwd: p+a, rev: [b]+p^-1（b は WaveA 後に確定）
+    qid: usize,
+    label: Option<u8>, // 観測した基本ラベル（任意の最適化）
+}
+
 struct World {
     rooms: Vec<Room>, // id = index
+    next_qid: usize,
     // 未確定の半辺: (u_id, a) -> PairJobId
     frontier_pairs: Vec<(RoomId, Port)>,
     // 新規 prefix 候補
-    new_prefixes: Vec<(RoomId, Port, Prefix)>, // parent, port a, child prefix
+    new_prefixes: Vec<NewPrefix>, // parent, port a, child prefix
+}
+
+impl Default for World {
+    fn default() -> Self {
+        Self {
+            rooms: Vec::new(),
+            next_qid: 0,
+            new_prefixes: Vec::new(),
+            frontier_pairs: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -255,13 +275,55 @@ pub fn build_guess_map_strict(
 
 enum PlanKind {
     Pair { u: RoomId, a: Port, b: Port, x: u8 },
-    Eq { p: RoomId, q_prefix: Prefix, x: u8 }, // p は既知ID
-    ObserveLabel { q_prefix: Prefix, sink: ObserveSink },
+    Eq { p: RoomId, qid: usize, x: u8 }, // ← q を参照せず、一意IDで識別
+    ObserveLabel { qid: usize },         // ← ラベル観測も qid
 }
 
 struct Plan {
     kind: PlanKind,
-    s: String, // エンコード済み
+    s: String,
+}
+
+// --- Eq 集計を qid ベースに --- //
+use std::collections::HashMap;
+
+struct EqAgg {
+    // (p_id, qid) -> 成功回数
+    ok: HashMap<(RoomId, usize), u8>,
+}
+
+impl EqAgg {
+    fn new() -> Self {
+        Self { ok: HashMap::new() }
+    }
+    fn on_result(&mut self, p: RoomId, qid: usize, x: u8, last: u8) {
+        if last == x {
+            *self.ok.entry((p, qid)).or_insert(0) += 1;
+        }
+    }
+    fn is_equal(&self, p: RoomId, qid: usize) -> bool {
+        self.ok.get(&(p, qid)).copied().unwrap_or(0) >= 3
+    }
+}
+
+// --- Pair 集計はそのままでもOK（u,a,b,x でユニーク） --- //
+struct PairAgg {
+    ok: HashMap<(RoomId, Port, Port), [bool; 4]>, // x=0..3 の成否
+}
+impl PairAgg {
+    fn new() -> Self {
+        Self { ok: HashMap::new() }
+    }
+    fn on_result(&mut self, u: RoomId, a: Port, b: Port, x: u8, last: u8) {
+        let e = self.ok.entry((u, a, b)).or_insert([false; 4]);
+        e[x as usize] = (last == x);
+    }
+    fn decide_b(&self, u: RoomId, a: Port) -> Option<Port> {
+        (0..6u8).find(|&b| {
+            let ok = self.ok.get(&(u, a, b)).copied().unwrap_or([false; 4]);
+            ok.iter().filter(|&&t| t).count() >= 3
+        })
+    }
 }
 
 // door-steps の安全チェック
@@ -277,26 +339,20 @@ fn enc_charcoal(x: u8) -> String {
     format!("[{}]", x)
 }
 
-fn make_pair_plan(u_id: RoomId, p: &Prefix, a: Port, b: Port, x: u8, n_max: usize) -> Plan {
-    // p [x] a b
-    let s = format!(
-        "{}{}{}",
-        enc_ports(&p.fwd),
-        enc_charcoal(x),
-        enc_ports(&[a, b])
-    );
-    ensure_len_le_6n(p.fwd.len() + 2, n_max);
+fn make_pair_plan(u: RoomId, p: &Prefix, a: Port, b: Port, x: u8, n: usize) -> Plan {
+    let s = format!("{}[{}]{}{}", enc_ports(&p.fwd), x, a, b);
+    ensure_len_le_6n(p.fwd.len() + 2, n);
     Plan {
-        kind: PlanKind::Pair { u: u_id, a, b, x },
+        kind: PlanKind::Pair { u, a, b, x },
         s,
     }
 }
 
-fn make_eq_plan(p_room: &Room, q: &Prefix, x: u8, n: usize) -> Plan {
+fn make_eq_plan(p_room: &Room, qid: usize, q: &Prefix, x: u8, n: usize) -> Plan {
     let s = format!(
-        "{}{}{}{}",
+        "{}[{}]{}{}",
         enc_ports(&p_room.prefix.fwd),
-        enc_charcoal(x),
+        x,
         enc_ports(&p_room.prefix.rev),
         enc_ports(&q.fwd)
     );
@@ -307,64 +363,19 @@ fn make_eq_plan(p_room: &Room, q: &Prefix, x: u8, n: usize) -> Plan {
     Plan {
         kind: PlanKind::Eq {
             p: p_room.id,
-            q_prefix: q.clone(),
+            qid,
             x,
         },
         s,
     }
 }
 
-fn make_label_plan(q: &Prefix, sink: ObserveSink, n_max: usize) -> Plan {
-    // 単に q.fwd を歩いて観測（0 歩可）
+fn make_label_plan(qid: usize, q: &Prefix, n: usize) -> Plan {
     let s = enc_ports(&q.fwd);
-    ensure_len_le_6n(q.fwd.len(), n_max);
+    ensure_len_le_6n(q.fwd.len(), n);
     Plan {
-        kind: PlanKind::ObserveLabel {
-            q_prefix: q.clone(),
-            sink,
-        },
+        kind: PlanKind::ObserveLabel { qid },
         s,
-    }
-}
-
-struct PairAgg {
-    // (u,a) ごとの「b×x」成功表
-    ok: std::collections::HashMap<(RoomId, Port, Port), [bool; 4]>, // x=0..3
-}
-
-impl PairAgg {
-    fn new() -> PairAgg {
-        PairAgg {
-            ok: std::collections::HashMap::new(),
-        }
-    }
-}
-
-impl PairAgg {
-    fn on_result(&mut self, u: RoomId, a: Port, b: Port, x: u8, last: u8) {
-        let key = (u, a, b);
-        let e = self.ok.entry(key).or_insert([false; 4]);
-        e[x as usize] = (last == x);
-    }
-    fn decide_b(&self, u: RoomId, a: Port) -> Option<Port> {
-        (0..6u8).find(|&b| {
-            let ok = self.ok.get(&(u, a, b)).copied().unwrap_or([false; 4]);
-            // 3値で送るなら、3つの x が true か
-            ok.iter().filter(|&&t| t).count() >= 3
-        })
-    }
-}
-
-struct EqAgg {
-    // (p_id, q_hash) -> 成功回数
-    ok: std::collections::HashMap<(RoomId, u64), usize>,
-}
-
-impl EqAgg {
-    fn new() -> EqAgg {
-        EqAgg {
-            ok: std::collections::HashMap::new(),
-        }
     }
 }
 
@@ -373,17 +384,44 @@ fn hash_prefix(q: &Prefix) -> u64 {
     0
 }
 
-impl EqAgg {
-    fn on_result(&mut self, p: RoomId, q: &Prefix, x: u8, last: u8) {
-        let k = (p, hash_prefix(q));
-        let e = self.ok.entry(k).or_default();
-        if last == x {
-            *e += 1;
+#[derive(Debug)]
+enum EdgeSetError {
+    Conflict {
+        at_room: RoomId,
+        at_port: Port,
+        want: (RoomId, Port),
+        have: (RoomId, Port),
+    },
+}
+
+fn set_edge(world: &mut World, u: RoomId, a: Port, v: RoomId, b: Port) -> Result<(), EdgeSetError> {
+    // u側
+    if let Some((vv, bb)) = world.rooms[u].nbr[a as usize] {
+        if vv != v || bb != b {
+            return Err(EdgeSetError::Conflict {
+                at_room: u,
+                at_port: a,
+                want: (v, b),
+                have: (vv, bb),
+            });
         }
+    } else {
+        world.rooms[u].nbr[a as usize] = Some((v, b));
     }
-    fn is_equal(&self, p: RoomId, q: &Prefix) -> bool {
-        self.ok.get(&(p, hash_prefix(q))).copied().unwrap_or(0) >= 3
+    // v側
+    if let Some((uu, aa)) = world.rooms[v].nbr[b as usize] {
+        if uu != u || aa != a {
+            return Err(EdgeSetError::Conflict {
+                at_room: v,
+                at_port: b,
+                want: (u, a),
+                have: (uu, aa),
+            });
+        }
+    } else {
+        world.rooms[v].nbr[b as usize] = Some((u, a));
     }
+    Ok(())
 }
 
 struct Batch {
@@ -412,38 +450,20 @@ impl Batch {
     }
 }
 
-#[derive(Clone)]
-enum ObserveSink {
-    /// 観測値を start に入れる
-    StartBaseLabel,
-    /// 観測値を new_prefixes[i] に入れる（i は実装側で割当）
-    NewPrefix(usize),
-}
-
-/// 開始部屋の基礎ラベルを 1 本の観測で確定
+/// 開始部屋の基礎ラベルを 1 本の観測（空プラン）で確定
 async fn bootstrap_start(
     world: &mut World,
     session: &SessionGuard,
-    n_max: usize,
+    _n_max: usize,
 ) -> anyhow::Result<()> {
-    let start = &world.rooms[0];
-    let mut batch = Batch::new();
-    batch.push(make_label_plan(
-        &start.prefix,
-        ObserveSink::StartBaseLabel,
-        n_max,
-    ));
-    let results = batch.flush(session).await?;
-
-    let (_plan, obs) = &results[0];
-    anyhow::ensure!(!obs.is_empty(), "empty observation");
+    // 空プラン "" で現在地（開始部屋）のラベルが 1 要素として返る
+    let resp = session.explore(&vec![String::new()]).await?;
+    anyhow::ensure!(resp.results.len() == 1, "unexpected /explore result shape");
+    let obs = &resp.results[0];
+    anyhow::ensure!(!obs.is_empty(), "empty observation for start");
     let label = *obs.last().unwrap(); // 0..3
     world.rooms[0].base_label = Some(label);
-
     Ok(())
-    // 【代替案】空プランが禁止の場合:
-    // - 最初の Wave A の Pair プランの "観測列[0]" を拾って start の基礎ラベルに入れる。
-    //   (Pair は p=[].fwd なので obs[0] が開始部屋)
 }
 
 async fn solve(n: usize, session: &SessionGuard) -> anyhow::Result<World> {
@@ -463,14 +483,13 @@ async fn solve(n: usize, session: &SessionGuard) -> anyhow::Result<World> {
     // BFS フロンティア
     let mut front: Vec<RoomId> = vec![0];
 
-    // 既知集合 S（Eq 候補）は常に 0..rooms.len()-1
     while !front.is_empty() {
         // ---------- Wave A: pair まとめ打ち ----------
         let mut batch = Batch::new();
         for &u in &front {
             for a in 0..6u8 {
                 if world.rooms[u].nbr[a as usize].is_some() {
-                    continue;
+                    continue; // 既に確定済み
                 }
                 for b in 0..6u8 {
                     for &x in &[0u8, 1, 2] {
@@ -481,7 +500,7 @@ async fn solve(n: usize, session: &SessionGuard) -> anyhow::Result<World> {
         }
 
         if batch.is_empty() {
-            // front の全半辺が既に確定している ⇒ 新規は出ない
+            // このフロンティアから生やす半辺がない ⇒ 完了
             break;
         }
 
@@ -490,131 +509,140 @@ async fn solve(n: usize, session: &SessionGuard) -> anyhow::Result<World> {
         // Pair の集計
         let mut pair_agg = PairAgg::new();
         for (plan, obs) in results {
-            let last = *obs.last().expect("non-empty obs");
+            let last = *obs.last().ok_or_else(|| anyhow::anyhow!("empty obs"))?;
             match plan.kind {
                 PlanKind::Pair { u, a, b, x } => {
                     pair_agg.on_result(u, a, b, x, last);
                 }
-                PlanKind::Eq { .. } | PlanKind::ObserveLabel { .. } => unreachable!(),
+                _ => unreachable!(),
             }
         }
 
-        // 決定した (u,a)->b から子 prefix を生やす
-        let mut new_prefixes: Vec<(RoomId, Port, Prefix)> = vec![];
+        // 決定した (u,a)->b から子 prefix を生やす（qid を付与）
+        world.new_prefixes.clear();
         for &u in &front {
             for a in 0..6u8 {
                 if world.rooms[u].nbr[a as usize].is_some() {
                     continue;
                 }
                 if let Some(b) = pair_agg.decide_b(u, a) {
+                    let qid = world.next_qid;
+                    world.next_qid += 1;
+
                     // q = p + a, q^-1 = [b] + p^-1
                     let mut qf = world.rooms[u].prefix.fwd.clone();
                     qf.push(a);
                     let mut qr = vec![b];
                     qr.extend_from_slice(&world.rooms[u].prefix.rev);
                     let child = Prefix { fwd: qf, rev: qr };
-                    new_prefixes.push((u, a, child));
-                } else {
-                    // b が決定できなかった場合は次ウェーブで 4 色目を投げ直す等の救済（省略）
+
+                    world.new_prefixes.push(NewPrefix {
+                        parent: u,
+                        a,
+                        prefix: child,
+                        qid,
+                        label: None,
+                    });
                 }
             }
         }
 
-        // ---------- Wave B: label と eq ----------
-        // まず新規 prefix の基礎ラベルを観測（空きフィルタ用）
-        let mut batch = Batch::new();
-        for (i, (_, _, q)) in new_prefixes.iter().enumerate() {
-            batch.push(make_label_plan(q, ObserveSink::NewPrefix(i), n));
+        if world.new_prefixes.is_empty() {
+            // 生やせる子が無い ⇒ 収束
+            break;
         }
-        let label_results = if !batch.is_empty() {
-            Some(batch.flush(session).await?)
-        } else {
-            None
-        };
 
-        let mut q_label: Vec<u8> = vec![0; new_prefixes.len()];
-        if let Some(results) = label_results {
-            for (plan, obs) in results {
-                let last = *obs.last().unwrap();
-                if let PlanKind::ObserveLabel { sink, .. } = plan.kind {
-                    match sink {
-                        ObserveSink::NewPrefix(i) => q_label[i] = last,
-                        ObserveSink::StartBaseLabel => unreachable!(),
+        // ---------- Wave B-1: 新規 prefix の基礎ラベル観測（候補絞り用） ----------
+        let mut qid_to_index = std::collections::HashMap::<usize, usize>::new();
+        let mut batch = Batch::new();
+        for (i, np) in world.new_prefixes.iter().enumerate() {
+            qid_to_index.insert(np.qid, i);
+            batch.push(make_label_plan(np.qid, &np.prefix, n));
+        }
+
+        let label_results = batch.flush(session).await?;
+        for (plan, obs) in label_results {
+            let last = *obs.last().unwrap();
+            match plan.kind {
+                PlanKind::ObserveLabel { qid } => {
+                    if let Some(&idx) = qid_to_index.get(&qid) {
+                        world.new_prefixes[idx].label = Some(last);
                     }
                 }
+                _ => unreachable!(),
             }
         }
 
-        // 候補集合 S を準備
-        let S: Vec<RoomId> = (0..world.rooms.len()).collect();
-
-        // eq をまとめて投げる
+        // ---------- Wave B-2: eq まとめ打ち ----------
+        let candidates: Vec<RoomId> = (0..world.rooms.len()).collect();
         let mut batch = Batch::new();
-        for (i, (_, _, q)) in new_prefixes.iter().enumerate() {
-            // 簡易フィルタ: 基礎ラベル一致のみ残す
-            for &s in &S {
-                let sbl = world.rooms[s].base_label;
-                if let Some(sbl) = sbl {
-                    if sbl != q_label[i] {
+        for np in &world.new_prefixes {
+            for &s in &candidates {
+                // 基本ラベルが既知なら一致するものだけに絞る
+                if let (Some(sl), Some(ql)) = (world.rooms[s].base_label, np.label) {
+                    if sl != ql {
                         continue;
                     }
                 }
                 for &x in &[0u8, 1, 2] {
-                    batch.push(make_eq_plan(&world.rooms[s], q, x, n));
+                    batch.push(make_eq_plan(&world.rooms[s], np.qid, &np.prefix, x, n));
                 }
             }
         }
-        let results = if !batch.is_empty() {
-            Some(batch.flush(session).await?)
-        } else {
-            None
-        };
 
-        // eq の集計
+        let eq_results = batch.flush(session).await?;
         let mut eq_agg = EqAgg::new();
-        if let Some(results) = results {
-            for (plan, obs) in results {
-                let last = *obs.last().unwrap();
-                if let PlanKind::Eq { p, q_prefix, x } = plan.kind {
-                    eq_agg.on_result(p, &q_prefix, x, last);
-                }
+        for (plan, obs) in eq_results {
+            let last = *obs.last().unwrap();
+            if let PlanKind::Eq { p, qid, x } = plan.kind {
+                eq_agg.on_result(p, qid, x, last);
+            } else {
+                unreachable!();
             }
         }
 
-        // new_prefixes を ID に確定し、辺を両側に張る
+        // ---------- 決着：ID に統合してエッジを張る（上書き禁止） ----------
         let mut next_front: Vec<RoomId> = vec![];
-        for (idx, (u, a, q)) in new_prefixes.into_iter().enumerate() {
-            // 既知の誰かと一致？
+        let new_prefixes = world.new_prefixes.drain(..).collect::<Vec<_>>();
+        for np in new_prefixes.iter() {
+            // 既知の誰かと同一？
             let mut same: Option<RoomId> = None;
-            for &s in &S {
-                if eq_agg.is_equal(s, &q) {
+            for s in 0..world.rooms.len() {
+                if eq_agg.is_equal(s, np.qid) {
                     same = Some(s);
                     break;
                 }
             }
+
             let vid = if let Some(s) = same {
                 s
             } else {
                 let id = world.rooms.len();
-                let mut new_room = Room::new(id, q.clone());
-                new_room.base_label = Some(q_label[idx]);
+                let mut new_room = Room::new(id, np.prefix.clone());
+                if let Some(lbl) = np.label {
+                    new_room.base_label = Some(lbl);
+                }
                 world.rooms.push(new_room);
                 next_front.push(id);
                 id
             };
 
-            // 接続: (u,a) <-> (vid, b) ; b は q.rev[0]
-            let b = q.rev[0];
-            world.rooms[u].nbr[a as usize] = Some((vid, b));
-            world.rooms[vid].nbr[b as usize] = Some((u, a));
+            // 接続: (np.parent, np.a) <-> (vid, b) ; b は q.rev[0]
+            let b = np.prefix.rev[0];
+            if let Err(e) = set_edge(&mut world, np.parent, np.a, vid, b) {
+                anyhow::bail!(
+                    "edge conflict while setting ({}.{}) <-> ({}.{}) : {:?}",
+                    np.parent,
+                    np.a,
+                    vid,
+                    b,
+                    e
+                );
+            }
         }
 
         front = next_front;
     }
-
-    // 念のため、残っている半辺がないかチェック
-    // （あれば、front を「まだ未確定の頂点」に再設定して追加ラウンドを回す設計でもOK）
-    // assert!(!has_unpaired_halfedges(&world));
 
     Ok(world)
 }
