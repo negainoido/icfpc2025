@@ -44,16 +44,12 @@ fastapi run server.py --host 0.0.0.0 --port 8000 --reload
 `/select` するときに任意の `team_id` を受け付けて自動で登録する.
 並列に動かすなら重複しないようにだけ注意.
 
-problemName は本来の
+### カスタム問題
 
-```
-probatio: 3,
-primus: 6,
-secundus: 12,
-tertius: 18,
-quartus: 24,
-quintus: 30,
+problemName として `probatio`, `primus`, ... 以外に部屋数とドア制限を指定した自由な問題を作れる.
+
+```bash
+./api.py select 10    # 部屋 10, ドア制限 x18 の問題を作る
+./api.py select 20:6  # 部屋 20, ドア制限 x6 の問題を作る
 ```
 
-以外に直接 1 以上の整数を問題名としてもよい.
-このときその数を部屋数として問題を作る.
