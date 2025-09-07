@@ -35,10 +35,13 @@ export default function MapInput({ onMapLoad, onError }: Props) {
     onMapLoad(sampleMap);
   };
 
-  const validateMap = (data: unknown): MapStruct => {
-    if (!data || typeof data !== 'object') {
+  const validateMap = (raw: unknown): MapStruct => {
+    if (!raw || typeof raw !== 'object') {
       throw new Error('Map must be a JSON object');
     }
+
+    // Normalize: accept wrappers like { map: {...} } (e.g., guess request payloads)
+    const data = (raw as any).map && typeof (raw as any).map === 'object' ? (raw as any).map : (raw as any);
 
     if (!Array.isArray(data.rooms)) {
       throw new Error('Map must have a "rooms" array');
