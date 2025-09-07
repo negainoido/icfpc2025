@@ -128,9 +128,12 @@ class Graph:
                     return v, i
         return None
 
-    def get_surround_labels(self, path: str) -> list:
+    # pathの先のノードと、その一つ先のノードのラベルを得る
+    def get_surround_labels(self, path: str) -> tuple[int, list]:
         results = api.api.explore([path + str(i) for i in range(6)])["results"]
-        return [result[-1] for result in results]
+        # 対象ノードのラベル
+        label_v = results[0][-2]
+        return [label_v, [result[-1] for result in results]]
 
     def check_one_edge(self) -> bool:
         v_e = self.get_unknown_edge()
@@ -140,8 +143,7 @@ class Graph:
 
         label_v = self.get_node_label(v)
         path_0_v = self.get_path(0, v)
-        label_v_e = self.get_label(path_0_v + str(e))
-        surround_labels_v_e = self.get_surround_labels(path_0_v + str(e))
+        [label_v_e, surround_labels_v_e] = self.get_surround_labels(path_0_v + str(e))
 
         # 逆向きの辺を探す
         reverse_doors = set()
