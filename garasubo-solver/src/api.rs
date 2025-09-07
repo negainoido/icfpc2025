@@ -224,6 +224,8 @@ impl ApiClient {
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct SelectResponse {
+    #[serde(default)]
+    pub id: String,
     pub session_id: Option<String>,
     #[serde(rename = "problemName")]
     problem_name: String,

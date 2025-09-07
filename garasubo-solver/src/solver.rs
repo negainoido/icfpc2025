@@ -1,22 +1,19 @@
 use crate::api;
 use crate::api::{Connection, RoomDoor};
-use serde::Serialize;
 use std::collections::HashSet;
 
 pub type Label = u8;
 // 0..=3
 pub type Dir = u8;
 
-/// ============ 提出用の map 形（必要に応じてあなたの JSON へ変換してください） ==
-
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct GuessRoom {
     pub label: Label,
     /// doors[a] = Some((to_room, peer_port)) / None if absent
     pub doors: [Option<(usize, Dir)>; 6],
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct GuessMap {
     pub rooms: Vec<GuessRoom>,
     pub starting_room: usize,
@@ -66,4 +63,14 @@ impl GuessMap {
             connections,
         })
     }
+}
+
+pub trait Solver {
+    fn next_explore_batch(&mut self) -> Vec<String>;
+    fn apply_explore_results(
+        &mut self,
+        sent_routes: &[String],
+        obs_labels: &[Vec<Label>],
+    ) -> anyhow::Result<()>;
+    fn build_guess(&self) -> anyhow::Result<GuessMap>;
 }
