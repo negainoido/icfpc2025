@@ -276,7 +276,7 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
     # decode connections
     connections: List[Dict[str, Dict[str, int]]] = []
     for (i, j) in port_matching_keys:
-        if assign.get(pool.id(("P", i, j)), False):
+        if i <= j and assign.get(pool.id(("P", i, j)), False):
             ri, di = divmod(i, D)
             rj, dj = divmod(j, D)
             connections.append(
@@ -285,6 +285,7 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
                     "to": {"room": rj, "door": dj},
                 }
             )
+    connections.sort(key=lambda e: (e["from"]["room"], e["from"]["door"], e["to"]["room"], e["to"]["door"]))
     return {
         "status": 1 if connections else 0,
         "rooms": rooms,
