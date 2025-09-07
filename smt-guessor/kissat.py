@@ -95,7 +95,8 @@ def build_cnf(
 
 
     # print the number of variables and clauses created for label constraints
-    print(f"[kissat] Label constraints: vars={pool.top}, clauses={len(cnf.clauses)}")    
+    if progress:
+        print(f"[kissat] Label constraints: vars={pool.top}, clauses={len(cnf.clauses)}")
     num_label_vars = pool.top
     num_label_clauses = len(cnf.clauses)
 
@@ -115,7 +116,8 @@ def build_cnf(
         cnf.extend(enc.clauses)
 
     # print the number of variables and clauses created for port matching constraints
-    print(f"[kissat] Port matching constraints: vars={pool.top - num_label_vars}, clauses={len(cnf.clauses) - num_label_clauses}")
+    if progress:
+        print(f"[kissat] Port matching constraints: vars={pool.top - num_label_vars}, clauses={len(cnf.clauses) - num_label_clauses}")
 
 
     # ---------------- (3) Trace constraints ----------------
@@ -266,7 +268,6 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
             if assign.get(pool.id(("L", k, bits)), False):
                 val = bits
                 break
-        print(k, [(pool.id(("L", k, bits)), assign.get(pool.id(("L", k, bits)), False)) for bits in range(4)])
         assert val is not None, f"Room {k} has no label assigned"
         rooms.append(val)
 
@@ -290,6 +291,78 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
         "startingRoom": starting_room,
         "connections": connections,
     }
+
+
+def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, out: Dict[str, any], progress: bool = True) -> Tuple[bool, List[str]]:
+    D = 6
+    P = N * D
+    errs: List[str] = []
+
+    # Build port matching map p -> q from connections
+    match = [-1] * P
+    for c in out.get("connections", []):
+        ri = int(c["from"]["room"])
+        di = int(c["from"]["door"]) 
+        rj = int(c["to"]["room"])
+        dj = int(c["to"]["door"]) 
+        p = ri * D + di
+        q = rj * D + dj
+        if not (0 <= p < P and 0 <= q < P):
+            errs.append(f"invalid connection port index: p={p}, q={q}")
+            continue
+        if match[p] != -1 and match[p] != q:
+            errs.append(f"port {p} matched twice: {match[p]} and {q}")
+        if match[q] != -1 and match[q] != p:
+            errs.append(f"port {q} matched twice: {match[q]} and {p}")
+        match[p] = q
+        match[q] = p
+
+    # Check all ports matched
+    for p in range(P):
+        if match[p] == -1:
+            ri, di = divmod(p, D)
+            errs.append(f"unmatched port: room={ri}, door={di}")
+
+    labels = out.get("rooms", [])
+    if len(labels) != N:
+        errs.append(f"rooms label length mismatch: got {len(labels)} expected {N}")
+
+    # Simulate each plan
+    for idx, (plan, obs) in enumerate(zip(plans, results)):
+        # start
+        cur = 0
+        if not (0 <= cur < N):
+            errs.append(f"plan {idx}: starting room out of range: {cur}")
+            continue
+        if labels and (labels[cur] != int(obs[0])):
+            errs.append(f"plan {idx} step 0: label mismatch at room {cur}: expected {obs[0]}, got {labels[cur]}")
+        # steps
+        for t, a in enumerate(plan):
+            if not (0 <= a < D):
+                errs.append(f"plan {idx} step {t}: action out of range: {a}")
+                break
+            p = cur * D + a
+            if match[p] == -1:
+                errs.append(f"plan {idx} step {t}: port {p} (room {cur}, door {a}) has no match")
+                break
+            q = match[p]
+            nxt = q // D
+            cur = nxt
+            expected = int(obs[t + 1])
+            if labels and (labels[cur] != expected):
+                errs.append(
+                    f"plan {idx} step {t+1}: label mismatch at room {cur}: expected {expected}, got {labels[cur]}"
+                )
+
+    ok = len(errs) == 0
+    if progress:
+        if ok:
+            print("[verify] All plans consistent with solution.")
+        else:
+            print(f"[verify] Found {len(errs)} issues:")
+            for m in errs:
+                print(" -", m)
+    return ok, errs
 
 
 def main() -> None:
@@ -327,6 +400,11 @@ def main() -> None:
         out = {"status": 0, "error": f"Kissat returned {status}"}
     else:
         out = extract_solution(meta, assign)
+        # Post-verify the solution against input plans/results
+        ok, errs = verify_solution(plans, results, N, out, progress=args.progress)
+        out["verified"] = bool(ok)
+        if not ok:
+            out["verifyErrors"] = errs
 
     if args.output:
         with open(args.output, "w") as f:
