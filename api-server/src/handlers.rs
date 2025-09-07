@@ -351,12 +351,13 @@ pub async fn get_sessions(
 
     let sessions: Vec<SessionWithProblem> = sessions_with_problems
         .into_iter()
-        .map(|(session, problem_name)| SessionWithProblem {
+        .map(|(session, problem_name, score)| SessionWithProblem {
             id: session.id,
             session_id: session.session_id,
             user_name: session.user_name,
             problem_name,
             status: session.status,
+            score,
             created_at: session.created_at,
             completed_at: session.completed_at,
         })

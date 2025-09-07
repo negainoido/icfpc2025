@@ -5,6 +5,7 @@ export interface Session {
   user_name?: string;
   problem_name?: string;
   status: string;
+  score?: number;
   created_at: string;
   completed_at?: string;
 }

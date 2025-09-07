@@ -44,6 +44,8 @@ pub struct SessionWithProblemName {
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
     pub response_body: Option<String>,
+    pub score_response_body: Option<String>,
+    pub guess_response_body: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -106,7 +108,7 @@ pub struct ExploreUpstreamRequest {
 pub struct ExploreUpstreamResponse {
     pub results: Vec<Vec<i32>>,
     #[serde(rename = "queryCount")]
-    pub query_count: i32,
+    pub query_count: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,7 +116,7 @@ pub struct ExploreResponse {
     pub session_id: String,
     pub results: Vec<Vec<i32>>,
     #[serde(rename = "queryCount")]
-    pub query_count: i32,
+    pub query_count: u64,
 }
 
 // Guess API types
@@ -178,6 +180,7 @@ pub struct SessionWithProblem {
     pub user_name: Option<String>,
     pub problem_name: Option<String>,
     pub status: String,
+    pub score: Option<u64>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
 }

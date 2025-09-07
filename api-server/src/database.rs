@@ -1,9 +1,7 @@
-use crate::models::{
-    ApiError, ApiLog, SelectUpstreamRequest, SelectUpstreamResponse, Session, SessionWithProblem,
-    SessionWithProblemName,
-};
+use crate::models::{ApiError, ApiLog, ExploreUpstreamResponse, GuessUpstreamResponse, SelectUpstreamRequest, SelectUpstreamResponse, Session, SessionWithProblem, SessionWithProblemName};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
+use tower_http::follow_redirect::policy::PolicyExt;
 use uuid::Uuid;
 
 pub async fn create_pool() -> Result<MySqlPool, sqlx::Error> {
@@ -374,7 +372,7 @@ pub async fn get_all_sessions(pool: &MySqlPool) -> Result<Vec<Session>, ApiError
 
 pub async fn get_all_sessions_with_problems(
     pool: &MySqlPool,
-) -> Result<Vec<(Session, Option<String>)>, ApiError> {
+) -> Result<Vec<(Session, Option<String>, Option<u64>)>, ApiError> {
     let sessions = sqlx::query_as::<_, SessionWithProblemName>(
         r#"
         SELECT 
@@ -383,7 +381,17 @@ pub async fn get_all_sessions_with_problems(
              FROM api_logs 
              WHERE session_id = s.session_id AND endpoint = 'select' 
              ORDER BY created_at ASC 
-             LIMIT 1) as response_body
+             LIMIT 1) as response_body,
+            (SELECT response_body
+             FROM api_logs
+             WHERE session_id = s.session_id AND endpoint = 'explore'
+             ORDER BY created_at DESC
+             LIMIT 1) as score_response_body,
+            (SELECT response_body
+             FROM api_logs
+             WHERE session_id = s.session_id AND endpoint = 'guess'
+             ORDER BY created_at DESC
+             LIMIT 1) as guess_response_body
         FROM sessions s
         ORDER BY s.created_at DESC
         "#,
@@ -408,8 +416,18 @@ pub async fn get_all_sessions_with_problems(
                     .map(|r| r.problem_name)
                     .ok()
             });
+            let score = row.score_response_body.and_then(|json_str| {
+                serde_json::from_str::<ExploreUpstreamResponse>(&json_str)
+                    .map(|r| r.query_count)
+                    .ok()
+            });
+            let guess_result = row.guess_response_body.and_then(|json_str| {
+                serde_json::from_str::<GuessUpstreamResponse>(&json_str)
+                    .map(|r| r.correct)
+                    .ok()
+            }).unwrap_or(false);
 
-            (session, problem_name)
+            (session, problem_name, guess_result.then(|| score).flatten())
         })
         .collect();
 
