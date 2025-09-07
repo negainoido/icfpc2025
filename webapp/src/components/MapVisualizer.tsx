@@ -36,7 +36,19 @@ export default function MapVisualizer({
     );
     const layoutBounds = getLayoutBounds(roomLayout);
 
-    const hexRadius = 50;
+    // Choose hex radius based on nearest neighbor distance to avoid overlaps
+    let minNeighborDist = Infinity;
+    for (let i = 0; i < roomLayout.length; i++) {
+      for (let j = i + 1; j < roomLayout.length; j++) {
+        const dx = roomLayout[j].position.x - roomLayout[i].position.x;
+        const dy = roomLayout[j].position.y - roomLayout[i].position.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < minNeighborDist) minNeighborDist = dist;
+      }
+    }
+    if (!isFinite(minNeighborDist)) minNeighborDist = 120;
+    const hexRadius = Math.max(18, Math.min(60, Math.floor(minNeighborDist * 0.28)));
+
     const roomHexagons = roomLayout.map((room) => ({
       ...room,
       hexagon: calculateHexagon(room.position, hexRadius),
@@ -50,7 +62,7 @@ export default function MapVisualizer({
 
   // Calculate viewBox to fit all rooms
   const viewBox = useMemo(() => {
-    const margin = 100;
+    const margin = 120;
     const width = bounds.maxX - bounds.minX + 2 * margin;
     const height = bounds.maxY - bounds.minY + 2 * margin;
     return {
