@@ -1,4 +1,7 @@
-use crate::models::{ApiError, ApiLog, Session};
+use crate::models::{
+    ApiError, ApiLog, SelectUpstreamRequest, SelectUpstreamResponse, Session, SessionWithProblem,
+    SessionWithProblemName,
+};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
 use uuid::Uuid;
@@ -367,6 +370,50 @@ pub async fn get_all_sessions(pool: &MySqlPool) -> Result<Vec<Session>, ApiError
         .await?;
 
     Ok(sessions)
+}
+
+pub async fn get_all_sessions_with_problems(
+    pool: &MySqlPool,
+) -> Result<Vec<(Session, Option<String>)>, ApiError> {
+    let sessions = sqlx::query_as::<_, SessionWithProblemName>(
+        r#"
+        SELECT 
+            s.*,
+            (SELECT response_body
+             FROM api_logs 
+             WHERE session_id = s.session_id AND endpoint = 'select' 
+             ORDER BY created_at ASC 
+             LIMIT 1) as response_body
+        FROM sessions s
+        ORDER BY s.created_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let result = sessions
+        .into_iter()
+        .map(|row| {
+            let session = Session {
+                id: row.id,
+                session_id: row.session_id,
+                user_name: row.user_name,
+                status: row.status,
+                created_at: row.created_at,
+                completed_at: row.completed_at,
+            };
+
+            let problem_name = row.response_body.and_then(|json_str| {
+                serde_json::from_str::<SelectUpstreamResponse>(&json_str)
+                    .map(|r| r.problem_name)
+                    .ok()
+            });
+
+            (session, problem_name)
+        })
+        .collect();
+
+    Ok(result)
 }
 
 pub async fn get_session_by_id(

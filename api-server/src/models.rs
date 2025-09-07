@@ -36,6 +36,17 @@ pub struct Session {
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct SessionWithProblemName {
+    pub id: i32,
+    pub session_id: String,
+    pub user_name: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub response_body: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct ApiLog {
     pub id: i32,
     pub session_id: String,
@@ -161,8 +172,19 @@ pub struct SessionDetail {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct SessionWithProblem {
+    pub id: i32,
+    pub session_id: String,
+    pub user_name: Option<String>,
+    pub problem_name: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SessionsListResponse {
-    pub sessions: Vec<Session>,
+    pub sessions: Vec<SessionWithProblem>,
 }
 
 // Session export types

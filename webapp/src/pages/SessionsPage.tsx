@@ -272,6 +272,12 @@ const SessionsPage = () => {
                   <div style={{ color: '#155724' }}>
                     <strong>セッションID:</strong> {currentSession.session_id}
                     <br />
+                    {currentSession.problem_name && (
+                      <>
+                        <strong>問題名:</strong> {currentSession.problem_name}
+                        <br />
+                      </>
+                    )}
                     {currentSession.user_name && (
                       <>
                         <strong>ユーザー名:</strong> {currentSession.user_name}
@@ -383,6 +389,15 @@ const SessionsPage = () => {
                         borderBottom: '2px solid #dee2e6',
                       }}
                     >
+                      問題名
+                    </th>
+                    <th
+                      style={{
+                        padding: '12px',
+                        textAlign: 'left',
+                        borderBottom: '2px solid #dee2e6',
+                      }}
+                    >
                       ユーザー名
                     </th>
                     <th
@@ -446,6 +461,9 @@ const SessionsPage = () => {
                         }}
                       >
                         {session.session_id.substring(0, 8)}...
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        {session.problem_name || '-'}
                       </td>
                       <td style={{ padding: '12px' }}>
                         {session.user_name || '-'}

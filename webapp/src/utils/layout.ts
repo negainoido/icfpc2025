@@ -141,7 +141,8 @@ function forceDirectedLayout(
       const dy = layout[j].position.y - layout[i].position.y;
       const distance = Math.sqrt(dx * dx + dy * dy) + 0.01;
 
-      const force = (attractionStrength * (distance - idealDistance)) / distance;
+      const force =
+        (attractionStrength * (distance - idealDistance)) / distance;
       const fx = (dx / distance) * force;
       const fy = (dy / distance) * force;
 

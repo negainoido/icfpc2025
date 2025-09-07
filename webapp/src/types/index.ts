@@ -3,6 +3,7 @@ export interface Session {
   id: number;
   session_id: string;
   user_name?: string;
+  problem_name?: string;
   status: string;
   created_at: string;
   completed_at?: string;
