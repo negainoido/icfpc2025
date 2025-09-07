@@ -91,7 +91,7 @@ class API:
             "CF-Access-Client-Secret": self.client_secret,
         }
         data = {key: val for key, val in data.items() if val}
-        for _try in range(max_retries):
+        for i_try in range(max_retries):
             try:
                 response = requests.post(url, json=data, headers=headers)
                 response.raise_for_status()
@@ -102,9 +102,9 @@ class API:
                     click.secho(f"{e.response.text}", err=True, fg="red")
                     if e.response.status_code >= 500:
                         click.secho(
-                            f"Retrying... [{_try}/{max_retries}]", err=True, fg="yellow"
+                            f"Retrying... [{i_try}/{max_retries}]", err=True, fg="yellow"
                         )
-                        time.sleep(0.1)
+                        time.sleep(0.1 * (1.6**i_try))
                         continue
                 sys.exit(1)
 
@@ -115,6 +115,7 @@ class API:
             "problemName": problem_name,
         }
         result = self.make_request("/select", data)
+        assert result is not None, "Request failed"
         if "session_id" in result:
             self.session_id = result["session_id"]
             print(f"SessionId: {self.session_id}")
@@ -123,11 +124,14 @@ class API:
     def explore(self, plans: list[str]):
         data = {"id": self.team_id, "user_name": self.user_name, "plans": plans}
         result = self.make_request("/explore", data)
+        assert result is not None, "Request failed"
         return result
 
     def guess(self, map_data: dict[str, Any]) -> dict[str, Any]:
         data = {"id": self.team_id, "user_name": self.user_name, "map": map_data}
-        return self.make_request("/guess", data)
+        result = self.make_request("/guess", data)
+        assert result is not None, "Request failed"
+        return result
 
     def make_get_request(self, endpoint: str) -> dict[str, Any]:
         """GETリクエストを送信し、レスポンスを返す"""
