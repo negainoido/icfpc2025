@@ -94,7 +94,7 @@ PROBLEM_SIZES = {
     "zain": 36,
     "hhet": 54,
     "teth": 72,
-    "iod": 9,
+    "iod": 90,
 }
 DOOR_LIMITS = {
     "__default": 18,

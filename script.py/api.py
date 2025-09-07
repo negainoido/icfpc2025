@@ -87,7 +87,9 @@ class API:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            click.echo(f"エラー: {e}", err=True)
+            click.secho(e, err=True, fg="red")
+            if e.response is not None:
+                click.secho(f"{e.response.text}", err=True, fg="red")
             sys.exit(1)
 
     def select(self, problem_name: str) -> dict[str, Any]:
@@ -123,7 +125,7 @@ class API:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            click.echo(f"エラー: {e}", err=True)
+            click.secho(e, err=True, fg="red")
             sys.exit(1)
 
     def make_put_request(self, endpoint: str) -> bool:
@@ -138,7 +140,7 @@ class API:
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
-            click.echo(f"エラー: {e}", err=True)
+            click.secho(e, err=True, fg="red")
             return False
 
     def get_sessions(self) -> dict[str, Any]:
@@ -185,6 +187,16 @@ def select(problem_name: str):
       tertius       18
       quartus       24
       quintus       30
+      aleph         12
+      beth          24
+      gimel         36
+      daleth        48
+      he            60
+      vau           18
+      zain          36
+      hhet          54
+      teth          72
+      iod           90
     """
     click.echo(f"問題 '{problem_name}' を選択中...")
     result = api.select(problem_name)
