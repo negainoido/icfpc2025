@@ -211,6 +211,7 @@ def cegis_solve(
     *,
     use_lex_symmetry=False,
     use_pattern_c=True,
+    snapshot_output: Path | None = None,
 ):
     extra = []  # 反例から積む制約（ports固定モード用）
     path_prefix = {}  # t_idx -> L（パス接地モード用）
@@ -232,6 +233,19 @@ def cegis_solve(
         res = solver.Solve(model)
         if verbose:
             print(f"[iter {it}] status:", solver.StatusName(res))
+            try:
+                stats = solver.ResponseStats()
+                print(f"[iter {it}] cpsat:\n{stats}")
+            except Exception:
+                # Fallback: minimal counters if ResponseStats is unavailable
+                try:
+                    print(
+                        f"[iter {it}] cpsat: wall={solver.WallTime():.3f}s, "
+                        f"conflicts={getattr(solver, 'NumConflicts', lambda: 'n/a')()}, "
+                        f"branches={getattr(solver, 'NumBranches', lambda: 'n/a')()}"
+                    )
+                except Exception:
+                    pass
 
         if res not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return None, {"status": solver.StatusName(res), "iter": it, "extra": extra}
@@ -241,6 +255,11 @@ def cegis_solve(
         P = 6 * N
         labels_room = [solver.Value(label_room[q]) for q in range(N)]
         mu = [solver.Value(m) for m in mate]
+
+        # スナップショット保存（各反復の候補解）
+        if snapshot_output is not None:
+            snap = _suffixed_path(Path(snapshot_output), it)
+            _write_map_json(snap, labels_room, mu, problem["s0"], N)
 
         # 検証
         traces = problem["traces"]
@@ -288,6 +307,24 @@ def mu_to_connections(mu, N):
                 {"from": {"room": q, "door": d}, "to": {"room": q2, "door": d2}}
             )
     return conns
+
+
+def _suffixed_path(base: Path, it: int) -> Path:
+    suf = f"-{it:02d}"
+    if base.suffix:
+        return base.with_name(base.stem + suf + base.suffix)
+    return base.with_name(base.name + suf)
+
+
+def _write_map_json(out_path: Path, labels_room, mu, s0, N):
+    out = {
+        "rooms": list(labels_room),
+        "startingRoom": s0,
+        "connections": mu_to_connections(list(mu), N),
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
 
 
 def main():
@@ -350,22 +387,15 @@ def main():
         verbose=not args.quiet,
         use_lex_symmetry=args.lex_sym,
         use_pattern_c=use_pattern_c,
+        snapshot_output=Path(args.output),
     )
     if sol is None:
         print("CEGIS 失敗:", meta)
         return
 
     N = prob["N"]
-    out = {
-        "rooms": sol["labels_room"],
-        "startingRoom": prob["s0"],
-        "connections": mu_to_connections(sol["mu"], N),
-    }
     out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(out, f, ensure_ascii=False, indent=2)
-
+    _write_map_json(out_path, sol["labels_room"], sol["mu"], prob["s0"], N)
     print("解を書き出しました:", str(out_path))
 
 
