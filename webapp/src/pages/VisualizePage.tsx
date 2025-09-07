@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import {MapStruct, ApiLog, ExploreState, ExploreStep} from '../types';
+import {
+  MapStruct,
+  ApiLog,
+  ExploreState,
+  ExploreStep,
+  SessionDetail,
+} from '../types';
 import { api } from '../services/api';
 import MapInput from '../components/MapInput';
 import MapVisualizer from '../components/MapVisualizer';
-import ExploreInput from "../components/ExploreInput.tsx";
-import ExploreVisualizer from "../components/ExploreVisualizer.tsx";
+import ExploreInput from '../components/ExploreInput.tsx';
+import ExploreVisualizer from '../components/ExploreVisualizer.tsx';
+import { parseExploreString, predictObservedLabels } from '../utils/explore';
 
 export default function VisualizePage() {
   const [map, setMap] = useState<MapStruct | null>(null);
@@ -18,9 +25,26 @@ export default function VisualizePage() {
   const location = useLocation();
   const [exploreSteps, setExploreSteps] = useState<ExploreStep[]>([]);
   const [exploreState, setExploreState] = useState<ExploreState | null>(null);
+  const [exploreOptions, setExploreOptions] = useState<
+    {
+      key: string;
+      logId: number;
+      planIndex: number;
+      plan: string;
+      label: string;
+    }[]
+  >([]);
+  const [selectedExploreKey, setSelectedExploreKey] = useState<string | null>(
+    null
+  );
+  const [exploreResponses, setExploreResponses] = useState<
+    Record<number, { results: number[][]; queryCount?: number }>
+  >({});
 
   // Helper function to extract map from the last guess request
-  const extractMapFromLastGuessRequest = (apiLogs: ApiLog[]): MapStruct | null => {
+  const extractMapFromLastGuessRequest = (
+    apiLogs: ApiLog[]
+  ): MapStruct | null => {
     const guessLogs = apiLogs
       .filter((log) => log.endpoint === 'guess' && log.request_body)
       .sort(
@@ -38,6 +62,74 @@ export default function VisualizePage() {
     }
   };
 
+  // Extract explore plans from session detail
+  const extractExploreOptionsFromSessionDetail = (detail: SessionDetail) => {
+    const options: {
+      key: string;
+      logId: number;
+      planIndex: number;
+      plan: string;
+      label: string;
+    }[] = [];
+    const responses: Record<
+      number,
+      { results: number[][]; queryCount?: number }
+    > = {};
+
+    detail.api_logs
+      .filter((log) => log.endpoint === 'explore' && log.request_body)
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      .forEach((log) => {
+        try {
+          const req = JSON.parse(log.request_body || '{}') as {
+            plans?: string[];
+          };
+          const plans = req.plans || [];
+          plans.forEach((plan, idx) => {
+            const shortPlan =
+              plan.length > 40 ? `${plan.slice(0, 37)}...` : plan;
+            const ts = new Date(log.created_at).toLocaleString('ja-JP');
+            options.push({
+              key: `${log.id}-${idx}`,
+              logId: log.id,
+              planIndex: idx,
+              plan,
+              label: `#${log.id} @ ${ts} (plan ${idx + 1}): ${shortPlan}`,
+            });
+          });
+          if (log.response_body) {
+            try {
+              const resp = JSON.parse(log.response_body) as {
+                results?: number[][];
+                queryCount?: number;
+              };
+              if (Array.isArray(resp.results)) {
+                responses[log.id] = {
+                  results: resp.results,
+                  queryCount: resp.queryCount,
+                };
+              }
+            } catch (e) {
+              // ignore malformed response
+            }
+          }
+        } catch (e) {
+          // ignore malformed
+        }
+      });
+
+    setExploreOptions(options);
+    setExploreResponses(responses);
+    if (options.length > 0) {
+      setSelectedExploreKey(options[0].key);
+    } else {
+      setSelectedExploreKey(null);
+    }
+  };
+
   // Handle map data passed from session history or fetch from session
   useEffect(() => {
     const state = location.state as any;
@@ -48,6 +140,17 @@ export default function VisualizePage() {
       setError(null);
       if (state.sessionId && state.logId) {
         setSessionInfo({ sessionId: state.sessionId, logId: state.logId });
+      }
+      // If we know the session, also fetch explore options
+      if (state.sessionId) {
+        (async () => {
+          try {
+            const sessionDetail = await api.getSessionDetail(state.sessionId);
+            extractExploreOptionsFromSessionDetail(sessionDetail);
+          } catch (err) {
+            // ignore explore options failure
+          }
+        })();
       }
       return;
     }
@@ -69,6 +172,9 @@ export default function VisualizePage() {
           } else {
             setError('このセッションにはguessリクエストが見つかりませんでした');
           }
+
+          // Also extract explore plans
+          extractExploreOptionsFromSessionDetail(sessionDetail);
         } catch (err) {
           console.error('Failed to fetch session details:', err);
           setError('セッションデータの取得に失敗しました');
@@ -98,12 +204,76 @@ export default function VisualizePage() {
   };
 
   const handleExploreLoad = (newSteps: ExploreStep[]) => {
-      setExploreSteps(newSteps);
+    setExploreSteps(newSteps);
   };
   const handleExploreStateChange = (state: ExploreState | null) => {
-      console.log('Explore state changed:', state);
-      setExploreState(state);
-  }
+    console.log('Explore state changed:', state);
+    setExploreState(state);
+  };
+
+  const handleLoadSelectedExplore = () => {
+    if (!selectedExploreKey) return;
+    const option = exploreOptions.find((o) => o.key === selectedExploreKey);
+    if (!option) return;
+    try {
+      const steps = parseExploreString(option.plan);
+      setExploreSteps(steps);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const selectedOption = selectedExploreKey
+    ? exploreOptions.find((o) => o.key === selectedExploreKey) || null
+    : null;
+  const actualLabels = selectedOption
+    ? exploreResponses[selectedOption.logId]?.results?.[
+        selectedOption.planIndex
+      ] || null
+    : null;
+  const expectedLabels =
+    map && exploreSteps.length > 0
+      ? predictObservedLabels(map, exploreSteps)
+      : null;
+
+  const renderLabelsRow = (
+    labels: number[] | null,
+    compareTo?: number[] | null
+  ) => {
+    if (!labels) return <span style={{ color: '#6c757d' }}>N/A</span>;
+    const maxLen = Math.max(labels.length, compareTo?.length || 0);
+    const items = [] as JSX.Element[];
+    for (let i = 0; i < maxLen; i++) {
+      const v = labels[i];
+      const other = compareTo ? compareTo[i] : undefined;
+      const match = other === undefined ? true : v === other;
+      const bg =
+        other === undefined ? '#e9ecef' : match ? '#d4edda' : '#f8d7da';
+      const color =
+        other === undefined ? '#495057' : match ? '#155724' : '#721c24';
+      items.push(
+        <span
+          key={i}
+          title={`index ${i}${other !== undefined ? `, expected ${other}` : ''}`}
+          style={{
+            display: 'inline-block',
+            minWidth: 22,
+            padding: '2px 6px',
+            marginRight: 4,
+            borderRadius: 4,
+            backgroundColor: bg,
+            color,
+            textAlign: 'center',
+            fontFamily: 'monospace',
+          }}
+        >
+          {v === undefined ? '—' : v}
+        </span>
+      );
+    }
+    return <div style={{ display: 'flex', flexWrap: 'wrap' }}>{items}</div>;
+  };
 
   return (
     <div
@@ -235,8 +405,8 @@ export default function VisualizePage() {
               </div>
             </div>
           ) : map ? (
-            <MapVisualizer 
-              map={map} 
+            <MapVisualizer
+              map={map}
               exploreState={exploreState}
               highlightCurrentRoom={exploreState?.currentRoom}
               pathHistory={exploreState?.pathHistory}
@@ -269,6 +439,54 @@ export default function VisualizePage() {
               boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
             }}
           >
+            {sessionInfo && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  alignItems: 'center',
+                  marginBottom: '12px',
+                }}
+              >
+                <span style={{ fontSize: '14px', color: '#495057' }}>
+                  Explore選択:
+                </span>
+                <select
+                  value={selectedExploreKey ?? ''}
+                  onChange={(e) =>
+                    setSelectedExploreKey(e.target.value || null)
+                  }
+                  style={{ padding: '6px 8px', minWidth: '320px' }}
+                >
+                  {exploreOptions.length === 0 ? (
+                    <option value="" disabled>
+                      セッション内にExploreが見つかりません
+                    </option>
+                  ) : (
+                    exploreOptions.map((opt) => (
+                      <option key={opt.key} value={opt.key}>
+                        {opt.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  onClick={handleLoadSelectedExplore}
+                  disabled={!selectedExploreKey}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: selectedExploreKey ? 'pointer' : 'not-allowed',
+                    fontSize: '12px',
+                  }}
+                >
+                  選択を読み込む
+                </button>
+              </div>
+            )}
             {exploreSteps.length > 0 ? (
               <ExploreVisualizer
                 map={map}
@@ -286,7 +504,93 @@ export default function VisualizePage() {
                   fontSize: '16px',
                 }}
               >
-                Enter an explore string below to start the simulation
+                下の入力欄からExplore文字列を入力、または上でExploreを選択して読み込み
+              </div>
+            )}
+
+            {/* Expected vs Actual response comparison */}
+            {selectedOption && (
+              <div
+                style={{
+                  marginTop: '12px',
+                  borderTop: '1px solid #dee2e6',
+                  paddingTop: '12px',
+                }}
+              >
+                <div style={{ marginBottom: 6, color: '#343a40' }}>
+                  <strong>選択中のExplore:</strong>{' '}
+                  <code>{selectedOption.plan}</code>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '160px 1fr',
+                    rowGap: 8,
+                    columnGap: 10,
+                  }}
+                >
+                  <div style={{ color: '#495057' }}>Expected (from map):</div>
+                  <div>{renderLabelsRow(expectedLabels, actualLabels)}</div>
+                  <div style={{ color: '#495057' }}>Actual (API):</div>
+                  <div>{renderLabelsRow(actualLabels, expectedLabels)}</div>
+                </div>
+                {expectedLabels && actualLabels && (
+                  <div style={{ marginTop: 8 }}>
+                    {JSON.stringify(expectedLabels) ===
+                    JSON.stringify(actualLabels) ? (
+                      <span
+                        style={{
+                          color: '#155724',
+                          background: '#d4edda',
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                        }}
+                      >
+                        ✅ 完全一致しました
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          color: '#721c24',
+                          background: '#f8d7da',
+                          padding: '4px 8px',
+                          borderRadius: 4,
+                        }}
+                      >
+                        ⚠️ 期待値とAPIレスポンスが異なります
+                      </span>
+                    )}
+                  </div>
+                )}
+                {/* Raw API response snippet */}
+                {actualLabels && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ color: '#495057', marginBottom: 4 }}>
+                      APIレスポンス（該当プラン）:
+                    </div>
+                    <pre
+                      style={{
+                        backgroundColor: '#f8f9fa',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        border: '1px solid #e9ecef',
+                        maxHeight: 160,
+                        overflow: 'auto',
+                        margin: 0,
+                      }}
+                    >
+                      {JSON.stringify(actualLabels)}
+                    </pre>
+                    {selectedOption &&
+                      exploreResponses[selectedOption.logId]?.queryCount !==
+                        undefined && (
+                        <div style={{ marginTop: 6, color: '#6c757d' }}>
+                          queryCount:{' '}
+                          {exploreResponses[selectedOption.logId]?.queryCount}
+                        </div>
+                      )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -301,12 +605,12 @@ export default function VisualizePage() {
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
           }}
         >
-            <ExploreInput
-                onExploreLoad={handleExploreLoad}
-                onError={handleError}
-                roomCount={map?.rooms.length || 0}
-            />
-        <MapInput onMapLoad={handleMapLoad} onError={handleError} />
+          <ExploreInput
+            onExploreLoad={handleExploreLoad}
+            onError={handleError}
+            roomCount={map?.rooms.length || 0}
+          />
+          <MapInput onMapLoad={handleMapLoad} onError={handleError} />
 
           {error && (
             <div

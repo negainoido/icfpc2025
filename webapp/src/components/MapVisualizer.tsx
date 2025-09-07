@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {MapStruct, ExploreVisualizationProps, PathSegment} from '../types';
+import { MapStruct, ExploreVisualizationProps, PathSegment } from '../types';
 import {
   calculateHexagon,
   hexagonToSVGPath,
@@ -14,7 +14,12 @@ interface Props extends ExploreVisualizationProps {
   map: MapStruct;
 }
 
-export default function MapVisualizer({ map, chalkMarks, pathHistory, highlightCurrentRoom }: Props) {
+export default function MapVisualizer({
+  map,
+  chalkMarks,
+  pathHistory,
+  highlightCurrentRoom,
+}: Props) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -329,14 +334,14 @@ export default function MapVisualizer({ map, chalkMarks, pathHistory, highlightC
               const isCurrentRoom = highlightCurrentRoom === index;
               const hasChalkMark = chalkMarks?.has(index);
               const chalkLabel = chalkMarks?.get(index);
-              
+
               // Determine the label to display (chalk mark overrides original)
               const displayLabel = hasChalkMark ? chalkLabel : room.label;
-              
+
               // Determine border color and width
               let borderColor = getRoomBorderColor(room.label);
               let borderWidth = 2;
-              
+
               if (isCurrentRoom) {
                 borderColor = '#ffc107'; // Amber for current room
                 borderWidth = 6;
@@ -357,7 +362,7 @@ export default function MapVisualizer({ map, chalkMarks, pathHistory, highlightC
                       opacity="0.3"
                     />
                   )}
-                  
+
                   {/* Room hexagon */}
                   <path
                     d={hexPath}
