@@ -13,8 +13,8 @@ mod models;
 
 use database::{create_pool, init_database};
 use handlers::{
-    abort_session_handler, explore, export_session, get_current_session, get_session_detail, get_sessions, guess,
-    select,
+    abort_session_handler, explore, export_session, get_current_session, get_session_detail,
+    get_sessions, guess, select,
 };
 
 #[tokio::main]

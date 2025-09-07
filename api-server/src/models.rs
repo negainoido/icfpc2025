@@ -132,6 +132,8 @@ pub struct GuessRequest {
     pub session_id: Option<String>,
     pub user_name: Option<String>,
     pub map: Map,
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

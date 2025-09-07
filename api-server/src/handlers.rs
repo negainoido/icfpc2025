@@ -11,9 +11,9 @@ use crate::{
     },
     icfpc_client::IcfpClient,
     models::{
-        ApiError, ErrorResponse, ExploreRequest, ExploreResponse, ExploreUpstreamRequest,
-        GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest, SelectResponse, Session,
-        SessionDetail, SessionsListResponse, SessionExport, SessionInfo, ApiHistoryEntry,
+        ApiError, ApiHistoryEntry, ErrorResponse, ExploreRequest, ExploreResponse,
+        ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest,
+        SelectResponse, Session, SessionDetail, SessionExport, SessionInfo, SessionsListResponse,
     },
 };
 
@@ -266,12 +266,28 @@ pub async fn guess(
     };
 
     let icfp_client = IcfpClient::new()?;
-
     let upstream_request = GuessUpstreamRequest {
         id: icfp_client.get_team_id(),
         map: payload.map,
     };
     let request_body = serde_json::to_string(&upstream_request).unwrap_or_default();
+    if payload.dry_run {
+        let _ = log_api_request(
+            &pool,
+            &session.session_id,
+            "guess",
+            Some(&request_body),
+            None,
+            None,
+        )
+        .await;
+        let response = GuessResponse {
+            session_id: session.session_id,
+            correct: true,
+        };
+
+        return Ok(Json(response));
+    };
 
     match icfp_client.guess(&upstream_request).await {
         Ok(upstream_response) => {
@@ -421,13 +437,15 @@ pub async fn export_session(
     let api_history: Vec<ApiHistoryEntry> = api_logs
         .into_iter()
         .map(|log| {
-            let request = log.request_body.as_ref().and_then(|body| {
-                serde_json::from_str(body).ok()
-            });
-            
-            let response = log.response_body.as_ref().and_then(|body| {
-                serde_json::from_str(body).ok()
-            });
+            let request = log
+                .request_body
+                .as_ref()
+                .and_then(|body| serde_json::from_str(body).ok());
+
+            let response = log
+                .response_body
+                .as_ref()
+                .and_then(|body| serde_json::from_str(body).ok());
 
             ApiHistoryEntry {
                 endpoint: log.endpoint,

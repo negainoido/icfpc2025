@@ -100,6 +100,7 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
 - `user_name`を指定：そのユーザーのアクティブセッションを使用
 - 両方指定された場合：`session_id`を優先
 - どちらも指定されていない場合：エラー
+- `dry_run`が指定されている場合、本家サーバーにリクエストは投げず、sessionも終了しない
 
 **リクエスト:**
 ```json
@@ -112,7 +113,8 @@ https://icfpcontest2025.github.io/specs/task_from_tex.html
     "connections": [
       {"from": {"room": 1, "door": 0}, "to": {"room": 2, "door": 1}},
       ...
-    ]
+    ],
+    dry_run: false
   }
 }
 ```
