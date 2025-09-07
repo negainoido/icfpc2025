@@ -6,14 +6,15 @@ use crate::{
     database::{
         abort_session, complete_session, create_session_if_no_active, create_session_or_enqueue,
         delete_pending_request, fail_session, get_active_session, get_active_session_by_user,
-        get_all_sessions, get_api_logs_for_session, get_session_by_id, log_api_request,
-        save_pending_request,
+        get_all_sessions, get_all_sessions_with_problems, get_api_logs_for_session,
+        get_session_by_id, log_api_request, save_pending_request,
     },
     icfpc_client::IcfpClient,
     models::{
         ApiError, ApiHistoryEntry, ErrorResponse, ExploreRequest, ExploreResponse,
         ExploreUpstreamRequest, GuessRequest, GuessResponse, GuessUpstreamRequest, SelectRequest,
-        SelectResponse, Session, SessionDetail, SessionExport, SessionInfo, SessionsListResponse,
+        SelectResponse, Session, SessionDetail, SessionExport, SessionInfo, SessionWithProblem,
+        SessionsListResponse,
     },
 };
 
@@ -344,7 +345,22 @@ pub async fn guess(
 pub async fn get_sessions(
     State(pool): State<MySqlPool>,
 ) -> Result<Json<SessionsListResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let sessions = get_all_sessions(&pool).await.map_err(ApiError::from)?;
+    let sessions_with_problems = get_all_sessions_with_problems(&pool)
+        .await
+        .map_err(ApiError::from)?;
+
+    let sessions: Vec<SessionWithProblem> = sessions_with_problems
+        .into_iter()
+        .map(|(session, problem_name)| SessionWithProblem {
+            id: session.id,
+            session_id: session.session_id,
+            user_name: session.user_name,
+            problem_name,
+            status: session.status,
+            created_at: session.created_at,
+            completed_at: session.completed_at,
+        })
+        .collect();
 
     let response = SessionsListResponse { sessions };
 

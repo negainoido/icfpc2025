@@ -110,7 +110,10 @@ export default function MapVisualizer({
     const currentHexPx = hexRadius * pxPerUnitX * zoom;
     const minHexPx = 34;
     if (currentHexPx < minHexPx) {
-      const neededZoom = Math.min(5, Math.max(zoom, minHexPx / (hexRadius * pxPerUnitX)));
+      const neededZoom = Math.min(
+        5,
+        Math.max(zoom, minHexPx / (hexRadius * pxPerUnitX))
+      );
       if (Math.abs(neededZoom - zoom) > 0.01) setZoom(neededZoom);
     }
   }, [hexRadius, viewBox.width]);
