@@ -112,6 +112,10 @@ class Graph:
         result = api.api.explore([path])
         return result["results"][0][-1]
 
+    def get_labels(self, paths: list[str]) -> list[int]:
+        results = api.api.explore(paths)["results"]
+        return [result[-1] for result in results]
+
     def get_node_label(self, node_id: int) -> int:
         if self.graph_labels[node_id] is None:
             path = self.get_path(0, node_id)
@@ -147,15 +151,19 @@ class Graph:
 
         # 逆向きの辺を探す
         reverse_doors = set()
+        reverse_door_plans = [] # batchで投げられるように配列をつくる
         for i, label_v_e_i in enumerate(surround_labels_v_e):
             if label_v_e_i != label_v:
                 continue
 
             label_v1 = (label_v + 1) % 4
             path_0_v_e_i = path_0_v + "[" + str(label_v1) + "]" + str(e) + str(i)
-            label_0_v_e_i = self.get_label(path_0_v_e_i)
-            if label_0_v_e_i == label_v1:
-                reverse_doors.add(i)  # This is the door from the neighbor back to v
+            reverse_door_plans.append([path_0_v_e_i, i, label_v1])
+
+        reverse_door_plan_results = self.get_labels([plan[0] for plan in reverse_door_plans])
+        for i, label in enumerate(reverse_door_plan_results):
+            if label == reverse_door_plans[i][2]:
+                reverse_doors.add(reverse_door_plans[i][1]) # This is the door from the neighbor back to v
 
         assert reverse_doors, "Reverse door not found"
 
