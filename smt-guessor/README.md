@@ -20,6 +20,21 @@ ICFP 2025「Ædificium」向けの SMT ベース地図再構成ツールです�
 3. 可視化（任意）:
    - `python visualize.py --input out.map.json --output map.png`
 
+### トレース可視化（trace.py）
+- 一つのマップに対するトレースの評価をインタラクティブに可視化します。
+- 例（サンプル同梱の `probatio`）:
+  - `python trace.py --trace example/probatio.json --map example/map-probatio.json`
+- オプション:
+  - `--plan-index <int>`: `plans`/`results` が複数ある場合に表示対象を選択（既定 0）。
+  - `--figsize W,H`: 図サイズ（既定 `8,8`）。
+- キー操作:
+  - 右/左矢印・`n`/`p`・スペース: 次/前のステップへ。
+  - `Home`/`End`: 先頭/末尾へジャンプ。
+  - `m`: ミスマッチした部屋のハイライト表示を切り替え。
+  - `q`: 閉じる。
+  - タイトルに `expected`（推定ラベル）と `observed`（観測値）を表示し、差異があるステップは赤、整合するステップは緑で強調表示します。
+  - 仕様: `results[0]` は `startingRoom` の観測と比較し、その後の `results[i+1]` は `plans[i]` で移動後の部屋ラベルと比較します。
+
 ## コマンド例（まとめ）
 ```
 # 1) 依存関係
