@@ -108,9 +108,12 @@ class Graph:
 
         assert False, "Path not found"
 
-    def get_label(self, path: str) -> int:
+    def get_labels(self, path: str) -> list[int]:
         result = api.api.explore([path])
-        return result["results"][0][-1]
+        return result["results"][0]
+
+    def get_label(self, path: str) -> int:
+        return self.get_labels(path)[-1]
 
     def get_labels(self, paths: list[str]) -> list[int]:
         results = api.api.explore(paths)["results"]
@@ -119,9 +122,7 @@ class Graph:
     def get_node_label(self, node_id: int) -> int:
         if self.graph_labels[node_id] is None:
             path = self.get_path(0, node_id)
-            result = api.api.explore([path])
-            click.echo(result)
-            self.graph_labels[node_id] = result["results"][0][-1]
+            self.graph_labels[node_id] = self.get_label(path)
 
         label = self.graph_labels[node_id]
         assert label is not None, "GetNode label is None"
@@ -169,6 +170,12 @@ class Graph:
 
         assert reverse_doors, "Reverse door not found"
 
+        if all(self.get_node_label(r) != label_v_e for r in self.reachable):
+            new_node_id = self.add_new_node(label_v_e)
+            self.add_edge(v, new_node_id, e, list(reverse_doors)[0])
+            self.reachable.add(new_node_id)
+            return True
+
         label_v_e1 = (label_v_e + 1) % 4
         path_0_v_e_reverse_door = (
             path_0_v
@@ -179,25 +186,61 @@ class Graph:
             + str(list(reverse_doors)[0])
         )
 
-        for r in self.reachable:
-            if self.get_node_label(r) != label_v_e:
+        visited = set()
+
+        def dfs(v: int) -> str:
+            if v in visited:
+                return ""
+            visited.add(v)
+            ret = ""
+            for i in range(6):
+                if self.graph[v][i] is None:
+                    continue
+                ret += str(i)
+                ret += dfs(self.graph[v][i])
+                ret += str(self.reverse_door[v][i])
+            return ret
+
+        visit_all_path = dfs(v)
+        v_e_reverse_door_visit_all_path = path_0_v_e_reverse_door + visit_all_path
+
+        visit_all_path_labels = self.get_labels(v_e_reverse_door_visit_all_path)[
+            -len(visit_all_path) - 1 :
+        ]
+
+        visit_all_path_doors = list(
+            map(
+                int,
+                list(visit_all_path),
+            )
+        )
+
+        label_r = visit_all_path_labels[0]
+        if label_r == label_v_e1:
+            for reverse_door in reverse_doors:
+                if self.graph[v][reverse_door] is not None:
+                    continue
+
+                self.add_edge(v, v, e, reverse_door)
+                return True
+            assert False, "Reverse door not found for v"
+
+        current_v = v
+        for idx, door in enumerate(visit_all_path_doors):
+            current_v = self.graph[current_v][door]
+            if self.get_node_label(current_v) != label_v_e:
                 continue
-            # Found a node 'r' that has the same label as the neighbor 'v_e'
-            path_v_r = self.get_path(v, r)
-            label_r = self.get_label(path_0_v_e_reverse_door + path_v_r)
+
+            label_r = visit_all_path_labels[idx + 1]
             if label_r == label_v_e1:
                 for reverse_door in reverse_doors:
-                    if self.graph[r][reverse_door] is not None:
+                    if self.graph[current_v][reverse_door] is not None:
                         continue
 
-                    self.add_edge(v, r, e, reverse_door)
+                    self.add_edge(v, current_v, e, reverse_door)
                     return True
 
-        new_node_id = self.add_new_node(label_v_e)
-        self.add_edge(v, new_node_id, e, list(reverse_doors)[0])
-        self.reachable.add(new_node_id)
-
-        return True
+        assert False, "not Reachable nor unreachable?"
 
     def get_map_data(self) -> dict:
         map_data = {
