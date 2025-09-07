@@ -79,14 +79,14 @@ const SessionsPage = () => {
   const handleExportSession = async (sessionId: string) => {
     try {
       const exportData = await api.exportSession(sessionId);
-      
+
       // JSON文字列に変換
       const jsonString = JSON.stringify(exportData, null, 2);
-      
+
       // ファイル名を生成
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `session_${sessionId.substring(0, 8)}_${timestamp}.json`;
-      
+
       // ダウンロード処理
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -97,7 +97,6 @@ const SessionsPage = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
     } catch (err) {
       console.error('Failed to export session:', err);
       setError('セッションのエクスポートに失敗しました');
@@ -472,7 +471,9 @@ const SessionsPage = () => {
                             詳細を見る
                           </button>
                           <button
-                            onClick={() => handleExportSession(session.session_id)}
+                            onClick={() =>
+                              handleExportSession(session.session_id)
+                            }
                             style={{
                               padding: '6px 12px',
                               backgroundColor: '#28a745',

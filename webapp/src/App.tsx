@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import GamePage from './pages/GamePage';
 import SessionsPage from './pages/SessionsPage';
+import VisualizePage from './pages/VisualizePage';
 import { SessionProvider } from './context/SessionContext';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/game" element={<GamePage />} />
             <Route path="/sessions" element={<SessionsPage />} />
+            <Route path="/visualize" element={<VisualizePage />} />
           </Routes>
         </div>
       </Router>
@@ -68,6 +70,7 @@ function HomePage() {
             display: 'flex',
             gap: '15px',
             justifyContent: 'center',
+            flexWrap: 'wrap',
           }}
         >
           <Link
@@ -101,6 +104,22 @@ function HomePage() {
             }}
           >
             View Sessions
+          </Link>
+          <Link
+            to="/visualize"
+            style={{
+              padding: '15px 30px',
+              backgroundColor: '#17a2b8',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '6px',
+              display: 'inline-block',
+              fontSize: '18px',
+              fontWeight: 'bold',
+              transition: 'background-color 0.3s',
+            }}
+          >
+            Visualize Map
           </Link>
         </div>
 
