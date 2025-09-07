@@ -13,12 +13,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
-from typing import Dict, List, Tuple, Iterable, Optional
+from typing import Dict, List, Tuple, Optional, Set
+
+from pysat.formula import CNF as SatCNF, IDPool
+from pysat.card import CardEnc, EncType
+
 
 
 
@@ -28,105 +30,6 @@ def normalize_plan(plan: str) -> List[int]:
     return [int(ch) - 1 for ch in plan]
 
 
-@dataclass
-class CNF:
-    num_vars: int
-    clauses: List[List[int]]
-
-    def add(self, lits: Iterable[int]) -> None:
-        self.clauses.append(list(lits))
-
-
-class CnfBuilder:
-    def __init__(self) -> None:
-        self.var_counter = 0
-        self.clauses: List[List[int]] = []
-        # variable maps
-        self.u_map: Dict[Tuple[int, int], int] = {}
-        self.x_map: Dict[Tuple[int, int, int], int] = {}
-        self.b_map: Dict[Tuple[int, int], int] = {}
-        self.m_map: Dict[Tuple[int, int], int] = {}
-
-    def new_var(self) -> int:
-        self.var_counter += 1
-        return self.var_counter
-
-    def lit(self, var: int, sign: bool = True) -> int:
-        return var if sign else -var
-
-    # Pair variable U_{i,j} with i<=j
-    def var_u(self, i: int, j: int) -> int:
-        if i <= j:
-            key = (i, j)
-        else:
-            key = (j, i)
-        v = self.u_map.get(key)
-        if v is None:
-            v = self.new_var()
-            self.u_map[key] = v
-        return v
-
-    # X variable for plan idx, time t, room k
-    def var_x(self, pid: int, t: int, k: int) -> int:
-        key = (pid, t, k)
-        v = self.x_map.get(key)
-        if v is None:
-            v = self.new_var()
-            self.x_map[key] = v
-        return v
-
-    # Label bit B_{k,bit} with bit in {0,1}
-    def var_b(self, k: int, bit: int) -> int:
-        key = (k, bit)
-        v = self.b_map.get(key)
-        if v is None:
-            v = self.new_var()
-            self.b_map[key] = v
-        return v
-
-    # Derived room-level matching M_{p,g} = OR_{o in 0..D-1} U_{p, D*g+o}
-    def var_m(self, p: int, g: int) -> int:
-        key = (p, g)
-        v = self.m_map.get(key)
-        if v is None:
-            v = self.new_var()
-            self.m_map[key] = v
-        return v
-
-    def add_clause(self, *lits: int) -> None:
-        self.clauses.append(list(lits))
-
-    def add_at_least_one(self, vars_list: List[int]) -> None:
-        # big OR
-        assert len(vars_list) > 0
-        self.add_clause(*vars_list)
-
-    def add_at_most_one_sequential(self, vars_list: List[int]) -> None:
-        # Sinz sequential encoding: O(n) clauses + (n-1) aux vars
-        n = len(vars_list)
-        if n <= 1:
-            return
-        s = [self.new_var() for _ in range(n - 1)]
-        # (¬x1 ∨ s1)
-        self.add_clause(-vars_list[0], s[0])
-        for i in range(1, n - 1):
-            # (¬x_{i+1} ∨ s_{i})
-            self.add_clause(-vars_list[i], s[i])
-            # (¬s_{i-1} ∨ s_{i})
-            self.add_clause(-s[i - 1], s[i])
-            # (¬x_{i+1} ∨ ¬s_{i-1})
-            self.add_clause(-vars_list[i], -s[i - 1])
-        # (¬x_n ∨ ¬s_{n-1})
-        self.add_clause(-vars_list[-1], -s[-1])
-
-    def add_exactly_one(self, vars_list: List[int]) -> None:
-        self.add_at_least_one(vars_list)
-        self.add_at_most_one_sequential(vars_list)
-
-    def build(self) -> CNF:
-        return CNF(self.var_counter, self.clauses)
-
-
 def build_cnf(
     plans: List[str],
     results: List[List[int]],
@@ -134,7 +37,7 @@ def build_cnf(
     starting_room: int = 0,
     D: int = 6,
     progress: bool = False,
-) -> Tuple[CNF, Dict[str, any]]:
+) -> Tuple[SatCNF, Dict[str, any]]:
     # Normalize inputs
     norm_plans = [normalize_plan(p) for p in plans]
     for i, (p, r) in enumerate(zip(norm_plans, results)):
@@ -144,10 +47,30 @@ def build_cnf(
             )
 
     P = D * N
-    cb = CnfBuilder()
+    cnf = SatCNF()
+    pool = IDPool()
+    u_keys: Set[Tuple[int, int]] = set()
+    m_keys: Set[Tuple[int, int]] = set()
+    x_keys: Set[Tuple[int, int, int]] = set()
 
     # Label bits per room (2-bit encoding)
-    B = [[cb.var_b(k, b) for b in range(2)] for k in range(N)]
+    def bvar(k: int, bit: int) -> int:
+        return pool.id(("B", k, bit))
+
+    # Helper for U and M and X
+    def uvar(i: int, j: int) -> int:
+        if i > j:
+            i, j = j, i
+        u_keys.add((i, j))
+        return pool.id(("U", i, j))
+
+    def mvar(p: int, g: int) -> int:
+        m_keys.add((p, g))
+        return pool.id(("M", p, g))
+
+    def xvar(pid: int, t: int, k: int) -> int:
+        x_keys.add((pid, t, k))
+        return pool.id(("X", pid, t, k))
 
     # Location variables per plan/time/room
     X: List[List[List[int]]] = []
@@ -155,11 +78,13 @@ def build_cnf(
         T = len(plan)
         x_plan: List[List[int]] = []
         for t in range(T + 1):
-            x_t = [cb.var_x(pid, t, k) for k in range(N)]
-            cb.add_exactly_one(x_t)
+            x_t = [xvar(pid, t, k) for k in range(N)]
+            # exactly one via PySAT encoder
+            enc = CardEnc.equals(lits=x_t, bound=1, vpool=pool, encoding=EncType.seqcounter)
+            cnf.extend(enc.clauses)
             x_plan.append(x_t)
         # starting room
-        cb.add_clause(cb.lit(x_plan[0][starting_room], True))
+        cnf.append([x_plan[0][starting_room]])
         X.append(x_plan)
 
         # label consistency: x[t,k] -> (B[k] == obs[t])
@@ -169,8 +94,8 @@ def build_cnf(
             b1 = (r >> 1) & 1
             for k in range(N):
                 # (¬x ∨ (B0 == b0)) and (¬x ∨ (B1 == b1))
-                cb.add_clause(-x_plan[t][k], cb.lit(B[k][0], bool(b0)))
-                cb.add_clause(-x_plan[t][k], cb.lit(B[k][1], bool(b1)))
+                cnf.append([-x_plan[t][k], bvar(k, 0) if b0 else -bvar(k, 0)])
+                cnf.append([-x_plan[t][k], bvar(k, 1) if b1 else -bvar(k, 1)])
 
         # transitions: for each t,k and each next room g,
         # x[t,k] ∧ (OR_{q in g} U_{p,q}) -> x[t+1,g]
@@ -180,25 +105,27 @@ def build_cnf(
             for k in range(N):
                 p = D * k + a_t
                 for g in range(N):
-                    m_pg = cb.var_m(p, g)
+                    m_pg = mvar(p, g)
                     # Link M_{p,g} <-> OR_{o} U_{p, D*g+o}
                     # (¬M ∨ U1 ∨ ... ∨ U6)
                     u_literals: List[int] = []
                     for o in range(D):
                         q = D * g + o
-                        u_literals.append(cb.var_u(min(p, q), max(p, q)))
+                        u_literals.append(uvar(p, q))
                         # (¬U -> M): (¬U ∨ M)
-                        cb.add_clause(-u_literals[-1], m_pg)
-                    cb.add_clause(-m_pg, *u_literals)
+                        cnf.append([-u_literals[-1], m_pg])
+                    cnf.append([-m_pg] + u_literals)
                     # (¬x[t,k] ∨ ¬M_{p,g} ∨ x[t+1,g])
-                    cb.add_clause(-X[pid][t][k], -m_pg, X[pid][t + 1][g])
+                    cnf.append([-X[pid][t][k], -m_pg, X[pid][t + 1][g]])
 
     # Port matching constraints: for each port p, exactly one partner q
     for p in range(P):
-        vars_list = [cb.var_u(min(p, q), max(p, q)) for q in range(P)]
-        cb.add_exactly_one(vars_list)
+        vars_list = [uvar(p, q) for q in range(P)]
+        enc = CardEnc.equals(lits=vars_list, bound=1, vpool=pool, encoding=EncType.seqcounter)
+        cnf.extend(enc.clauses)
 
-    cnf = cb.build()
+    # Ensure nv is at least the top variable id
+    cnf.nv = max(getattr(cnf, 'nv', 0) or 0, pool.top)
     meta = {
         "N": N,
         "D": D,
@@ -206,56 +133,30 @@ def build_cnf(
         "plans": norm_plans,
         "results": results,
         "starting_room": starting_room,
-        "u_map": cb.u_map,
-        "x_map": cb.x_map,
-        "b_map": cb.b_map,
-        "m_map": cb.m_map,
+        "pool": pool,
+        "u_keys": u_keys,
     }
     if progress:
-        print(
-            f"[kissat] CNF built: vars={cnf.num_vars}, clauses={len(cnf.clauses)}, U={len(cb.u_map)}, M={len(cb.m_map)}, X={len(cb.x_map)}"
-        )
+        print(f"[kissat] CNF built: vars~{pool.top}, clauses={len(cnf.clauses)}, U={len(u_keys)}, M={len(m_keys)}, X={len(x_keys)}")
     return cnf, meta
 
 
-def cnf_to_dimacs(cnf: CNF) -> str:
-    lines = [f"p cnf {cnf.num_vars} {len(cnf.clauses)}\n"]
-    for cl in cnf.clauses:
-        lines.append(" ".join(str(l) for l in cl) + " 0\n")
-    return "".join(lines)
-
-
 def solve_with_kissat(
-    cnf: CNF,
+    cnf: SatCNF,
     time_limit_s: Optional[float] = None,
     progress: bool = False,
 ) -> Tuple[str, Dict[int, bool]]:
     """Solve CNF with external 'kissat' binary. Returns (status, assignment). status in {SAT, UNSAT, UNKNOWN}"""
-    # Locate kissat binary
-    bin_path = shutil.which("kissat")
-    if not bin_path:
-        # Try alongside current Python (venv bin)
-        py_dir = os.path.dirname(sys.executable)
-        cand = os.path.join(py_dir, "kissat")
-        if os.path.isfile(cand) and os.access(cand, os.X_OK):
-            bin_path = cand
-    if not bin_path:
-        raise RuntimeError(
-            "'kissat' binary not found. Install it (e.g., 'brew install kissat' on macOS, 'apt install kissat' on Debian/Ubuntu),\n"
-            "or 'pip install passagemath-kissat' (which provides a 'kissat' console script),\n"
-            "or pass its path via --kissat-bin /path/to/kissat."
-        )
 
-    dimacs = cnf_to_dimacs(cnf)
     with tempfile.TemporaryDirectory() as td:
         cnf_path = os.path.join(td, "problem.cnf")
-        with open(cnf_path, "w") as f:
-            f.write(dimacs)
-        cmd = [bin_path, "-q", cnf_path]
+        # write DIMACS using PySAT utility
+        cnf.to_file(cnf_path)
+        cmd = ["kissat", "-q", cnf_path]
         # Try to pass time limit if supported
         if time_limit_s and time_limit_s > 0:
             # Many builds support '--time=SECONDS'
-            cmd = [bin_path, f"--time={int(time_limit_s)}", cnf_path]
+            cmd = ["kissat", f"--time={int(time_limit_s)}", cnf_path]
         if progress:
             print("[kissat] Running:", " ".join(cmd))
         try:
@@ -300,21 +201,21 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
     N = meta["N"]
     D = meta["D"]
     starting_room = meta["starting_room"]
-    b_map: Dict[Tuple[int, int], int] = meta["b_map"]
-    u_map: Dict[Tuple[int, int], int] = meta["u_map"]
+    pool: IDPool = meta["pool"]
+    u_keys: Set[Tuple[int, int]] = meta["u_keys"]
 
     # decode labels
     rooms: List[int] = []
     for k in range(N):
-        b0 = assign.get(b_map[(k, 0)], False)
-        b1 = assign.get(b_map[(k, 1)], False)
+        b0 = assign.get(pool.id(("B", k, 0)), False)
+        b1 = assign.get(pool.id(("B", k, 1)), False)
         val = (1 if b0 else 0) | ((1 if b1 else 0) << 1)
         rooms.append(val)
 
     # decode connections
     connections: List[Dict[str, Dict[str, int]]] = []
-    for (i, j), var in u_map.items():
-        if assign.get(var, False):
+    for (i, j) in u_keys:
+        if assign.get(pool.id(("U", i, j)), False):
             ri, di = divmod(i, D)
             rj, dj = divmod(j, D)
             connections.append(
