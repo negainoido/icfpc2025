@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Session, SessionDetail, Map } from '../types';
+import { try_json_string_format } from '../utils/text.ts';
 
 const SessionsPage = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -794,11 +795,7 @@ const SessionsPage = () => {
                               margin: '5px 0',
                             }}
                           >
-                            {JSON.stringify(
-                              JSON.parse(log.response_body),
-                              null,
-                              2
-                            )}
+                            {try_json_string_format(log.response_body)}
                           </pre>
                         </div>
                       )}
