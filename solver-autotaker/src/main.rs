@@ -71,10 +71,6 @@ struct Args {
     #[arg(long)]
     reheat_to: Option<f32>,
 
-    /// Probability of random relabel move (low)
-    #[arg(long, default_value_t = 0.05_f32)]
-    p_relabel: f32,
-
     /// Probability of 3-edge loop-change rewire move
     #[arg(long, default_value_t = 0.05_f32)]
     p_loopmove: f32,
@@ -128,7 +124,6 @@ struct Instance {
 
 #[derive(Clone)]
 struct Model {
-    labels: Vec<Label>,     // λ(q)
     match_to: Vec<usize>,   // μ: involution on 0..6N-1, μ[μ[p]]==p
 }
 
@@ -213,25 +208,8 @@ fn validate_instance(n: usize, s0: usize, plans: &[Vec<Door>], results: &[Vec<La
     Ok(())
 }
 
-fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
+fn build_initial(inst: &Instance, _rng: &mut StdRng) -> Model {
     let n = inst.n;
-    // Balanced labels (±1)
-    let mut labels = vec![0u8; n];
-    let m = (n / 4) as usize;
-    let r = (n % 4) as usize;
-    let mut pool: Vec<Label> = Vec::with_capacity(n);
-    for l in 0..4u8 {
-        let cnt = m + if (l as usize) < r { 1 } else { 0 };
-        for _ in 0..cnt { pool.push(l); }
-    }
-    pool.shuffle(rng);
-    for (i, &v) in pool.iter().enumerate() { labels[i] = v; }
-
-    // Optionally enforce starting room label to match observed (use first plan's first label if any)
-    if let Some(first) = inst.results.get(0).and_then(|v| v.first()).copied() {
-        if first <= 3 { labels[inst.s0] = first; }
-    }
-
     // match_to initialized to invalid
     let mut match_to = vec![usize::MAX; n * 6];
     // free bitmask per room: 6 bits set means free
@@ -260,11 +238,10 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
         match_to[j] = i;
     }
 
-    // Build by tracing plans: wire (q, a) -> some q_to whose label matches next observed label
-    for (plan, obs) in inst.plans.iter().zip(inst.results.iter()) {
+    // Build by tracing plans: wire (q, a) to some available destination port greedily
+    for plan in inst.plans.iter() {
         let mut q = inst.s0;
-        for (i, &a) in plan.iter().enumerate() {
-            let want = obs[i + 1];
+        for &a in plan.iter() {
             let p_from = to_port(q, a);
             // ensure from port is still free, otherwise skip (will close later)
             let from_free = (free[q] & (1u8 << a)) != 0;
@@ -279,16 +256,9 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
                 }
                 continue;
             }
-
-            // choose destination room with label want and free port
+            // choose any destination room with a free port
             let mut q_to: Option<usize> = None;
-            for cand in 0..n {
-                if labels[cand] == want && free[cand] != 0 { q_to = Some(cand); break; }
-            }
-            if q_to.is_none() {
-                // fallback: any room with free port
-                for cand in 0..n { if free[cand] != 0 { q_to = Some(cand); break; } }
-            }
+            for cand in 0..n { if free[cand] != 0 { q_to = Some(cand); break; } }
             if let Some(q2) = q_to {
                 // pick destination port, prefer opposite
                 let pref = ((a as u8 + 3) % 6) as u8;
@@ -332,49 +302,80 @@ fn build_initial(inst: &Instance, rng: &mut StdRng) -> Model {
         match_to[p] = p;
     }
 
-    Model { labels, match_to }
+    Model { match_to }
 }
 
-fn simulate(model: &Model, s0: Room, plan: &[Door]) -> Vec<Label> {
+fn trace_rooms(match_to: &[usize], s0: Room, plan: &[Door]) -> Vec<Room> {
     let mut q = s0;
     let mut out = Vec::with_capacity(plan.len() + 1);
-    out.push(model.labels[q]);
+    out.push(q);
+    let n_ports = match_to.len();
     for &a in plan {
         let p = to_port(q, a);
-        let p2 = model.match_to[p.0];
-        if p2 >= model.match_to.len() { // sanitize on the fly (shouldn't happen after finalize)
-            // treat as self-loop to stay in the same room
-            out.push(model.labels[q]);
-            continue;
-        }
+        let p2 = if p.0 < n_ports { match_to[p.0] } else { p.0 };
+        let p2 = if p2 < n_ports { p2 } else { p.0 };
         let (q2, _c2) = from_port(PortIdx(p2));
         q = q2;
-        out.push(model.labels[q]);
+        out.push(q);
     }
     out
 }
 
-fn energy(inst: &Instance, m: &Model, lambda_bal: f32) -> Energy {
-    // obs mismatch
+// Infer labels greedily by following all traces, enforcing strict quotas N//4 (+1 for first N%4 labels)
+fn infer_labels(inst: &Instance, match_to: &[usize]) -> Vec<Label> {
+    let n = inst.n;
+    let mut labels: Vec<Option<Label>> = vec![None; n];
+    let base = (n / 4) as i32;
+    let rem = (n % 4) as usize;
+    let mut remain = [0i32; 4];
+    for l in 0..4usize { remain[l] = base + if l < rem { 1 } else { 0 }; }
+
+    // helper to assign label if not set
+    let mut set_label = |q: usize, want: Label| {
+        if labels[q].is_some() { return; }
+        let wl = want as usize;
+        if remain[wl] > 0 { labels[q] = Some(want); remain[wl] -= 1; return; }
+        // pick any other label with remaining quota
+        for l in 0..4usize {
+            if l == wl { continue; }
+            if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; return; }
+        }
+        // as a last resort (shouldn't happen), assign the first label
+        if labels[q].is_none() { labels[q] = Some(0); }
+    };
+
+    // Traverse all plans and assign greedily
+    for (plan, expect) in inst.plans.iter().zip(inst.results.iter()) {
+        let path = trace_rooms(match_to, inst.s0, plan);
+        for (room, lab) in path.into_iter().zip(expect.iter().copied()) {
+            set_label(room, lab);
+        }
+    }
+
+    // Fill any remaining unlabeled rooms with leftover quotas
+    for q in 0..n {
+        if labels[q].is_none() {
+            for l in 0..4usize {
+                if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; break; }
+            }
+            if labels[q].is_none() { labels[q] = Some(0); }
+        }
+    }
+
+    labels.into_iter().map(|x| x.unwrap_or(0)).collect()
+}
+
+fn energy(inst: &Instance, m: &Model, _lambda_bal: f32) -> Energy {
+    // Greedily infer labels with strict quotas, then count observation mismatches
+    let labels = infer_labels(inst, &m.match_to);
     let mut obs: i32 = 0;
     for (plan, expect) in inst.plans.iter().zip(inst.results.iter()) {
-        let got = simulate(m, inst.s0, plan);
-        for (g, &e) in got.iter().zip(expect.iter()) { if *g != e { obs += 1; } }
+        let path = trace_rooms(&m.match_to, inst.s0, plan);
+        for (room, &e) in path.into_iter().zip(expect.iter()) {
+            if labels[room] != e { obs += 1; }
+        }
     }
-    // balance
-    let mut cnt = [0i32; 4];
-    for &l in &m.labels { cnt[l as usize] += 1; }
-    let n = inst.n as i32;
-    let base = n / 4;
-    let rem = (n % 4) as usize;
-    let mut balance = 0i32;
-    for l in 0..4usize {
-        let target = base + if l < rem as usize { 1 } else { 0 };
-        let d = cnt[l] - target;
-        balance += d * d;
-    }
-    let balance = ((lambda_bal * balance as f32).round() as i32).max(0);
-    Energy { obs, balance, total: obs + balance }
+    Energy { obs, balance: 0, total: obs }
 }
 
 fn two_opt(m: &mut Model, p1: usize, p2: usize) {
@@ -414,7 +415,6 @@ fn anneal(
     tmin: f32,
     reheat_every: Option<usize>,
     reheat_to: Option<f32>,
-    p_relabel: f32,
     p_loopmove: f32,
 ) -> Energy {
     let start_t = Instant::now();
@@ -439,12 +439,8 @@ fn anneal(
         if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
         // randomly choose move
         let mv: f32 = rng.r#gen();
-        let p_relabel = p_relabel.clamp(0.0, 1.0);
         let p_loopmove = p_loopmove.clamp(0.0, 1.0);
-        let mut p_swap = 0.30_f32;
-        if p_swap + p_relabel + p_loopmove > 1.0 { p_swap = (1.0 - p_relabel - p_loopmove).max(0.0); }
-        let p_two_opt = (1.0 - p_swap - p_relabel - p_loopmove).max(0.0);
-        if mv < p_two_opt {
+        if mv >= p_loopmove {
             // 2-opt move (only on two distinct, non-loop edges)
             let p1 = rng.gen_range(0..n_ports);
             let mut p2 = rng.gen_range(0..n_ports);
@@ -500,53 +496,6 @@ fn anneal(
                 {
                     debug_assert!(check_involution(model), "post two_opt revert: involution broken");
                 }
-            }
-        } else if mv < p_two_opt + p_swap {
-            // label swap
-            let q1 = rng.gen_range(0..inst.n);
-            let mut q2 = rng.gen_range(0..inst.n);
-            if q2 == q1 { q2 = (q2 + 1) % inst.n; }
-            model.labels.swap(q1, q2);
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=swap q1={} q2={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    q1, q2, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                model.labels.swap(q1, q2);
-            }
-        } else if mv < p_two_opt + p_swap + p_relabel {
-            // random relabel: pick a room and set a random new label != old
-            let q = rng.gen_range(0..inst.n);
-            let old_l = model.labels[q];
-            let r: u8 = rng.gen_range(1..=3); // 1..=3 then add to old and mod 4 ensures != old
-            let new_l: u8 = ((old_l as u8 + r) % 4) as u8;
-            model.labels[q] = new_l;
-            let new_e = energy(inst, model, lambda_bal);
-            let d_total = new_e.total - cur.total;
-            let d = d_total as f32;
-            let accept = d <= 0.0 || rng.r#gen::<f32>() < (-d / t.max(1e-6)).exp();
-            if verbose >= 2 {
-                eprintln!(
-                    "dbg: mv=relabel q={} old={} new={} dE={} T={:.4} acc={} cur->new {}->{}",
-                    q, old_l, new_l, d_total, t, accept, cur.total, new_e.total
-                );
-            }
-            if accept {
-                cur = new_e;
-                since_log_accepts += 1;
-                if new_e.total < best.total { best = new_e; best_model = model.clone(); last_best_iter = k; }
-            } else {
-                model.labels[q] = old_l;
             }
         } else {
             // loop-change 3-edge move: pair->loops or loops->pair
@@ -653,7 +602,7 @@ fn anneal(
             // Save an additional snapshot following the same naming rule as other snapshots
             if let Some(base) = save_base {
                 let save_path = derive_save_path(base, k + 1);
-                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                if let Err(e) = write_output_path(inst, &best_model, inst.s0 as usize, &save_path) {
                     if verbose > 0 {
                         eprintln!("warn: failed to save {}: {}", save_path.display(), e);
                     }
@@ -705,7 +654,7 @@ fn anneal(
             if every > 0 && (k + 1) % every == 0 {
                 // Save best-so-far
                 let save_path = derive_save_path(base, k + 1);
-                if let Err(e) = write_output_path(&best_model, inst.s0 as usize, &save_path) {
+                if let Err(e) = write_output_path(inst, &best_model, inst.s0 as usize, &save_path) {
                     if verbose > 0 {
                         eprintln!("warn: failed to save {}: {}", save_path.display(), e);
                     }
@@ -725,8 +674,9 @@ fn anneal(
     best
 }
 
-fn emit_output(model: &Model, s0: Room) -> OutputMap {
-    let n = model.labels.len();
+fn emit_output(inst: &Instance, model: &Model, s0: Room) -> OutputMap {
+    let n = inst.n;
+    let labels = infer_labels(inst, &model.match_to);
     let mut conns: Vec<Connection> = Vec::new();
     for p in 0..(n * 6) {
         let q = model.match_to[p];
@@ -738,7 +688,7 @@ fn emit_output(model: &Model, s0: Room) -> OutputMap {
             to: PortRef { room: rq2, door: dc2 as usize },
         });
     }
-    OutputMap { rooms: model.labels.clone(), starting_room: s0, connections: conns }
+    OutputMap { rooms: labels, starting_room: s0, connections: conns }
 }
 
 fn finalize_match_to(model: &mut Model) {
@@ -768,8 +718,8 @@ fn derive_save_path(base: &Path, iter: usize) -> PathBuf {
     dir.join(name)
 }
 
-fn write_output_path(model: &Model, s0: usize, path: &Path) -> Result<()> {
-    let out = emit_output(model, s0);
+fn write_output_path(inst: &Instance, model: &Model, s0: usize, path: &Path) -> Result<()> {
+    let out = emit_output(inst, model, s0);
     let serialized = serde_json::to_string_pretty(&out)?;
     if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { fs::create_dir_all(parent)?; } }
     fs::write(path, serialized)?;
@@ -814,7 +764,7 @@ async fn main() -> Result<()> {
     let save_base = if args.output != "-" { Some(Path::new(&args.output)) } else { None };
     if let Some(base) = save_base {
         let p0 = derive_save_path(base, 0);
-        write_output_path(&model, inst.s0 as usize, &p0)?;
+        write_output_path(&inst, &model, inst.s0 as usize, &p0)?;
         if args.verbose > 0 { eprintln!("saved {} (initial)", p0.display()); }
     }
 
@@ -855,7 +805,6 @@ async fn main() -> Result<()> {
             args.tmin,
             args.reheat_every,
             args.reheat_to,
-            args.p_relabel,
             args.p_loopmove,
         );
         finalize_match_to(&mut m);
@@ -875,7 +824,7 @@ async fn main() -> Result<()> {
     }
 
     // Use best-overall model
-    let out = emit_output(&best_overall_model, inst.s0);
+    let out = emit_output(&inst, &best_overall_model, inst.s0);
 
     let serialized = serde_json::to_string_pretty(&out)?;
 
