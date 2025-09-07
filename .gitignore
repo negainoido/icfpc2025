@@ -139,3 +139,5 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+
+AGENTS.md

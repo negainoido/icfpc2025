@@ -1,4 +1,10 @@
-import { MapStruct, ExploreStep, ExploreState, PathSegment, Connection } from '../types';
+import {
+  MapStruct,
+  ExploreStep,
+  ExploreState,
+  PathSegment,
+  Connection,
+} from '../types';
 
 export function parseExploreString(input: string): ExploreStep[] {
   const steps: ExploreStep[] = [];
@@ -11,14 +17,18 @@ export function parseExploreString(input: string): ExploreStep[] {
       // Find the closing bracket
       const closeIndex = input.indexOf(']', i);
       if (closeIndex === -1) {
-        throw new Error(`Missing closing bracket for chalk mark at position ${i}`);
+        throw new Error(
+          `Missing closing bracket for chalk mark at position ${i}`
+        );
       }
 
       const labelStr = input.slice(i + 1, closeIndex);
       const label = parseInt(labelStr, 10);
 
       if (isNaN(label) || label < 0 || label > 3) {
-        throw new Error(`Invalid chalk label "${labelStr}" at position ${i}. Must be 0-3.`);
+        throw new Error(
+          `Invalid chalk label "${labelStr}" at position ${i}. Must be 0-3.`
+        );
       }
 
       steps.push({ type: 'chalk', label });
@@ -31,22 +41,33 @@ export function parseExploreString(input: string): ExploreStep[] {
       // Skip whitespace
       i++;
     } else {
-      throw new Error(`Invalid character "${char}" at position ${i}. Expected 0-5 or [n].`);
+      throw new Error(
+        `Invalid character "${char}" at position ${i}. Expected 0-5 or [n].`
+      );
     }
   }
 
   return steps;
 }
 
-export function findConnection(map: MapStruct, fromRoom: number, door: number): Connection | null {
-  return map.connections.find(
-    conn => 
-      (conn.from.room === fromRoom && conn.from.door === door) ||
-      (conn.to.room === fromRoom && conn.to.door === door)
-  ) || null;
+export function findConnection(
+  map: MapStruct,
+  fromRoom: number,
+  door: number
+): Connection | null {
+  return (
+    map.connections.find(
+      (conn) =>
+        (conn.from.room === fromRoom && conn.from.door === door) ||
+        (conn.to.room === fromRoom && conn.to.door === door)
+    ) || null
+  );
 }
 
-export function getDestinationRoom(connection: Connection, fromRoom: number): number {
+export function getDestinationRoom(
+  connection: Connection,
+  fromRoom: number
+): number {
   if (connection.from.room === fromRoom) {
     return connection.to.room;
   } else {
@@ -54,7 +75,10 @@ export function getDestinationRoom(connection: Connection, fromRoom: number): nu
   }
 }
 
-export function simulateExploreSteps(map: MapStruct, steps: ExploreStep[]): ExploreState[] {
+export function simulateExploreSteps(
+  map: MapStruct,
+  steps: ExploreStep[]
+): ExploreState[] {
   const states: ExploreState[] = [];
   let currentRoom = map.startingRoom;
   const pathHistory: PathSegment[] = [];
@@ -87,7 +111,9 @@ export function simulateExploreSteps(map: MapStruct, steps: ExploreStep[]): Expl
       // Find connection for this door
       const connection = findConnection(map, currentRoom, step.door);
       if (!connection) {
-        throw new Error(`No connection found from room ${currentRoom} through door ${step.door}`);
+        throw new Error(
+          `No connection found from room ${currentRoom} through door ${step.door}`
+        );
       }
 
       const destinationRoom = getDestinationRoom(connection, currentRoom);
@@ -102,7 +128,8 @@ export function simulateExploreSteps(map: MapStruct, steps: ExploreStep[]): Expl
       currentRoom = destinationRoom;
 
       // Observe the label in the new room (chalk mark overrides original)
-      const observedLabel = chalkMarks.get(currentRoom) ?? map.rooms[currentRoom];
+      const observedLabel =
+        chalkMarks.get(currentRoom) ?? map.rooms[currentRoom];
       observedLabels.push(observedLabel);
     }
 
@@ -121,13 +148,19 @@ export function simulateExploreSteps(map: MapStruct, steps: ExploreStep[]): Expl
   return states;
 }
 
-export function predictObservedLabels(map: MapStruct, steps: ExploreStep[]): number[] {
+export function predictObservedLabels(
+  map: MapStruct,
+  steps: ExploreStep[]
+): number[] {
   const states = simulateExploreSteps(map, steps);
   // Return the final state's observed labels
   return states[states.length - 1].observedLabels;
 }
 
-export function validateExploreString(input: string): { valid: boolean; error?: string } {
+export function validateExploreString(input: string): {
+  valid: boolean;
+  error?: string;
+} {
   try {
     parseExploreString(input);
     return { valid: true };
@@ -138,7 +171,7 @@ export function validateExploreString(input: string): { valid: boolean; error?: 
 
 export function formatExploreString(steps: ExploreStep[]): string {
   return steps
-    .map(step => {
+    .map((step) => {
       if (step.type === 'move') {
         return step.door.toString();
       } else {
@@ -157,19 +190,22 @@ export function getExploreStepDescription(step: ExploreStep): string {
 }
 
 export function countDoorSteps(steps: ExploreStep[]): number {
-  return steps.filter(step => step.type === 'move').length;
+  return steps.filter((step) => step.type === 'move').length;
 }
 
-export function validateStepLimit(steps: ExploreStep[], roomCount: number): { valid: boolean; error?: string } {
+export function validateStepLimit(
+  steps: ExploreStep[],
+  roomCount: number
+): { valid: boolean; error?: string } {
   const doorSteps = countDoorSteps(steps);
   const limit = 6 * roomCount;
-  
+
   if (doorSteps > limit) {
     return {
       valid: false,
-      error: `Too many door steps: ${doorSteps}. Maximum allowed: ${limit} (6 × ${roomCount} rooms)`
+      error: `Too many door steps: ${doorSteps}. Maximum allowed: ${limit} (6 × ${roomCount} rooms)`,
     };
   }
-  
+
   return { valid: true };
 }

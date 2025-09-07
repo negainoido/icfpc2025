@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MapStruct, ExploreStep, ExploreState } from '../types';
-import { simulateExploreSteps, getExploreStepDescription } from '../utils/explore';
+import {
+  simulateExploreSteps,
+  getExploreStepDescription,
+} from '../utils/explore';
 
 interface Props {
   map: MapStruct;
@@ -8,7 +11,11 @@ interface Props {
   onStateChange: (state: ExploreState | null) => void;
 }
 
-export default function ExploreVisualizer({ map, steps, onStateChange }: Props) {
+export default function ExploreVisualizer({
+  map,
+  steps,
+  onStateChange,
+}: Props) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000); // milliseconds
@@ -39,19 +46,19 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
     }
 
     const timeout = setTimeout(() => {
-      setCurrentStepIndex(prev => Math.min(prev + 1, allStates.length - 1));
+      setCurrentStepIndex((prev) => Math.min(prev + 1, allStates.length - 1));
     }, playbackSpeed);
 
     return () => clearTimeout(timeout);
   }, [isPlaying, currentStepIndex, allStates.length, playbackSpeed]);
 
   const handlePrevious = () => {
-    setCurrentStepIndex(prev => Math.max(0, prev - 1));
+    setCurrentStepIndex((prev) => Math.max(0, prev - 1));
     setIsPlaying(false);
   };
 
   const handleNext = () => {
-    setCurrentStepIndex(prev => Math.min(prev + 1, allStates.length - 1));
+    setCurrentStepIndex((prev) => Math.min(prev + 1, allStates.length - 1));
     setIsPlaying(false);
   };
 
@@ -87,7 +94,8 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
           color: '#721c24',
         }}
       >
-        <strong>Error:</strong> Could not simulate the explore steps. Please check your map and explore string.
+        <strong>Error:</strong> Could not simulate the explore steps. Please
+        check your map and explore string.
       </div>
     );
   }
@@ -250,7 +258,7 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
               style={{
                 height: '100%',
                 backgroundColor: '#007bff',
-                width: `${((currentStepIndex) / Math.max(1, allStates.length - 1)) * 100}%`,
+                width: `${(currentStepIndex / Math.max(1, allStates.length - 1)) * 100}%`,
                 transition: 'width 0.3s ease',
               }}
             />
@@ -280,7 +288,9 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
         >
           {/* Current Step Info */}
           <div>
-            <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>Current Step</h4>
+            <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>
+              Current Step
+            </h4>
             {currentStep ? (
               <div
                 style={{
@@ -319,7 +329,9 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
 
           {/* Current Room Info */}
           <div>
-            <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>Current Room</h4>
+            <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>
+              Current Room
+            </h4>
             <div
               style={{
                 padding: '10px',
@@ -332,11 +344,13 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
                 <strong>Room:</strong> {currentState?.currentRoom}
               </div>
               <div style={{ marginBottom: '5px' }}>
-                <strong>Original Label:</strong> {map.rooms[currentState?.currentRoom || 0]}
+                <strong>Original Label:</strong>{' '}
+                {map.rooms[currentState?.currentRoom || 0]}
               </div>
               {currentState?.chalkMarks.has(currentState.currentRoom) && (
                 <div style={{ color: '#28a745', fontWeight: 'bold' }}>
-                  <strong>Chalk Mark:</strong> {currentState.chalkMarks.get(currentState.currentRoom)}
+                  <strong>Chalk Mark:</strong>{' '}
+                  {currentState.chalkMarks.get(currentState.currentRoom)}
                 </div>
               )}
             </div>
@@ -353,7 +367,9 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
           border: '1px solid #dee2e6',
         }}
       >
-        <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>Observed Labels</h4>
+        <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>
+          Observed Labels
+        </h4>
         <div
           style={{
             display: 'flex',
@@ -366,8 +382,14 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
               key={index}
               style={{
                 padding: '6px 12px',
-                backgroundColor: index === currentState.observedLabels.length - 1 ? '#007bff' : '#e9ecef',
-                color: index === currentState.observedLabels.length - 1 ? 'white' : '#495057',
+                backgroundColor:
+                  index === currentState.observedLabels.length - 1
+                    ? '#007bff'
+                    : '#e9ecef',
+                color:
+                  index === currentState.observedLabels.length - 1
+                    ? 'white'
+                    : '#495057',
                 borderRadius: '15px',
                 fontSize: '12px',
                 fontWeight: 'bold',
@@ -398,7 +420,9 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
           border: '1px solid #dee2e6',
         }}
       >
-        <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>Step Timeline</h4>
+        <h4 style={{ margin: '0 0 10px 0', color: '#343a40' }}>
+          Step Timeline
+        </h4>
         <div
           style={{
             display: 'flex',
@@ -409,7 +433,7 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
           {allStates.map((_, index) => {
             const isCurrent = index === currentStepIndex;
             const isPast = index < currentStepIndex;
-            
+
             return (
               <button
                 key={index}
@@ -417,7 +441,11 @@ export default function ExploreVisualizer({ map, steps, onStateChange }: Props) 
                 style={{
                   width: '30px',
                   height: '30px',
-                  backgroundColor: isCurrent ? '#007bff' : isPast ? '#28a745' : '#e9ecef',
+                  backgroundColor: isCurrent
+                    ? '#007bff'
+                    : isPast
+                      ? '#28a745'
+                      : '#e9ecef',
                   color: isCurrent || isPast ? 'white' : '#495057',
                   border: 'none',
                   borderRadius: '4px',

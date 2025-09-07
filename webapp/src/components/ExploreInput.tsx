@@ -14,7 +14,11 @@ interface Props {
   roomCount?: number;
 }
 
-export default function ExploreInput({ onExploreLoad, onError, roomCount = 0 }: Props) {
+export default function ExploreInput({
+  onExploreLoad,
+  onError,
+  roomCount = 0,
+}: Props) {
   const [exploreString, setExploreString] = useState('');
   const [parsedSteps, setParsedSteps] = useState<ExploreStep[]>([]);
   const [isValid, setIsValid] = useState(true);
@@ -136,7 +140,13 @@ export default function ExploreInput({ onExploreLoad, onError, roomCount = 0 }: 
             border: '1px solid #dee2e6',
           }}
         >
-          <div style={{ marginBottom: '10px', fontWeight: 'bold', fontSize: '14px' }}>
+          <div
+            style={{
+              marginBottom: '10px',
+              fontWeight: 'bold',
+              fontSize: '14px',
+            }}
+          >
             Parsed Steps ({parsedSteps.length}):
           </div>
           <div
@@ -243,9 +253,13 @@ export default function ExploreInput({ onExploreLoad, onError, roomCount = 0 }: 
         <ul style={{ marginTop: '5px', paddingLeft: '20px' }}>
           <li>Use digits 0-5 to specify door movements</li>
           <li>Use [0-3] to mark current room with chalk</li>
-          <li>Example: "2[3]12[0]" means: door 2 → mark 3 → door 1 → door 2 → mark 0</li>
           <li>
-            Each plan is limited to {roomCount > 0 ? stepLimit : '6n'} door steps
+            Example: "2[3]12[0]" means: door 2 → mark 3 → door 1 → door 2 → mark
+            0
+          </li>
+          <li>
+            Each plan is limited to {roomCount > 0 ? stepLimit : '6n'} door
+            steps
             {roomCount > 0 && ` (${roomCount} rooms × 6)`}
           </li>
         </ul>
