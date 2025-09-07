@@ -199,10 +199,11 @@ class Graph:
             visited.add(v)
             ret = ""
             for i in range(6):
-                if self.graph[v][i] is None:
+                nv = self.graph[v][i]
+                if nv is None or nv in visited:
                     continue
                 ret += str(i)
-                ret += dfs(self.graph[v][i])
+                ret += dfs(nv)
                 ret += str(self.reverse_door[v][i])
             return ret
 
@@ -231,8 +232,10 @@ class Graph:
             assert False, "Reverse door not found for v"
 
         current_v = v
+        visit_node = [v]
         for idx, door in enumerate(visit_all_path_doors):
             current_v = self.graph[current_v][door]
+            visit_node.append(current_v)
             if self.get_node_label(current_v) != label_v_e:
                 continue
 
@@ -247,7 +250,10 @@ class Graph:
 
                 assert False, "Reverse door not found for current_v"
 
-        assert False, "not Reachable nor unreachable?"
+        new_node_id = self.add_new_node(label_v_e)
+        self.add_edge(v, new_node_id, e, list(reverse_doors)[0])
+        self.reachable.add(new_node_id)
+        return True
 
     def get_map_data(self) -> dict:
         map_data = {
