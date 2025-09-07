@@ -16,17 +16,17 @@ export default function MapInput({ onMapLoad, onError }: Props) {
     connections: [
       {
         from: { room: 0, door: 0 },
-        to: { room: 1, door: 3 }
+        to: { room: 1, door: 3 },
       },
       {
         from: { room: 0, door: 1 },
-        to: { room: 2, door: 2 }
+        to: { room: 2, door: 2 },
       },
       {
         from: { room: 1, door: 0 },
-        to: { room: 3, door: 5 }
-      }
-    ]
+        to: { room: 3, door: 5 },
+      },
+    ],
   };
 
   const handleLoadSample = () => {
@@ -70,25 +70,40 @@ export default function MapInput({ onMapLoad, onError }: Props) {
         throw new Error('Connections must have "from" and "to" objects');
       }
 
-      if (typeof conn.from.room !== 'number' || typeof conn.from.door !== 'number') {
+      if (
+        typeof conn.from.room !== 'number' ||
+        typeof conn.from.door !== 'number'
+      ) {
         throw new Error('Connection "from" must have room and door numbers');
       }
 
-      if (typeof conn.to.room !== 'number' || typeof conn.to.door !== 'number') {
+      if (
+        typeof conn.to.room !== 'number' ||
+        typeof conn.to.door !== 'number'
+      ) {
         throw new Error('Connection "to" must have room and door numbers');
       }
 
       // Validate door numbers are 0-5
-      if (conn.from.door < 0 || conn.from.door > 5 || conn.to.door < 0 || conn.to.door > 5) {
+      if (
+        conn.from.door < 0 ||
+        conn.from.door > 5 ||
+        conn.to.door < 0 ||
+        conn.to.door > 5
+      ) {
         throw new Error('Door numbers must be between 0 and 5');
       }
 
       // Validate room indices exist
       if (conn.from.room < 0 || conn.from.room >= data.rooms.length) {
-        throw new Error(`Connection references non-existent room ${conn.from.room}`);
+        throw new Error(
+          `Connection references non-existent room ${conn.from.room}`
+        );
       }
       if (conn.to.room < 0 || conn.to.room >= data.rooms.length) {
-        throw new Error(`Connection references non-existent room ${conn.to.room}`);
+        throw new Error(
+          `Connection references non-existent room ${conn.to.room}`
+        );
       }
     }
 
@@ -217,7 +232,8 @@ export default function MapInput({ onMapLoad, onError }: Props) {
         style={{
           width: '100%',
           padding: '12px',
-          backgroundColor: isLoading || !jsonText.trim() ? '#6c757d' : '#007bff',
+          backgroundColor:
+            isLoading || !jsonText.trim() ? '#6c757d' : '#007bff',
           color: 'white',
           border: 'none',
           borderRadius: '4px',
@@ -241,11 +257,21 @@ export default function MapInput({ onMapLoad, onError }: Props) {
         }}
       >
         <strong>Map Format:</strong>
-        <ul style={{ marginTop: '8px', paddingLeft: '20px', margin: '8px 0 0 0' }}>
-          <li><strong>rooms:</strong> Array of room label values (0-3)</li>
-          <li><strong>startingRoom:</strong> Index of the starting room</li>
-          <li><strong>connections:</strong> Array of door connections</li>
-          <li><strong>door numbers:</strong> 0-5 (hexagon has 6 doors)</li>
+        <ul
+          style={{ marginTop: '8px', paddingLeft: '20px', margin: '8px 0 0 0' }}
+        >
+          <li>
+            <strong>rooms:</strong> Array of room label values (0-3)
+          </li>
+          <li>
+            <strong>startingRoom:</strong> Index of the starting room
+          </li>
+          <li>
+            <strong>connections:</strong> Array of door connections
+          </li>
+          <li>
+            <strong>door numbers:</strong> 0-5 (hexagon has 6 doors)
+          </li>
         </ul>
       </div>
     </div>
