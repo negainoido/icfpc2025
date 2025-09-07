@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { Session, SessionDetail } from '../types';
+import { Session, SessionDetail, Map } from '../types';
 
 const SessionsPage = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -12,6 +12,7 @@ const SessionsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadSessions();
@@ -100,6 +101,27 @@ const SessionsPage = () => {
     } catch (err) {
       console.error('Failed to export session:', err);
       setError('セッションのエクスポートに失敗しました');
+    }
+  };
+
+  const isGuessRequestWithMap = (log: any) => {
+    return log.endpoint === 'guess' && log.request_body;
+  };
+
+  const extractMapFromGuessLog = (log: any): Map | null => {
+    try {
+      if (!isGuessRequestWithMap(log)) return null;
+      const requestData = JSON.parse(log.request_body);
+      return requestData.map || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleVisualizeMap = (log: any) => {
+    const map = extractMapFromGuessLog(log);
+    if (map) {
+      navigate('/visualize', { state: { map, sessionId: log.session_id, logId: log.id } });
     }
   };
 
@@ -657,30 +679,49 @@ const SessionsPage = () => {
                           marginBottom: '10px',
                         }}
                       >
-                        <div>
-                          <strong
-                            style={{
-                              color: '#007bff',
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            {log.endpoint}
-                          </strong>
-                          <span
-                            style={{
-                              marginLeft: '10px',
-                              padding: '2px 6px',
-                              backgroundColor:
-                                log.response_status === 200
-                                  ? '#28a745'
-                                  : '#dc3545',
-                              color: 'white',
-                              borderRadius: '4px',
-                              fontSize: '12px',
-                            }}
-                          >
-                            {log.response_status || 'N/A'}
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div>
+                            <strong
+                              style={{
+                                color: '#007bff',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {log.endpoint}
+                            </strong>
+                            <span
+                              style={{
+                                marginLeft: '10px',
+                                padding: '2px 6px',
+                                backgroundColor:
+                                  log.response_status === 200
+                                    ? '#28a745'
+                                    : '#dc3545',
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                              }}
+                            >
+                              {log.response_status || 'N/A'}
+                            </span>
+                          </div>
+                          {isGuessRequestWithMap(log) && (
+                            <button
+                              onClick={() => handleVisualizeMap(log)}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: '#17a2b8',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              🗺️ Visualize
+                            </button>
+                          )}
                         </div>
                         <div style={{ color: '#6c757d', fontSize: '12px' }}>
                           {formatDateTime(log.created_at)}

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { Map } from '../types';
 import MapInput from '../components/MapInput';
 import MapVisualizer from '../components/MapVisualizer';
@@ -6,10 +7,25 @@ import MapVisualizer from '../components/MapVisualizer';
 export default function VisualizePage() {
   const [map, setMap] = useState<Map | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<{sessionId?: string, logId?: number} | null>(null);
+  const location = useLocation();
+
+  // Handle map data passed from session history
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.map) {
+      setMap(state.map);
+      setError(null);
+      if (state.sessionId && state.logId) {
+        setSessionInfo({ sessionId: state.sessionId, logId: state.logId });
+      }
+    }
+  }, [location.state]);
 
   const handleMapLoad = (loadedMap: Map) => {
     setMap(loadedMap);
     setError(null);
+    setSessionInfo(null); // Clear session info when manually loading a new map
   };
 
   const handleError = (errorMessage: string) => {
@@ -40,12 +56,46 @@ export default function VisualizePage() {
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
           }}
         >
-          <h1 style={{ marginBottom: '20px', color: '#343a40' }}>
-            Map Visualizer
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+            <h1 style={{ margin: 0, color: '#343a40', flexGrow: 1 }}>
+              Map Visualizer
+            </h1>
+            <Link
+              to="/sessions"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+              }}
+            >
+              ← Back to Sessions
+            </Link>
+          </div>
+          
+          {sessionInfo && (
+            <div
+              style={{
+                backgroundColor: '#d1ecf1',
+                border: '1px solid #bee5eb',
+                borderRadius: '4px',
+                padding: '12px',
+                marginBottom: '15px',
+              }}
+            >
+              <div style={{ color: '#0c5460', fontSize: '14px' }}>
+                <strong>🗂️ From Session History:</strong> Session ID: {sessionInfo.sessionId?.substring(0, 8)}... (Log #{sessionInfo.logId})
+              </div>
+            </div>
+          )}
+
           <p style={{ color: '#6c757d', marginBottom: '20px' }}>
-            Upload or paste a Map JSON to visualize the library layout. Each
-            room will be displayed as a hexagon with doors on each side.
+            {sessionInfo 
+              ? 'Viewing map from a guess request in session history.' 
+              : 'Upload or paste a Map JSON to visualize the library layout. Each room will be displayed as a hexagon with doors on each side.'
+            }
           </p>
 
           <div
