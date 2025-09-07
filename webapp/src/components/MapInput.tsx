@@ -41,7 +41,10 @@ export default function MapInput({ onMapLoad, onError }: Props) {
     }
 
     // Normalize: accept wrappers like { map: {...} } (e.g., guess request payloads)
-    const data = (raw as any).map && typeof (raw as any).map === 'object' ? (raw as any).map : (raw as any);
+    const data =
+      (raw as any).map && typeof (raw as any).map === 'object'
+        ? (raw as any).map
+        : (raw as any);
 
     if (!Array.isArray(data.rooms)) {
       throw new Error('Map must have a "rooms" array');

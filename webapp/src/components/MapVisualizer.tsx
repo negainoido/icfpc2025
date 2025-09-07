@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { MapStruct, ExploreVisualizationProps, PathSegment } from '../types';
 import {
   calculateHexagon,
@@ -24,6 +24,7 @@ export default function MapVisualizer({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate layout and hexagons
   const { hexagons, bounds } = useMemo(() => {
@@ -47,7 +48,10 @@ export default function MapVisualizer({
       }
     }
     if (!isFinite(minNeighborDist)) minNeighborDist = 120;
-    const hexRadius = Math.max(18, Math.min(60, Math.floor(minNeighborDist * 0.28)));
+    const hexRadius = Math.max(
+      18,
+      Math.min(60, Math.floor(minNeighborDist * 0.28))
+    );
 
     const roomHexagons = roomLayout.map((room) => ({
       ...room,
@@ -96,11 +100,19 @@ export default function MapVisualizer({
     setIsDragging(false);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((prev) => Math.max(0.1, Math.min(5, prev * zoomFactor)));
-  };
+  // Block page scroll and apply zoom with a non-passive wheel listener
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom((prev) => Math.max(0.1, Math.min(5, prev * zoomFactor)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel as EventListener);
+  }, []);
 
   const handleResetView = () => {
     setZoom(1);
@@ -175,7 +187,16 @@ export default function MapVisualizer({
       </div>
 
       {/* SVG Visualization */}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          position: 'relative',
+          overscrollBehavior: 'none',
+          touchAction: 'none',
+        }}
+      >
         <svg
           width="100%"
           height="100%"
@@ -183,12 +204,13 @@ export default function MapVisualizer({
           style={{
             cursor: isDragging ? 'grabbing' : 'grab',
             userSelect: 'none',
+            overscrollBehavior: 'contain',
+            touchAction: 'none',
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
         >
           {/* Background grid */}
           <defs>

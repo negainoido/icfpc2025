@@ -110,9 +110,9 @@ function forceDirectedLayout(
   const iterations = 200;
   const dt = 0.08;
   const repulsionStrength = 20000; // push nodes apart more strongly
-  const attractionStrength = 20;   // keep connections reasonably tight
-  const idealDistance = 180;       // target connection length
-  const minSeparation = 130;       // hard minimum center-to-center distance
+  const attractionStrength = 20; // keep connections reasonably tight
+  const idealDistance = 180; // target connection length
+  const minSeparation = 130; // hard minimum center-to-center distance
 
   for (let iter = 0; iter < iterations; iter++) {
     const forces: Point[] = layout.map(() => ({ x: 0, y: 0 }));
