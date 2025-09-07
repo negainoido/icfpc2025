@@ -65,9 +65,9 @@ class Graph:
     def __init__(self, N):
         self.N = N
         self.M = N * 6  # Total number of possible edges
-        self.graph = [[None] * 6 for _ in range(N)]
-        self.reverse_door = [[None] * 6 for _ in range(N)]
-        self.graph_labels = [None for _ in range(N)]
+        self.graph: list[list[int | None]] = [[None] * 6 for _ in range(N)]
+        self.reverse_door: list[list[int | None]] = [[None] * 6 for _ in range(N)]
+        self.graph_labels: list[int | None] = [None for _ in range(N)]
         self.visited_node_count = 0
         self.reachable = {0}
 
@@ -123,7 +123,9 @@ class Graph:
             click.echo(result)
             self.graph_labels[node_id] = result["results"][0][-1]
 
-        return self.graph_labels[node_id]
+        label = self.graph_labels[node_id]
+        assert label is not None, "GetNode label is None"
+        return label
 
     def get_unknown_edge(self) -> tuple[int, int] | None:
         for v in self.reachable:
@@ -137,7 +139,7 @@ class Graph:
         results = api.api.explore([path + str(i) for i in range(6)])["results"]
         # 対象ノードのラベル
         label_v = results[0][-2]
-        return [label_v, [result[-1] for result in results]]
+        return (label_v, [result[-1] for result in results])
 
     def check_one_edge(self) -> bool:
         v_e = self.get_unknown_edge()
