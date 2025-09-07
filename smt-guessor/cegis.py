@@ -50,13 +50,12 @@ def simulate(mu, labels_room, s0, plan):
 
 def build_model(
     problem,
-    extra_constraints=None,
     *,
     use_lex_symmetry=False,
     use_pattern_c=True,
     path_prefix=None,
 ):
-    """CEGIS本体が足す追加制約(extra_constraints)を受け取ってモデルを再構築"""
+    """CEGIS本体が足す追加制約(path_prefix)を受け取ってモデルを再構築"""
     traces = problem["traces"]
     N = problem["N"]
     s0 = problem["s0"]
@@ -130,19 +129,27 @@ def build_model(
         obs = t["obs"]
         k = len(plan)
         for i in range(1, k):
-            # 存在 OR: ∨_{q in S, d in D}  ( labelRoom[q]==b_i ∧ labelPort[q,a_i]==b_{i+1} ∧ labelPort[q,d]==b_{i-1} )
+            # +存在 OR: ∨_{q in S}  ( labelRoom[q]==b_i ∧ labelPort[q,a_i]==b_{i+1} ∧ OR {d in D} labelPort[q,d]==b_{i-1} )
             lits = []
             for qid in range(N):
+                sel_q = model.NewBoolVar(f"win_t{t_idx}_i{i}_q{qid}")
+                # sel_q => label_room[qid] == obs[i]
+                model.Add(label_room[qid] == obs[i]).OnlyEnforceIf(sel_q)
+                # sel_q => label_port[pid(qid, plan[i])] == obs[i + 1]
+                model.Add(label_port[pid(qid, plan[i])] == obs[i + 1]).OnlyEnforceIf(
+                    sel_q
+                )
+                # OR over d: ∃d, label_port[pid(qid, d)] == obs[i - 1]
+                or_d = []
                 for d in range(6):
-                    sel = model.NewBoolVar(f"win_t{t_idx}_i{i}_q{qid}_d{d}")
-                    # sel => 各条件
-                    model.Add(label_room[qid] == obs[i]).OnlyEnforceIf(sel)
-                    model.Add(
-                        label_port[pid(qid, plan[i])] == obs[i + 1]
-                    ).OnlyEnforceIf(sel)
-                    model.Add(label_port[pid(qid, d)] == obs[i - 1]).OnlyEnforceIf(sel)
-                    # sel が偽なら条件を緩める必要は無い（OnlyEnforceIf なので拘束されない）
-                    lits.append(sel)
+                    sel_d = model.NewBoolVar(f"win_t{t_idx}_i{i}_q{qid}_d{d}")
+                    model.Add(label_port[pid(qid, d)] == obs[i - 1]).OnlyEnforceIf(
+                        sel_d
+                    )
+                    or_d.append(sel_d)
+                # sel_q => (∨_d sel_d)
+                model.AddBoolOr(or_d).OnlyEnforceIf(sel_q)
+                lits.append(sel_q)
             # 少なくとも1つ選べ
             model.Add(sum(lits) >= 1)
 
@@ -159,22 +166,6 @@ def build_model(
                     model.Add(
                         label_port[pid(q1, d)] <= label_port[pid(q2, d)]
                     ).OnlyEnforceIf(same)
-
-    # 追加制約（CEGISの反例で積み増し）
-    if extra_constraints:
-        for c in extra_constraints:
-            typ = c["type"]
-            if typ == "fix_mate":
-                p, p_to = c["p"], c["p_to"]
-                model.Add(mate[p] == p_to)
-            elif typ == "fix_label_room":
-                q, val = c["q"], c["val"]
-                model.Add(label_room[q] == val)
-            elif typ == "fix_label_port":
-                p, val = c["p"], c["val"]
-                model.Add(label_port[p] == val)
-            else:
-                raise ValueError(f"Unknown extra constraint type: {typ}")
 
     # パス接地制約（長さ prefix の実在パスを要求）
     if path_prefix:
@@ -213,14 +204,12 @@ def cegis_solve(
     use_pattern_c=True,
     snapshot_output: Path | None = None,
 ):
-    extra = []  # 反例から積む制約（ports固定モード用）
     path_prefix = {}  # t_idx -> L（パス接地モード用）
-    fixed_room = {}
-    fixed_port = {}
+    for t_idx in range(len(problem["traces"])):
+        path_prefix[t_idx] = min(10, len(problem["traces"][t_idx]["plan"]))
     for it in range(max_iters):
         model, label_room, label_port, mate = build_model(
             problem,
-            extra_constraints=extra,
             use_lex_symmetry=use_lex_symmetry,
             use_pattern_c=use_pattern_c,
             path_prefix=path_prefix,
@@ -248,7 +237,11 @@ def cegis_solve(
                     pass
 
         if res not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            return None, {"status": solver.StatusName(res), "iter": it, "extra": extra}
+            return None, {
+                "status": solver.StatusName(res),
+                "iter": it,
+                "path_prefix": path_prefix,
+            }
 
         # 候補を取り出し
         N = problem["N"]
@@ -264,30 +257,35 @@ def cegis_solve(
         # 検証
         traces = problem["traces"]
         s0 = problem["s0"]
-        any_fail = False
+        # 全トレースを検査して、追加制約は最も短いトレースから生成
+        failures = []  # (t_idx, i_star, plan_len)
         for t_idx, t in enumerate(traces):
             want = t["obs"]
             got = simulate(mu, labels_room, s0, t["plan"])
             if got != want:
-                any_fail = True
                 # 最短失敗位置 i*
                 i_star = next(i for i, (x, y) in enumerate(zip(got, want)) if x != y)
-                # 反例位置までの実在パスを要求（アンカーを強くしていく）
-                prev = path_prefix.get(t_idx, 0)
-                path_prefix[t_idx] = max(prev, i_star)
-                if verbose:
-                    print(f"  -> counterexample on trace {t_idx} at i*={i_star}, path_prefix={path_prefix[t_idx]}")
-                break
+                failures.append((t_idx, i_star, len(t["plan"])))
 
-        if not any_fail:
+        if not failures:
             # 解が見つかった
             return {"labels_room": labels_room, "mu": mu}, {
                 "status": "FEASIBLE",
                 "iter": it,
-                "extra_cnt": len(extra),
+                "path_prefix_cnt": len(path_prefix),
             }
 
-    return None, {"status": "MAX_ITERS", "iter": max_iters, "extra": extra}
+        # もっとも短いトレース（plan長が最小）を選択。タイは i* が小さいものを優先
+        failures.sort(key=lambda x: (x[2], x[1]))
+        t_idx, i_star, _plen = failures[0]
+        prev = path_prefix.get(t_idx, 0)
+        path_prefix[t_idx] = max(prev, i_star)
+        if verbose:
+            print(
+                f"  -> counterexample on trace {t_idx} at i*={i_star}, path_prefix={path_prefix[t_idx]} (selected among {len(failures)} fails)"
+            )
+
+    return None, {"status": "MAX_ITERS", "iter": max_iters, "path_prefix": path_prefix}
 
 
 def mu_to_connections(mu, N):
@@ -365,28 +363,16 @@ def main():
         action="store_true",
         help="Enable lexicographic symmetry breaking within equal labels",
     )
-    parser.add_argument(
-        "--no-pattern-c",
-        action="store_true",
-        help="Disable pattern-C fixed prefix labeling",
-    )
-    parser.add_argument(
-        "--pattern-c",
-        action="store_true",
-        help="Enable pattern-C fixed prefix labeling (overrides --no-pattern-c)",
-    )
     args = parser.parse_args()
 
     prob = load_problem(args.input)
 
-    use_pattern_c = (args.pattern_c and not args.no_pattern_c)
     sol, meta = cegis_solve(
         prob,
         max_iters=args.iters,
         time_limit_s=args.time_limit,
         verbose=not args.quiet,
         use_lex_symmetry=args.lex_sym,
-        use_pattern_c=use_pattern_c,
         snapshot_output=Path(args.output),
     )
     if sol is None:
