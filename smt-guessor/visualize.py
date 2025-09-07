@@ -211,6 +211,14 @@ def export_animation(
 
     # Prepare figure reused for each frame
     fig, ax = plt.subplots(figsize=figsize)
+    # Ensure an Agg canvas for consistent pixel buffer access
+    try:
+        from matplotlib.backends.backend_agg import FigureCanvasAgg  # type: ignore
+
+        FigureCanvasAgg(fig)  # attaches an Agg canvas to the figure
+        has_agg = True
+    except Exception:
+        has_agg = False
 
     # Optionally save frames individually
     if save_frames_dir:
@@ -238,11 +246,24 @@ def export_animation(
             fig.savefig(out_png, bbox_inches="tight", dpi=220)
 
         if pil_ok:
+            # Render canvas and grab a pixel buffer
             fig.canvas.draw()
             w, h = fig.canvas.get_width_height()
-            buf = fig.canvas.tostring_rgb()
-            arr = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 3))
-            frames.append(Image.fromarray(arr))
+            if has_agg and hasattr(fig.canvas, "buffer_rgba"):
+                # Agg backend: reliable RGBA buffer
+                buf = fig.canvas.buffer_rgba()
+                tmp = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 4))
+                arr = tmp[:, :, :3].copy()  # RGBA -> RGB
+            elif hasattr(fig.canvas, "tostring_rgb"):
+                buf = fig.canvas.tostring_rgb()
+                arr = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 3))
+            else:
+                # Fallback for backends providing ARGB only
+                buf = fig.canvas.tostring_argb()
+                tmp = np.frombuffer(buf, dtype=np.uint8).reshape((h, w, 4))
+                # ARGB -> RGB by dropping alpha and reordering
+                arr = tmp[:, :, 1:4].copy()
+            frames.append(Image.fromarray(arr, mode="RGB"))
 
     # Attempt to save animation if PIL available
     ext = os.path.splitext(output_path)[1].lower()
@@ -283,7 +304,8 @@ def export_animation(
 
     # Otherwise, frames were saved individually already.
     print(
-        f"Saved {len(files)} frames under '{save_frames_dir}'. Combine externally if needed.")
+        f"Saved {len(files)} frames under '{save_frames_dir}'. Combine externally if needed."
+    )
 
 
 def main():
