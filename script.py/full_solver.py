@@ -177,6 +177,9 @@ class Graph:
             return True
 
         label_v_e1 = (label_v_e + 1) % 4
+        if label_v_e1 == label_v:
+            label_v_e1 = (label_v_e1 + 1) % 4
+
         path_0_v_e_reverse_door = (
             path_0_v
             + str(e)
@@ -215,8 +218,8 @@ class Graph:
             )
         )
 
-        label_r = visit_all_path_labels[0]
-        if label_r == label_v_e1:
+        new_label_v = visit_all_path_labels[0]
+        if new_label_v == label_v_e1:
             for reverse_door in reverse_doors:
                 if self.graph[v][reverse_door] is not None:
                     continue
@@ -239,6 +242,8 @@ class Graph:
 
                     self.add_edge(v, current_v, e, reverse_door)
                     return True
+
+                assert False, "Reverse door not found for current_v"
 
         assert False, "not Reachable nor unreachable?"
 
