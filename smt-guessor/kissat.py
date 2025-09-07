@@ -26,9 +26,7 @@ STARTING_ROOM_ID = 0
 
 
 def normalize_plan(plan: str) -> List[int]:
-    if any(ch == "0" for ch in plan):
-        return [int(ch) for ch in plan]
-    return [int(ch) - 1 for ch in plan]
+    return [int(ch) for ch in plan]
 
 
 def build_cnf(
@@ -40,10 +38,11 @@ def build_cnf(
 ) -> Tuple[SatCNF, Dict[str, any]]:
     # Normalize inputs
     norm_plans = [normalize_plan(p) for p in plans]
-    for room_id, (p, r) in enumerate(zip(norm_plans, results)):
-        if len(r) != len(p) + 1:
+    print(norm_plans)
+    for room_id, (from_pid, r) in enumerate(zip(norm_plans, results)):
+        if len(r) != len(from_pid) + 1:
             raise ValueError(
-                f"Plan/results length mismatch at {room_id}: len(plan)={len(p)} vs len(results)={len(r)}"
+                f"Plan/results length mismatch at {room_id}: len(plan)={len(from_pid)} vs len(results)={len(r)}"
             )
 
     P = D * N
@@ -106,14 +105,14 @@ def build_cnf(
     # ---------------- (2) Port matching constraints ----------------
     # Port matching constraints: for each port p, exactly one partner q
     port_matching_var_dict = dict()
-    for q in range(P):
-        for p in range(q + 1):
-            var = port_matching_var(p, q)
-            port_matching_var_dict[(p, q)] = var
-            port_matching_var_dict[(q, p)] = var
+    for to_pid in range(P):
+        for from_pid in range(to_pid + 1):
+            var = port_matching_var(from_pid, to_pid)
+            port_matching_var_dict[(from_pid, to_pid)] = var
+            port_matching_var_dict[(to_pid, from_pid)] = var
 
-    for p in range(P):
-        vars_list = [port_matching_var_dict[(p, q)] for q in range(P)]
+    for from_pid in range(P):
+        vars_list = [port_matching_var_dict[(from_pid, q)] for q in range(P)]
         enc = CardEnc.equals(lits=vars_list, bound=1, vpool=pool, encoding=EncType.seqcounter)
         cnf.extend(enc.clauses)
 
@@ -122,6 +121,23 @@ def build_cnf(
 
 
     # ---------------- (3) Trace constraints ----------------
+
+    # Prepare variable representing OR_{q in g} U_{p,q} (M_{p,g}) in advance
+    for from_pid in range(P):
+        from_rid, _ = divmod(from_pid, D)
+        for to_rid in range(N):
+            m = move_possibility_var(from_pid, to_rid)
+            u_literals: List[int] = []
+            for d in range(D):
+                to_pid = D * to_rid + d
+                u_literals.append(port_matching_var_dict[(from_pid, to_pid)])
+                # # (¬U -> M): (¬U ∨ M)
+                cnf.append([-u_literals[-1], m])
+            # Link M_{p,g} <-> OR_{o} U_{p, D*g+o}
+            # (¬M ∨ U1 ∨ ... ∨ U6)
+            cnf.append([-m] + u_literals)
+
+
     # Location variables per plan/time/room
     X: List[List[List[int]]] = []
     for trace_id, (plan, obs) in enumerate(zip(norm_plans, results)):
@@ -139,10 +155,9 @@ def build_cnf(
 
         # label consistency: x[t,k] -> (Label[k] == obs[t])
         for t in range(T + 1):
-            for frid in range(N):
+            for rid in range(N):
                 assert obs[t] in (0, 1, 2, 3), f"Invalid observation {obs[t]} at plan {trace_id}, time {t}"
-                print([-x_plan[t][frid], label_assign_var(frid, obs[t])])
-                cnf.append([-x_plan[t][frid], label_assign_var(frid, obs[t])])
+                cnf.append([-x_plan[t][rid], label_assign_var(rid, obs[t])])
 
 
         # starting room
@@ -155,24 +170,12 @@ def build_cnf(
             door = plan[t]
             assert 0 <= door < D, f"Invalid action {door} at plan {trace_id}, time {t}"
 
-            for frid in range(N):
-                p = D * frid + door
-                for trid in range(N):
-                    m_pg = move_possibility_var(p, trid)
-                    # Link M_{p,g} <-> OR_{o} U_{p, D*g+o}
-                    # (¬M ∨ U1 ∨ ... ∨ U6)
-                    u_literals: List[int] = []
-                    for o in range(D):
-                        q = D * trid + o
-                        u_literals.append(port_matching_var_dict[(p, q)])
-                        # # (¬U -> M): (¬U ∨ M)
-                        cnf.append([-u_literals[-1], m_pg])
-                    cnf.append([-m_pg] + u_literals)
-                    # # x[t,k] ∧ x[t+1,g] -> m_pg
-                    # cnf.append([-X[trace_id][t][frid], -X[trace_id][t + 1][trid], m_pg])
-
-                    # x[t,k] ∧ m_pg -> x[t+1,g]
-                    cnf.append([-X[trace_id][t][frid], -m_pg, X[trace_id][t + 1][trid]])
+            for from_rid in range(N):
+                from_pid = D * from_rid + door
+                for to_rid in range(N):
+                    m = move_possibility_var(from_pid, to_rid)
+                    cnf.append([-X[trace_id][t][from_rid], -m, X[trace_id][t + 1][to_rid]])
+                    # cnf.append([-X[trace_id][t][from_rid], -X[trace_id][t + 1][to_rid]], m)
 
 
 
@@ -269,8 +272,6 @@ def extract_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str,
         assert val is not None, f"Room {k} has no label assigned"
         rooms.append(val)
 
-    for i in range(N):
-        print("FOO", pool.id(("T", 1, 1, i)), assign.get(pool.id(("T", 1, 1, i)), False))
 
     # decode connections
     connections: List[Dict[str, Dict[str, int]]] = []
