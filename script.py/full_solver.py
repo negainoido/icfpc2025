@@ -115,7 +115,7 @@ class Graph:
     def get_label(self, path: str) -> int:
         return self.get_labels(path)[-1]
 
-    def get_labels(self, paths: list[str]) -> list[int]:
+    def get_multiple_labels(self, paths: list[str]) -> list[int]:
         results = api.api.explore(paths)["results"]
         return [result[-1] for result in results]
 
@@ -163,7 +163,9 @@ class Graph:
             path_0_v_e_i = path_0_v + "[" + str(label_v1) + "]" + str(e) + str(i)
             reverse_door_plans.append([path_0_v_e_i, i, label_v1])
 
-        reverse_door_plan_results = self.get_labels([plan[0] for plan in reverse_door_plans])
+        reverse_door_plan_results = self.get_multiple_labels(
+            [plan[0] for plan in reverse_door_plans]
+        )
         for i, label in enumerate(reverse_door_plan_results):
             if label == reverse_door_plans[i][2]:
                 reverse_doors.add(reverse_door_plans[i][1]) # This is the door from the neighbor back to v
