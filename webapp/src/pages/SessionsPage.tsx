@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { Session, SessionDetail, Map } from '../types';
+import { Session, SessionDetail, MapStruct } from '../types';
 import { try_json_string_format } from '../utils/text.ts';
 
 const SessionsPage = () => {
@@ -109,7 +109,7 @@ const SessionsPage = () => {
     return log.endpoint === 'guess' && log.request_body;
   };
 
-  const extractMapFromGuessLog = (log: any): Map | null => {
+  const extractMapFromGuessLog = (log: any): MapStruct | null => {
     try {
       if (!isGuessRequestWithMap(log)) return null;
       const requestData = JSON.parse(log.request_body);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSession } from '../hooks/useSession';
-import { Connection, Map } from '../types';
+import { Connection, MapStruct } from '../types';
 
 interface MapBuilderState {
   rooms: number[];
@@ -113,7 +113,7 @@ export default function MapBuilder() {
       return;
     }
 
-    const finalMap: Map = {
+    const finalMap: MapStruct = {
       rooms: map.rooms,
       startingRoom: map.startingRoom,
       connections: map.connections,

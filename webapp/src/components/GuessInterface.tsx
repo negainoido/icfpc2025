@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useSession } from '../hooks/useSession';
 import { api, ApiError } from '../services/api';
-import { Map } from '../types';
+import { MapStruct } from '../types';
 
 interface Props {
-  map: Map;
+  map: MapStruct;
 }
 
 export default function GuessInterface({ map }: Props) {

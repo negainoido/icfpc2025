@@ -1,5 +1,5 @@
 import { Point } from './hexagon';
-import { Map } from '../types';
+import { MapStruct } from '../types';
 
 export interface RoomLayout {
   roomIndex: number;
@@ -11,7 +11,7 @@ export interface RoomLayout {
  * Calculate positions for all rooms in the map using a simple force-directed approach
  */
 export function calculateRoomLayout(
-  map: Map,
+  map: MapStruct,
   containerWidth: number,
   containerHeight: number
 ): RoomLayout[] {
@@ -43,7 +43,7 @@ export function calculateRoomLayout(
  * Arrange rooms in a circle
  */
 function circularLayout(
-  map: Map,
+  map: MapStruct,
   containerWidth: number,
   containerHeight: number
 ): RoomLayout[] {
@@ -73,7 +73,7 @@ function circularLayout(
  * Use a simplified force-directed layout
  */
 function forceDirectedLayout(
-  map: Map,
+  map: MapStruct,
   containerWidth: number,
   containerHeight: number
 ): RoomLayout[] {

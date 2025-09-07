@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Map } from '../types';
+import { MapStruct } from '../types';
 
 interface Props {
-  onMapLoad: (map: Map) => void;
+  onMapLoad: (map: MapStruct) => void;
   onError: (error: string) => void;
 }
 
@@ -35,7 +35,7 @@ export default function MapInput({ onMapLoad, onError }: Props) {
     onMapLoad(sampleMap);
   };
 
-  const validateMap = (data: unknown): Map => {
+  const validateMap = (data: unknown): MapStruct => {
     if (!data || typeof data !== 'object') {
       throw new Error('Map must be a JSON object');
     }
@@ -107,7 +107,7 @@ export default function MapInput({ onMapLoad, onError }: Props) {
       }
     }
 
-    return data as Map;
+    return data as MapStruct;
   };
 
   const handleLoadJson = () => {
