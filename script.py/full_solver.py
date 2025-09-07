@@ -76,6 +76,12 @@ class Graph:
         self.visited_node_count += 1
         return self.visited_node_count - 1
 
+    def get_remaining_edges(self) -> int:
+        cnt = 0
+        for e in self.graph:
+            cnt += e.count(None)
+        return cnt
+
     def add_edge(self, u: int, v: int, door: int, reverse_door: int | None = None):
         self.graph[u][door] = v
         self.reverse_door[u][door] = reverse_door
@@ -256,7 +262,7 @@ def solve(problem_name: str):
     edge_num = 0
     while True:
         edge_num += 1
-        click.echo(f"辺数: {edge_num}")
+        click.echo(f"辺数: {edge_num}, 残りの辺数: {graph.get_remaining_edges()}")
         if not graph.check_one_edge():
             break
 
