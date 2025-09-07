@@ -1,6 +1,6 @@
+use crate::solver::{Dir, GuessMap, GuessRoom, Label};
 use anyhow::{anyhow, Context, Result};
 use std::collections::{HashMap, HashSet};
-use crate::solver::{Dir, GuessMap, GuessRoom, Label};
 
 // 0..=5
 pub type StateId = usize;
@@ -45,7 +45,11 @@ impl Obs {
     pub fn tail_after_alpha<'a>(&'a self, alpha_moves: usize) -> &'a [Label] {
         // α 読了直後のラベルは labels[alpha_moves]
         let idx = alpha_moves;
-        if idx <= self.labels.len() { &self.labels[idx..] } else { &[] }
+        if idx <= self.labels.len() {
+            &self.labels[idx..]
+        } else {
+            &[]
+        }
     }
 }
 
@@ -61,8 +65,8 @@ struct Transitions {
 #[derive(Clone, Debug)]
 struct MapDraft {
     labels: Vec<Label>,
-    alpha: Vec<Vec<Dir>>,       // 各状態への代表アクセス α（Move のみ）
-    trans: Vec<Transitions>,    // δ
+    alpha: Vec<Vec<Dir>>,    // 各状態への代表アクセス α（Move のみ）
+    trans: Vec<Transitions>, // δ
 }
 impl MapDraft {
     fn new(start_label: Label) -> Self {
@@ -125,14 +129,12 @@ enum Phase {
         f: Plan,
         draft: MapDraft,
         key2id: HashMap<FKey, StateId>,
-        frontier: Vec<StateId>,    // 今層に展開する状態
+        frontier: Vec<StateId>, // 今層に展開する状態
         // 直前のバッチ： (s,a)
         pending: Vec<(StateId, Dir)>,
     },
     /// すべて埋まった
-    Done {
-        draft: MapDraft,
-    },
+    Done { draft: MapDraft },
 }
 
 /// ============ 制御構造体（公開インターフェース） =============================
@@ -166,7 +168,11 @@ impl InteractiveSolver {
     /// 返り値が `vec![]` のとき、探索は完了しています（/guess へ）。
     pub fn next_explore_batch(&mut self) -> Vec<String> {
         match &mut self.phase {
-            Phase::BuildFInit { accesses, candidates, pending } => {
+            Phase::BuildFInit {
+                accesses,
+                candidates,
+                pending,
+            } => {
                 // A×C をすべて 1 バッチで
                 let mut plans = vec![];
                 pending.clear();
@@ -179,7 +185,13 @@ impl InteractiveSolver {
                 }
                 plans
             }
-            Phase::BuildFRefine { accesses, current_f, colliding_pairs, ext_len, pending } => {
+            Phase::BuildFRefine {
+                accesses,
+                current_f,
+                colliding_pairs,
+                ext_len,
+                pending,
+            } => {
                 // いまの ext_len で ext 候補を全列挙
                 let exts = enumerate_words_exact(*ext_len);
                 let mut plans = vec![];
@@ -208,41 +220,57 @@ impl InteractiveSolver {
                 let plan = encode_plan(&f.clone());
                 vec![plan]
             }
-            Phase::Enumerate { f, draft, frontier, pending, .. } => {
-                // 今の frontier に対し、未知 a を全部まとめ打ち
-                let mut plans = vec![];
-                pending.clear();
-                if frontier.is_empty() {
-                    // 終了条件確認：すべての δ が埋まっているか？
-                    let all_filled = draft.trans.iter().all(|tr| tr.to.iter().all(|x| x.is_some()));
-                    if all_filled {
-                        // Done へ（バッチは空）
-                        let done = Phase::Done { draft: draft.clone() };
-                        self.phase = done;
-                        return vec![];
+            Phase::Enumerate {
+                f,
+                draft,
+                frontier,
+                pending,
+                ..
+            } => {
+                // 未探索が残っている限り、空バッチを返さない。
+                loop {
+                    pending.clear();
+                    // 1) frontier が空なら、未探索を持つ全状態で再構築
+                    if frontier.is_empty() {
+                        let mut rest = vec![];
+                        for s in 0..draft.trans.len() {
+                            if draft.trans[s].to.iter().any(|x| x.is_none()) {
+                                rest.push(s);
+                            }
+                        }
+                        if rest.is_empty() {
+                            // もう未探索は無い → 完了
+                            self.phase = Phase::Done {
+                                draft: draft.clone(),
+                            };
+                            return vec![];
+                        }
+                        *frontier = rest;
                     }
-                    // 未展開の状態がある場合は、それらを frontier に積み直す
-                    let mut rest = vec![];
-                    for s in 0..draft.trans.len() {
-                        if draft.trans[s].to.iter().any(|x| x.is_none()) {
-                            rest.push(s);
+
+                    // 2) frontier からクエリ組み立て
+                    let mut plans = vec![];
+                    for &s in frontier.iter() {
+                        let alpha = &draft.alpha[s];
+                        for &a in &self.cfg.door_order {
+                            if draft.trans[s].to[a as usize].is_some() {
+                                continue;
+                            }
+                            let mut p = Plan::from_moves(alpha.clone());
+                            p.push_move(a);
+                            let p = p.concat(&f);
+                            plans.push(encode_plan(&p));
+                            pending.push((s, a));
                         }
                     }
-                    *frontier = rest;
-                }
-                // frontier をまとめて展開
-                for &s in frontier.iter() {
-                    let alpha = &draft.alpha[s];
-                    for &a in &self.cfg.door_order {
-                        if draft.trans[s].to[a as usize].is_some() { continue; }
-                        let mut p = Plan::from_moves(alpha.clone());
-                        p.push_move(a);
-                        let p = p.concat(&f);
-                        plans.push(encode_plan(&p));
-                        pending.push((s, a));
+                    if !plans.is_empty() {
+                        // 1 本でも作れたら返す
+                        return plans;
                     }
+
+                    // 3) この frontier では打つものが無かった → 破棄して再試行
+                    frontier.clear();
                 }
-                plans
             }
             Phase::Done { .. } => vec![],
         }
@@ -252,7 +280,11 @@ impl InteractiveSolver {
     ///
     /// - `sent_routes`: 直前の `next_explore_batch()` が返したルート群（同順）
     /// - `obs_labels`: それぞれに対応するラベル列（labels[0] が開始時ラベル）
-    pub fn apply_explore_results(&mut self, sent_routes: &[String], obs_labels: &[Vec<Label>]) -> Result<()> {
+    pub fn apply_explore_results(
+        &mut self,
+        sent_routes: &[String],
+        obs_labels: &[Vec<Label>],
+    ) -> Result<()> {
         if sent_routes.is_empty() && obs_labels.is_empty() {
             // 何も送っていない/何も返ってない → 何もしない
             return Ok(());
@@ -265,7 +297,11 @@ impl InteractiveSolver {
         );
 
         match &mut self.phase {
-            Phase::BuildFInit { accesses, candidates, pending } => {
+            Phase::BuildFInit {
+                accesses,
+                candidates,
+                pending,
+            } => {
                 let mut tails_by_cand: HashMap<usize, HashSet<FKey>> = HashMap::new();
 
                 for ((ai, ci), obs) in pending.iter().cloned().zip(obs_labels.iter()) {
@@ -276,7 +312,9 @@ impl InteractiveSolver {
                 }
 
                 // スコア最大の候補を採用
-                let (best_ci, _best_score) = candidates.iter().enumerate()
+                let (best_ci, _best_score) = candidates
+                    .iter()
+                    .enumerate()
                     .map(|(ci, _)| {
                         let score = tails_by_cand.get(&ci).map(|s| s.len()).unwrap_or(0);
                         (ci, score)
@@ -290,7 +328,9 @@ impl InteractiveSolver {
                 // もう一度 piecemeal に取りに行かないといけないが、今回のバッチ内に
                 // ちょうど best_ci の結果が含まれているので再利用する
                 for ((ai, ci), obs) in pending.iter().cloned().zip(obs_labels.iter()) {
-                    if ci != best_ci { continue; }
+                    if ci != best_ci {
+                        continue;
+                    }
                     let alpha_moves = accesses[ai].len();
                     let tail = tail_after_alpha_from_str(&sent_routes, &obs, alpha_moves)?;
                     tails_for_best[ai] = FKey(tail);
@@ -298,7 +338,8 @@ impl InteractiveSolver {
                 let mut pairs = vec![];
                 for i in 0..tails_for_best.len() {
                     for j in (i + 1)..tails_for_best.len() {
-                        if !tails_for_best[i].0.is_empty() && tails_for_best[i] == tails_for_best[j] {
+                        if !tails_for_best[i].0.is_empty() && tails_for_best[i] == tails_for_best[j]
+                        {
                             pairs.push((i, j));
                         }
                     }
@@ -306,7 +347,10 @@ impl InteractiveSolver {
 
                 if pairs.is_empty() {
                     // 十分に分離できた → start 識別へ
-                    self.phase = Phase::IdentifyStart { f: best_f, pending: false };
+                    self.phase = Phase::IdentifyStart {
+                        f: best_f,
+                        pending: false,
+                    };
                 } else {
                     // まだ衝突 → ext_len=1 から延長探索へ
                     self.phase = Phase::BuildFRefine {
@@ -320,13 +364,19 @@ impl InteractiveSolver {
                 Ok(())
             }
 
-            Phase::BuildFRefine { accesses, current_f, colliding_pairs, ext_len, pending } => {
+            Phase::BuildFRefine {
+                accesses,
+                current_f,
+                colliding_pairs,
+                ext_len,
+                pending,
+            } => {
                 let exts = enumerate_words_exact(*ext_len);
                 // (pair_idx -> (i,j)) ごとに、ext ごとの 2 行を比較
                 // 受信順は pending と同じ。
                 // 集計: ext_index -> (i_tail, j_tail) のうち 1 組でも不一致なら採用
                 let mut pair_ext_split: HashSet<usize> = HashSet::new(); // ext_idx が割った
-                // tail 保存： (pair_idx, which_row(0/1), ext_idx) -> tail
+                                                                         // tail 保存： (pair_idx, which_row(0/1), ext_idx) -> tail
                 let mut tails: HashMap<(usize, u8, usize), FKey> = HashMap::new();
 
                 for (tag, obs) in pending.iter().cloned().zip(obs_labels.iter()) {
@@ -355,15 +405,21 @@ impl InteractiveSolver {
                 }
 
                 if let Some(ext) = chosen_ext {
-                        // F を延長したら、そのまま IdentifyStart へ直行
-                        *current_f = current_f.clone().concat(&Plan::from_moves(ext));
-                        self.phase = Phase::IdentifyStart { f: current_f.clone(), pending: false };
-                        Ok(())
+                    // F を延長したら、そのまま IdentifyStart へ直行
+                    *current_f = current_f.clone().concat(&Plan::from_moves(ext));
+                    self.phase = Phase::IdentifyStart {
+                        f: current_f.clone(),
+                        pending: false,
+                    };
+                    Ok(())
                 } else {
                     // この長さでは割れなかった → ext_len を伸ばす
                     if *ext_len >= self.cfg.f_refine_max_len {
                         // これ以上は延ばさない方針：現 F で続行
-                        self.phase = Phase::IdentifyStart { f: current_f.clone(), pending: false };
+                        self.phase = Phase::IdentifyStart {
+                            f: current_f.clone(),
+                            pending: false,
+                        };
                         Ok(())
                     } else {
                         *ext_len += 1;
@@ -376,17 +432,15 @@ impl InteractiveSolver {
             Phase::IdentifyStart { f, pending } => {
                 // ε·F の結果 1 本だけ
                 anyhow::ensure!(sent_routes.len() == 1, "IdentifyStart expects single route");
-                    let labels = &obs_labels[0];
-                    anyhow::ensure!(!labels.is_empty(), "empty labels");
-                    let tail = tail_after_alpha_from_str_single(&sent_routes[0], labels, 0)?;
-                    let start_label = tail[0];
-                    let mut draft = MapDraft::new(start_label);
-                    let mut key2id: HashMap<FKey, StateId> = HashMap::new();
-                    key2id.insert(FKey(tail), 0);
+                let labels = &obs_labels[0];
+                anyhow::ensure!(!labels.is_empty(), "empty labels");
+                let tail = tail_after_alpha_from_str_single(&sent_routes[0], labels, 0)?;
+                let start_label = tail[0];
+                let mut draft = MapDraft::new(start_label);
+                let mut key2id: HashMap<FKey, StateId> = HashMap::new();
+                key2id.insert(FKey(tail), 0);
 
-
-
-            *pending = false;
+                *pending = false;
 
                 self.phase = Phase::Enumerate {
                     f: f.clone(),
@@ -398,15 +452,30 @@ impl InteractiveSolver {
                 Ok(())
             }
 
-            Phase::Enumerate { f, draft, key2id, frontier, pending } => {
+            Phase::Enumerate {
+                f,
+                draft,
+                key2id,
+                frontier,
+                pending,
+            } => {
                 // pending と obs_labels は 1 対 1
-                anyhow::ensure!(pending.len() == obs_labels.len(),
-                    "enumerate: pending={}, recv={}", pending.len(), obs_labels.len());
+                anyhow::ensure!(
+                    pending.len() == obs_labels.len(),
+                    "enumerate: pending={}, recv={}",
+                    pending.len(),
+                    obs_labels.len()
+                );
 
                 // 今層で新規に見つかった状態を next_frontier に積む
                 let mut next_frontier = vec![];
 
-                for (((s, a), labels), route) in pending.iter().cloned().zip(obs_labels.iter()).zip(sent_routes.iter()) {
+                for (((s, a), labels), route) in pending
+                    .iter()
+                    .cloned()
+                    .zip(obs_labels.iter())
+                    .zip(sent_routes.iter())
+                {
                     // α_s の長さ + 1（Move a）だけ進んだ時点の tail
                     // α は「α_s の Move 数 + Move(a) の 1」のみ
                     let alpha_len = draft.alpha[s].len() + 1;
@@ -420,7 +489,11 @@ impl InteractiveSolver {
                         sid
                     } else {
                         let sid = draft.labels.len();
-                        anyhow::ensure!(sid <= self.cfg.max_rooms, "room overflow (>{})", self.cfg.max_rooms);
+                        anyhow::ensure!(
+                            sid <= self.cfg.max_rooms,
+                            "room overflow (>{})",
+                            self.cfg.max_rooms
+                        );
                         key2id.insert(key, sid);
                         draft.labels.push(lab);
                         let mut alpha_t = draft.alpha[s].clone();
@@ -433,8 +506,23 @@ impl InteractiveSolver {
                     draft.trans[s].to[a as usize] = Some(t);
                 }
 
-                // frontier を更新
-                *frontier = next_frontier;
+                // frontier を更新：基本は「今回新規に見つかった状態」
+                // ただし頑健性のため、まだ穴が残っている既知状態も追加しておく。
+                let mut still_open = vec![];
+                for s in 0..draft.trans.len() {
+                    if draft.trans[s].to.iter().any(|x| x.is_none()) {
+                        still_open.push(s);
+                    }
+                }
+                // next_frontier を優先的に前段に置き、重複は避ける
+                let mut merged: Vec<StateId> = vec![];
+                let mut seen = std::collections::HashSet::new();
+                for s in next_frontier.into_iter().chain(still_open.into_iter()) {
+                    if seen.insert(s) {
+                        merged.push(s);
+                    }
+                }
+                *frontier = merged;
                 pending.clear();
                 Ok(())
             }
@@ -449,7 +537,10 @@ impl InteractiveSolver {
             Phase::Done { draft } => draft.clone(),
             Phase::Enumerate { draft, .. } => {
                 // すべて埋まっていれば Done でなくても出してよい
-                let all_filled = draft.trans.iter().all(|tr| tr.to.iter().all(|x| x.is_some()));
+                let all_filled = draft
+                    .trans
+                    .iter()
+                    .all(|tr| tr.to.iter().all(|x| x.is_some()));
                 if !all_filled {
                     return Err(anyhow!("map is not complete yet"));
                 }
@@ -462,17 +553,24 @@ impl InteractiveSolver {
         let pairs = recover_port_pairs(&draft);
 
         // 提出形（例）に整形
-        let mut rooms: Vec<GuessRoom> = draft.labels.iter().map(|&lab| GuessRoom {
-            label: lab,
-            doors: [None, None, None, None, None, None],
-        }).collect();
+        let mut rooms: Vec<GuessRoom> = draft
+            .labels
+            .iter()
+            .map(|&lab| GuessRoom {
+                label: lab,
+                doors: [None, None, None, None, None, None],
+            })
+            .collect();
 
         for (s, a, t, b) in pairs {
             rooms[s].doors[a as usize] = Some((t, b));
             rooms[t].doors[b as usize] = Some((s, a));
         }
 
-        Ok(GuessMap { rooms, starting_room: 0 })
+        Ok(GuessMap {
+            rooms,
+            starting_room: 0,
+        })
     }
 }
 
@@ -486,7 +584,9 @@ fn enumerate_words_upto(k: usize) -> Vec<Vec<Dir>> {
     out
 }
 fn enumerate_words_exact(k: usize) -> Vec<Vec<Dir>> {
-    if k == 0 { return vec![vec![]]; }
+    if k == 0 {
+        return vec![vec![]];
+    }
     let mut res = vec![vec![]];
     for _ in 0..k {
         let mut next = vec![];
@@ -551,7 +651,9 @@ fn recover_port_pairs(draft: &MapDraft) -> Vec<(StateId, Dir, StateId, Dir)> {
 
     for s in 0..n {
         for a in 0..6usize {
-            if used[s][a] { continue; }
+            if used[s][a] {
+                continue;
+            }
             if let Some(t) = draft.trans[s].to[a] {
                 // 逆像 δ(t,b)=s となる b を探す
                 let mut found = None;

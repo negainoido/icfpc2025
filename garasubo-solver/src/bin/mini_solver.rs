@@ -256,8 +256,14 @@ pub fn build_guess_map_strict(
                 // 片側だけ Connection を作る
                 let ((fr, fd), (tr, td)) = key;
                 connections.push(Connection {
-                    from: RoomDoor { room: fr as usize, door: fd as usize },
-                    to: RoomDoor { room: tr as usize, door: td as usize },
+                    from: RoomDoor {
+                        room: fr as usize,
+                        door: fd as usize,
+                    },
+                    to: RoomDoor {
+                        room: tr as usize,
+                        door: td as usize,
+                    },
                 });
             }
         }

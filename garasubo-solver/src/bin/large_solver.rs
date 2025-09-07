@@ -1,8 +1,8 @@
 use clap::Parser;
-use tokio::signal;
 use garasubo_solver::api::{ApiClient, GuessMap};
 use garasubo_solver::chatgpt_solver::{Config, InteractiveSolver};
 use garasubo_solver::session_manager::SessionManager;
+use tokio::signal;
 
 #[derive(Parser)]
 #[command(name = "garasubo-solver")]
@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
         }
         println!("Sending batch of {} routes to explore...", next_batch.len());
         let result = session_guard.explore(&next_batch).await?;
-         solver.apply_explore_results(&next_batch, &result.results)?;
+        solver.apply_explore_results(&next_batch, &result.results)?;
     }
     let map = solver.build_guess()?;
 

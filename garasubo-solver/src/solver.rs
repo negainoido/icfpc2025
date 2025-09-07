@@ -1,7 +1,7 @@
-use std::collections::HashSet;
-use serde::Serialize;
 use crate::api;
 use crate::api::{Connection, RoomDoor};
+use serde::Serialize;
+use std::collections::HashSet;
 
 pub type Label = u8;
 // 0..=3
@@ -38,12 +38,20 @@ impl GuessMap {
                     let from_door = d;
                     let to_room = *to_room;
                     let to_door = *peer_port as usize;
-                    if !used.contains(&(from_room, from_door)) && !used.contains(&(to_room, to_door)) {
+                    if !used.contains(&(from_room, from_door))
+                        && !used.contains(&(to_room, to_door))
+                    {
                         used.insert((from_room, from_door));
                         used.insert((to_room, to_door));
                         connections.push(Connection {
-                            from: RoomDoor { room: from_room, door: from_door },
-                            to: RoomDoor { room: to_room, door: to_door },
+                            from: RoomDoor {
+                                room: from_room,
+                                door: from_door,
+                            },
+                            to: RoomDoor {
+                                room: to_room,
+                                door: to_door,
+                            },
                         });
                     }
                 } else {

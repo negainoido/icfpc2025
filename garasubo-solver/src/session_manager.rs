@@ -88,7 +88,13 @@ impl SessionManager {
             .with_context(|| format!("Failed to start session for problem '{}'", problem_name))?;
 
         let mut session = self.current_session.lock().await;
-        *session = Some(response.session_id.clone().unwrap_or("dummy".to_string()).clone());
+        *session = Some(
+            response
+                .session_id
+                .clone()
+                .unwrap_or("dummy".to_string())
+                .clone(),
+        );
 
         Ok(response)
     }
@@ -105,7 +111,13 @@ impl SessionManager {
             .with_context(|| format!("Failed to start session for problem '{}'", problem_name))?;
 
         let mut session = self.current_session.lock().await;
-        *session = Some(response.session_id.clone().unwrap_or("dummy".to_string()).clone());
+        *session = Some(
+            response
+                .session_id
+                .clone()
+                .unwrap_or("dummy".to_string())
+                .clone(),
+        );
 
         Ok(SessionGuard::new(
             self.api_client.clone(),

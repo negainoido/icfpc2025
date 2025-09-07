@@ -40,18 +40,18 @@ enum Commands {
 fn convert_guess_map(guess_map: guess_map::GuessMap) -> ApiGuessMap {
     ApiGuessMap {
         rooms: guess_map.rooms.into_iter().map(|r| r as i32).collect(),
-        starting_room: guess_map.starting_room as i32,
+        starting_room: guess_map.starting_room,
         connections: guess_map
             .connections
             .into_iter()
             .map(|conn| ApiConnection {
                 from: RoomDoor {
-                    room: conn.from.room as i32,
-                    door: conn.from.door as i32,
+                    room: conn.from.room,
+                    door: conn.from.door,
                 },
                 to: RoomDoor {
-                    room: conn.to.room as i32,
-                    door: conn.to.door as i32,
+                    room: conn.to.room,
+                    door: conn.to.door,
                 },
             })
             .collect(),
