@@ -51,7 +51,6 @@ def simulate(mu, labels_room, s0, plan):
 def build_model(
     problem,
     *,
-    use_lex_symmetry=False,
     use_pattern_c=True,
     path_prefix=None,
 ):
@@ -153,19 +152,21 @@ def build_model(
             # 少なくとも1つ選べ
             model.Add(sum(lits) >= 1)
 
-    # 6) 同一ラベル内のレキシコ順（軽めの対称性除去）
-    if use_lex_symmetry:
-        # 実装簡易化のため、(q<q') & label等しい ⇒ 6個の逐次比較 を reify で表現
-        for q1 in range(N):
-            for q2 in range(q1 + 1, N):
-                same = model.NewBoolVar(f"sameLabel_{q1}_{q2}")
-                model.Add(label_room[q1] == label_room[q2]).OnlyEnforceIf(same)
-                model.Add(label_room[q1] != label_room[q2]).OnlyEnforceIf(same.Not())
-                # 簡易: same ⇒ (各dで port値の非減少)。必要時のみ有効化。
-                for d in range(6):
-                    model.Add(
-                        label_port[pid(q1, d)] <= label_port[pid(q2, d)]
-                    ).OnlyEnforceIf(same)
+    # 6) 対称性制約（lexicographic, ラベルが同じ部屋同士でのみ）
+    B = 8  # >= 5 ならOK（digitは0..3）
+    weights = [B ** (5 - d) for d in range(6)]
+    key = [
+        model.NewIntVar(0, sum(3 * w for w in weights), f"key[{q}]") for q in range(N)
+    ]
+    for q in range(N):
+        model.Add(key[q] == sum(weights[d] * label_port[pid(q, d)] for d in range(6)))
+
+    for q1 in range(1, N):  # q1=0は特殊扱い
+        for q2 in range(q1 + 1, N):
+            same = model.NewBoolVar(f"sameLabel_{q1}_{q2}")
+            model.Add(label_room[q1] == label_room[q2]).OnlyEnforceIf(same)
+            model.Add(label_room[q1] != label_room[q2]).OnlyEnforceIf(same.Not())
+            model.Add(key[q1] <= key[q2]).OnlyEnforceIf(same)
 
     # パス接地制約（長さ prefix の実在パスを要求）
     if path_prefix:
@@ -200,7 +201,6 @@ def cegis_solve(
     time_limit_s=10.0,
     verbose=True,
     *,
-    use_lex_symmetry=False,
     use_pattern_c=True,
     snapshot_output: Path | None = None,
 ):
@@ -210,7 +210,6 @@ def cegis_solve(
     for it in range(max_iters):
         model, label_room, label_port, mate = build_model(
             problem,
-            use_lex_symmetry=use_lex_symmetry,
             use_pattern_c=use_pattern_c,
             path_prefix=path_prefix,
         )
@@ -358,11 +357,6 @@ def main():
         action="store_true",
         help="Reduce logging",
     )
-    parser.add_argument(
-        "--lex-sym",
-        action="store_true",
-        help="Enable lexicographic symmetry breaking within equal labels",
-    )
     args = parser.parse_args()
 
     prob = load_problem(args.input)
@@ -372,7 +366,6 @@ def main():
         max_iters=args.iters,
         time_limit_s=args.time_limit,
         verbose=not args.quiet,
-        use_lex_symmetry=args.lex_sym,
         snapshot_output=Path(args.output),
     )
     if sol is None:
