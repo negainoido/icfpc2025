@@ -23,6 +23,43 @@ PROBLEM_SIZES = {
     "iod": 90,
 }
 
+"""
+
+辺を一本ずつ探索してグラフを構築する
+最初は到達可能なノードは0番ノード、そのラベルも既知
+
+到達可能なノードから伸びている未知の辺を一本取ってくる
+* 未知の辺とその逆向きのドアを見つける
+* その辺の先のノードが既知のノードか未知のノードかを判定する
+
+到達可能なノード: V
+未知か既知かわからない隣のノード: X
+そこから伸びている未知の辺を: e
+Vのラベル label_v
+
+V - e -> X - 0 -> Y0
+V - e -> X - 1 -> Y1
+...
+V - e -> X - 5 -> Y5
+
+Vを (label_v  + 1) % 4で塗ってもう一回Xの隣接するノードのラベルを確認して、
+Yiのラベルが(label_v + 1) % 4と一致するものを探す
+
+
+XからVに戻る辺: reverse_doorが分かる
+
+今度はXが既知のノードなのか、未知のノードなのかを判別する
+既知のノードのうちXと同じラベルを持つものを探す
+
+ZがXと同じラベルを持っていたとする。Zは既知のノード
+
+V - e -> X (Xのラベルを(label_x + 1)%4にする) - reverse_e -> V - - - -> Z
+
+Zのラベルが(label_x+1)%4で塗られていたらZはXと同じ
+
+もしそのようなZが存在しなければ、Xは未知のノード
+
+"""
 
 class Graph:
     def __init__(self, N):
@@ -31,13 +68,11 @@ class Graph:
         self.reverse_door = [[None] * 6 for _ in range(N)]
         self.graph_labels = [None for _ in range(N)]
         self.visited_node_count = 0
-        self.labels_to_node = [set() for _ in range(4)]
         self.reachable = {0}
 
-    def add_node(self, label: int) -> int:
+    def add_new_node(self, label: int) -> int:
         self.graph_labels[self.visited_node_count] = label
         self.visited_node_count += 1
-        self.labels_to_node[label].add(self.visited_node_count - 1)
         return self.visited_node_count - 1
 
     def add_edge(self, u: int, v: int, door: int, reverse_door: int | None = None):
@@ -47,7 +82,7 @@ class Graph:
             self.graph[v][reverse_door] = u
             self.reverse_door[v][reverse_door] = door
 
-    def get_path(self, u: int, v: int) -> str | None:
+    def get_path(self, u: int, v: int) -> str:
         queue = [(u, "")]
         visited = set()
         while queue:
@@ -59,11 +94,12 @@ class Graph:
                 continue
             visited.add(current)
             for door in range(6):
-                if self.graph[current][door] is not None:
-                    next_node = self.graph[current][door]
-                    queue.append((next_node, path + str(door)))
+                next_node = self.graph[current][door]
+                if next_node is None:
+                    continue
+                queue.append((next_node, path + str(door)))
 
-        return None
+        assert False, "Path not found"
 
     def get_label(self, path: str) -> int:
         result = api.api.explore([path])
@@ -100,6 +136,8 @@ class Graph:
         label_v_e = self.get_label(path_0_v + str(e))
         surround_labels_v_e = self.get_surround_labels(path_0_v + str(e))
 
+        # 逆向きの辺を探す
+        reverse_doors = set()
         for i, label_v_e_i in enumerate(surround_labels_v_e):
             if label_v_e_i != label_v:
                 continue
@@ -108,12 +146,18 @@ class Graph:
             path_0_v_e_i = path_0_v + "[" + str(label_v1) + "]" + str(e) + str(i)
             label_0_v_e_i = self.get_label(path_0_v_e_i)
             if label_0_v_e_i == label_v1:
-                reverse_door = i  # This is the door from the neighbor back to v
-                break
+                reverse_doors.add(i)  # This is the door from the neighbor back to v
+
+        assert reverse_doors, "Reverse door not found"
 
         label_v_e1 = (label_v_e + 1) % 4
         path_0_v_e_reverse_door = (
-            path_0_v + str(e) + "[" + str(label_v_e1) + "]" + str(reverse_door)
+            path_0_v
+            + str(e)
+            + "["
+            + str(label_v_e1)
+            + "]"
+            + str(list(reverse_doors)[0])
         )
 
         for r in self.reachable:
@@ -123,12 +167,15 @@ class Graph:
             path_v_r = self.get_path(v, r)
             label_r = self.get_label(path_0_v_e_reverse_door + path_v_r)
             if label_r == label_v_e1:
-                self.add_edge(v, r, e, reverse_door)
-                return True
+                for reverse_door in reverse_doors:
+                    if self.graph[r][reverse_door] is not None:
+                        continue
 
-        self.add_node(label_v_e)
-        new_node_id = self.visited_node_count - 1
-        self.add_edge(v, new_node_id, e, reverse_door)
+                    self.add_edge(v, r, e, reverse_door)
+                    return True
+
+        new_node_id = self.add_new_node(label_v_e)
+        self.add_edge(v, new_node_id, e, list(reverse_doors)[0])
         self.reachable.add(new_node_id)
 
         return True
@@ -203,16 +250,13 @@ def solve(problem_name: str):
     N = PROBLEM_SIZES[problem_name]
     click.echo(f"問題サイズ: {N}")
     graph = Graph(N)
-    graph.add_node(graph.get_node_label(0))
+    graph.add_new_node(graph.get_node_label(0))
 
     while True:
         if not graph.check_one_edge():
             break
-        print(graph.graph)
-        print(graph.graph_labels)
 
     print(api.api.guess(graph.get_map_data()))
-
 
 if __name__ == "__main__":
     cli()
