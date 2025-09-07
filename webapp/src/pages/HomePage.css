@@ -1,0 +1,86 @@
+.home-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8f9fa;
+  padding: 20px;
+  text-align: center;
+}
+
+.home-box {
+  background-color: white;
+  border-radius: 8px;
+  padding: 40px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+}
+
+.home-title {
+  margin-bottom: 20px;
+  color: #343a40;
+}
+
+.home-subtitle {
+  margin-bottom: 30px;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+.home-description {
+  margin-bottom: 30px;
+  color: #6c757d;
+  line-height: 1.6;
+}
+
+.home-buttons {
+  margin-bottom: 30px;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-button {
+  padding: 15px 30px;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 18px;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.explore-btn {
+  background-color: #007bff;
+}
+
+.sessions-btn {
+  background-color: #28a745;
+}
+
+.visualize-btn {
+  background-color: #17a2b8;
+}
+
+.resource-section {
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.resource-title {
+  margin-bottom: 10px;
+}
+
+.resource-link {
+  color: #007bff;
+  margin-right: 20px;
+}
+
+.home-footer {
+  margin-top: 30px;
+  font-size: 12px;
+  color: #adb5bd;
+}
