@@ -67,3 +67,6 @@ class Plan:
 
     def __iter__(self):
         return iter(self.actions)
+
+    def num_goto(self) -> int:
+        return sum(1 for action in self.actions if isinstance(action, Goto))

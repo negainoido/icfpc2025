@@ -85,6 +85,29 @@ PROBLEM_SIZES = {
     "tertius": 18,
     "quartus": 24,
     "quintus": 30,
+    "aleph": 12,
+    "beth": 24,
+    "gimel": 36,
+    "daleth": 48,
+    "he": 60,
+    "vau": 18,
+    "zain": 36,
+    "hhet": 54,
+    "teth": 72,
+    "iod": 9,
+}
+DOOR_LIMITS = {
+    "__default": 18,
+    "aleph": 6,
+    "beth": 6,
+    "gimel": 6,
+    "daleth": 6,
+    "he": 6,
+    "vau": 6,
+    "zain": 6,
+    "hhet": 6,
+    "teth": 6,
+    "iod": 6,
 }
 
 
@@ -102,6 +125,7 @@ class Problem:
 
     name: str
     rooms: list[Room]
+    limit: int  # Limit of door-steps
     starting_room: int = 0
 
     @classmethod
@@ -126,7 +150,10 @@ class Problem:
             rooms[to_room].doors[to_door] = (from_room, from_door)
 
         return cls(
-            name="submitted_map", rooms=rooms, starting_room=map_data.startingRoom
+            name="submitted_map",
+            rooms=rooms,
+            starting_room=map_data.startingRoom,
+            limit=DOOR_LIMITS["__default"],
         )
 
 
@@ -146,8 +173,18 @@ class Team:
 teams: dict[str, Team] = {}
 
 
-def generate_random_problem(problem_name: str, size: int) -> Problem:
-    """指定された問題名に基づいてランダムな問題を生成する"""
+def generate_random_problem(problem_name: str, size: int, limit: int) -> Problem:
+    """指定された問題名に基づいてランダムな問題を生成する
+
+    Parameters
+    ----------
+    problem_name
+        任意の問題名（例: "probatio", "primus", "aleph", "beth", など）
+    size
+        部屋の数
+    limit
+        ドアステップの制限 (6, 18)
+    """
 
     # 各部屋にできるだけ均等な2ビットラベルを割り当て
     offset = random.randint(0, 3)
@@ -181,11 +218,12 @@ def generate_random_problem(problem_name: str, size: int) -> Problem:
         rooms[room1].doors[door1] = (room2, door2)
         rooms[room2].doors[door2] = (room1, door1)
 
-    problem = Problem(name=problem_name, rooms=rooms, starting_room=0)
+    problem = Problem(name=problem_name, rooms=rooms, starting_room=0, limit=limit)
 
     # 生成された問題情報をログ出力
     print(f"\n=== 生成された問題 ({problem_name}) ===")
     print(f"部屋数: {size}")
+    print(f"ドア制限: x{limit}")
     print(f"開始部屋: {problem.starting_room}")
     print("部屋ラベル:")
     for i, room in enumerate(rooms):
@@ -338,21 +376,31 @@ async def register(request: RegisterRequest):
 @app.post("/select", response_model=SelectResponse)
 async def select(request: SelectRequest):
     """問題を選択し、ランダムな地図を生成する"""
-    if request.problemName not in PROBLEM_SIZES:
-        try:
-            size = int(request.problemName)
-            assert size >= 1
-        except Exception:
-            raise HTTPException(status_code=400, detail="Unknown problem name")
-    else:
+    if request.problemName in PROBLEM_SIZES:
+        # 既知の問題から選ぶ場合
+        problem_name = request.problemName
         size = PROBLEM_SIZES[request.problemName]
+        limit = DOOR_LIMITS.get(request.problemName) or DOOR_LIMITS["__default"]
+    elif request.problemName.isdigit():
+        # 任意の部屋数を指定する場合
+        size = int(request.problemName)
+        limit = DOOR_LIMITS["__default"]
+        problem_name = f"custom:{size}:{limit}"
+    elif ":" in request.problemName:
+        # カスタム問題名 (例: "10:6" なら size=10, limit=6)
+        req_parts = request.problemName.split(":")
+        size = int(req_parts[-2].strip())
+        limit = int(req_parts[-1].strip())
+        problem_name = f"{size}:{limit}"
+    else:
+        raise HTTPException(status_code=400, detail="Unknown problem name format")
 
-    # 新しいチームとみなす
+    # 常に新しいチームとみなす
     team = Team(id=request.id, name="negainoido", pl="Rust", email="mail@mail")
     teams[request.id] = team
 
     # 新しい問題を生成
-    problem = generate_random_problem(request.problemName, size)
+    problem = generate_random_problem(problem_name, size, limit)
     team.current_problem = problem
     team.query_count = 0  # クエリカウントをリセット
 
@@ -374,18 +422,23 @@ async def explore(request: ExploreRequest):
     if team.current_problem is None:
         raise HTTPException(status_code=400, detail="No problem selected")
 
-    # プランの長さは最大 18*n (v1.2)
+    # プランの解析
+    try:
+        plans = [Plan.from_string(plan_str) for plan_str in request.plans]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # ドア移動の制限をチェック
     n = len(team.current_problem.rooms)
-    max_plan_length = 18 * n
-    for plan in request.plans:
-        if len(plan) > max_plan_length:
+    max_plan_length = n * team.current_problem.limit
+    for plan in plans:
+        if plan.num_goto() > max_plan_length:
             raise HTTPException(
                 status_code=400,
-                detail=f"Plan length {len(plan)} exceeds maximum {max_plan_length}",
+                detail=f"Plan has too many doors (Goto actions): {plan.num_goto()} exceeds maximum {max_plan_length}",
             )
 
     # ルートプランを実行
-    plans = [Plan.from_string(plan_str) for plan_str in request.plans]
     results = simulate_exploration(team.current_problem, plans)
 
     # クエリカウントを更新（プラン数 + リクエストペナルティ1）
