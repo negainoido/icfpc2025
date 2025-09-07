@@ -13,7 +13,7 @@ mod models;
 
 use database::{create_pool, init_database};
 use handlers::{
-    abort_session_handler, explore, get_current_session, get_session_detail, get_sessions, guess,
+    abort_session_handler, explore, export_session, get_current_session, get_session_detail, get_sessions, guess,
     select,
 };
 
@@ -44,6 +44,7 @@ async fn main() {
         .route("/api/sessions", get(get_sessions))
         .route("/api/sessions/current", get(get_current_session))
         .route("/api/sessions/{session_id}", get(get_session_detail))
+        .route("/api/sessions/{session_id}/export", get(export_session))
         .route(
             "/api/sessions/{session_id}/abort",
             put(abort_session_handler),
@@ -60,6 +61,7 @@ async fn main() {
     println!("  GET  /api/sessions         - Get all sessions");
     println!("  GET  /api/sessions/current - Get current active session");
     println!("  GET  /api/sessions/:id     - Get session details and logs");
+    println!("  GET  /api/sessions/:id/export - Export session data as JSON");
     println!("  PUT  /api/sessions/:id/abort - Abort active session");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

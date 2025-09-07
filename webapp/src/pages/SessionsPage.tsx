@@ -76,6 +76,34 @@ const SessionsPage = () => {
     }
   };
 
+  const handleExportSession = async (sessionId: string) => {
+    try {
+      const exportData = await api.exportSession(sessionId);
+      
+      // JSON文字列に変換
+      const jsonString = JSON.stringify(exportData, null, 2);
+      
+      // ファイル名を生成
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `session_${sessionId.substring(0, 8)}_${timestamp}.json`;
+      
+      // ダウンロード処理
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      console.error('Failed to export session:', err);
+      setError('セッションのエクスポートに失敗しました');
+    }
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -442,6 +470,20 @@ const SessionsPage = () => {
                             }}
                           >
                             詳細を見る
+                          </button>
+                          <button
+                            onClick={() => handleExportSession(session.session_id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#28a745',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                            }}
+                          >
+                            JSON出力
                           </button>
                           {session.status === 'active' && (
                             <button
