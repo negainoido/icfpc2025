@@ -14,7 +14,7 @@ pub struct ExploreRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct ExploreResponse {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub results: Vec<Vec<u8>>,
     #[serde(rename = "queryCount")]
     pub query_count: i32,
@@ -33,7 +33,7 @@ pub struct GuessRequest {
 pub struct GuessMap {
     pub rooms: Vec<i32>,
     #[serde(rename = "startingRoom")]
-    pub starting_room: i32,
+    pub starting_room: usize,
     pub connections: Vec<Connection>,
 }
 
@@ -45,13 +45,13 @@ pub struct Connection {
 
 #[derive(Serialize)]
 pub struct RoomDoor {
-    pub room: i32,
-    pub door: i32,
+    pub room: usize,
+    pub door: usize,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct GuessResponse {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub correct: bool,
 }
 
@@ -64,13 +64,13 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: &String) -> Self {
         let client_id = std::env::var("CLIENT_ID").ok();
         let client_secret = std::env::var("CLIENT_SECRET").ok();
 
         Self {
             client: Client::new(),
-            base_url,
+            base_url: base_url.clone(),
             client_id,
             client_secret,
         }
@@ -94,7 +94,7 @@ impl ApiClient {
         problem_name: String,
         user_name: Option<String>,
     ) -> anyhow::Result<SelectResponse> {
-        let url = format!("{}/api/select", self.base_url);
+        let url = format!("{}/select", self.base_url);
         println!("{}", url);
         let request = SelectRequest {
             problem_name,
@@ -126,7 +126,7 @@ impl ApiClient {
     }
 
     pub async fn abort_session(&self, session_id: &str) -> anyhow::Result<()> {
-        let url = format!("{}/api/sessions/{}/abort", self.base_url, session_id);
+        let url = format!("{}/sessions/{}/abort", self.base_url, session_id);
 
         let response = self
             .add_auth_headers(self.client.put(&url))
@@ -151,7 +151,7 @@ impl ApiClient {
         session_id: &str,
         plans: &[String],
     ) -> anyhow::Result<ExploreResponse> {
-        let url = format!("{}/api/explore", self.base_url);
+        let url = format!("{}/explore", self.base_url);
         let request = ExploreRequest {
             session_id: Some(session_id.to_string()),
             user_name: None,
@@ -190,7 +190,7 @@ impl ApiClient {
         session_id: &str,
         guess_map: GuessMap,
     ) -> anyhow::Result<GuessResponse> {
-        let url = format!("{}/api/guess", self.base_url);
+        let url = format!("{}/guess", self.base_url);
         let request = GuessRequest {
             session_id: Some(session_id.to_string()),
             user_name: None,
@@ -224,7 +224,7 @@ impl ApiClient {
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct SelectResponse {
-    pub session_id: String,
+    pub session_id: Option<String>,
     #[serde(rename = "problemName")]
     problem_name: String,
 }

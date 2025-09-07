@@ -18,7 +18,7 @@ struct Cli {
     #[arg(long)]
     room_num: Option<usize>,
 
-    #[arg(long, default_value = "https://negainoido.garasubo.com")]
+    #[arg(long, default_value = "https://negainoido.garasubo.com/api")]
     api_base_url: String,
 }
 
@@ -256,8 +256,8 @@ pub fn build_guess_map_strict(
                 // 片側だけ Connection を作る
                 let ((fr, fd), (tr, td)) = key;
                 connections.push(Connection {
-                    from: RoomDoor { room: fr, door: fd },
-                    to: RoomDoor { room: tr, door: td },
+                    from: RoomDoor { room: fr as usize, door: fd as usize },
+                    to: RoomDoor { room: tr as usize, door: td as usize },
                 });
             }
         }
@@ -268,7 +268,7 @@ pub fn build_guess_map_strict(
 
     Ok(GuessMap {
         rooms: rooms_vec,
-        starting_room: starting_room as i32,
+        starting_room: starting_room,
         connections,
     })
 }
@@ -652,10 +652,10 @@ async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     let cli = Cli::parse();
 
-    let session_manager = SessionManager::new(ApiClient::new(cli.api_base_url));
+    let session_manager = SessionManager::new(ApiClient::new(&cli.api_base_url));
 
     let session_manager_for_signal = session_manager.current_session.clone();
-    let api_client_for_signal = ApiClient::new("https://negainoido.garasubo.com".to_string());
+    let api_client_for_signal = ApiClient::new(&cli.api_base_url);
 
     tokio::spawn(async move {
         if let Ok(()) = signal::ctrl_c().await {
