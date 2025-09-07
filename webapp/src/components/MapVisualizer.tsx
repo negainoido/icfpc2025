@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Map } from '../types';
+import {MapStruct, ExploreVisualizationProps, PathSegment} from '../types';
 import {
   calculateHexagon,
   hexagonToSVGPath,
@@ -10,11 +10,11 @@ import {
 } from '../utils/hexagon';
 import { calculateRoomLayout, getLayoutBounds } from '../utils/layout';
 
-interface Props {
-  map: Map;
+interface Props extends ExploreVisualizationProps {
+  map: MapStruct;
 }
 
-export default function MapVisualizer({ map }: Props) {
+export default function MapVisualizer({ map, chalkMarks, pathHistory, highlightCurrentRoom }: Props) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -23,7 +23,7 @@ export default function MapVisualizer({ map }: Props) {
   // Calculate layout and hexagons
   const { hexagons, bounds } = useMemo(() => {
     const containerWidth = 800;
-    const containerHeight = 600;
+    const containerHeight = 400;
     const roomLayout = calculateRoomLayout(
       map,
       containerWidth,
@@ -263,26 +263,122 @@ export default function MapVisualizer({ map }: Props) {
             })}
           </g>
 
+          {/* Explore Path Visualization */}
+          {pathHistory && pathHistory.length > 0 && (
+            <g>
+              {pathHistory.map((segment, index) => {
+                const fromHex = hexagons.find(
+                  (h) => h.roomIndex === segment.from
+                );
+                const toHex = hexagons.find((h) => h.roomIndex === segment.to);
+
+                if (!fromHex || !toHex) return null;
+
+                const fromDoor = fromHex.hexagon.doorPositions[segment.door];
+                const toCenter = toHex.position;
+                const curvePath = createCurvePath(fromDoor, toCenter);
+
+                // Color path segments with gradient from blue to red
+                const progress = index / Math.max(1, pathHistory.length - 1);
+                const red = Math.round(50 + progress * 200);
+                const blue = Math.round(255 - progress * 200);
+                const pathColor = `rgb(${red}, 100, ${blue})`;
+
+                return (
+                  <g key={`path-${index}`}>
+                    <path
+                      d={curvePath}
+                      stroke={pathColor}
+                      strokeWidth="5"
+                      fill="none"
+                      strokeLinecap="round"
+                      opacity="0.8"
+                      strokeDasharray="5,3"
+                    />
+                    {/* Step number */}
+                    <circle
+                      cx={(fromDoor.x + toCenter.x) / 2}
+                      cy={(fromDoor.y + toCenter.y) / 2}
+                      r="12"
+                      fill={pathColor}
+                      opacity="0.9"
+                    />
+                    <text
+                      x={(fromDoor.x + toCenter.x) / 2}
+                      y={(fromDoor.y + toCenter.y) / 2}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="10"
+                      fontWeight="bold"
+                      fill="white"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      {index + 1}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
           {/* Rooms */}
           <g>
             {hexagons.map((room, index) => {
               const hexPath = hexagonToSVGPath(room.hexagon);
               const isStartingRoom = index === map.startingRoom;
+              const isCurrentRoom = highlightCurrentRoom === index;
+              const hasChalkMark = chalkMarks?.has(index);
+              const chalkLabel = chalkMarks?.get(index);
+              
+              // Determine the label to display (chalk mark overrides original)
+              const displayLabel = hasChalkMark ? chalkLabel : room.label;
+              
+              // Determine border color and width
+              let borderColor = getRoomBorderColor(room.label);
+              let borderWidth = 2;
+              
+              if (isCurrentRoom) {
+                borderColor = '#ffc107'; // Amber for current room
+                borderWidth = 6;
+              } else if (isStartingRoom) {
+                borderColor = '#dc3545'; // Red for starting room
+                borderWidth = 4;
+              }
 
               return (
                 <g key={index}>
+                  {/* Current room highlight glow */}
+                  {isCurrentRoom && (
+                    <path
+                      d={hexPath}
+                      fill="none"
+                      stroke="#ffc107"
+                      strokeWidth="10"
+                      opacity="0.3"
+                    />
+                  )}
+                  
                   {/* Room hexagon */}
                   <path
                     d={hexPath}
-                    fill={getRoomColor(room.label)}
-                    stroke={
-                      isStartingRoom
-                        ? '#dc3545'
-                        : getRoomBorderColor(room.label)
-                    }
-                    strokeWidth={isStartingRoom ? 4 : 2}
+                    fill={getRoomColor(displayLabel || room.label)}
+                    stroke={borderColor}
+                    strokeWidth={borderWidth}
                     opacity="0.9"
                   />
+
+                  {/* Chalk mark background */}
+                  {hasChalkMark && (
+                    <circle
+                      cx={room.position.x + 20}
+                      cy={room.position.y - 20}
+                      r="12"
+                      fill="#28a745"
+                      stroke="white"
+                      strokeWidth="2"
+                      opacity="0.9"
+                    />
+                  )}
 
                   {/* Room label */}
                   <text
@@ -292,10 +388,10 @@ export default function MapVisualizer({ map }: Props) {
                     dominantBaseline="middle"
                     fontSize="16"
                     fontWeight="bold"
-                    fill="#343a40"
+                    fill={hasChalkMark ? '#28a745' : '#343a40'}
                     style={{ pointerEvents: 'none' }}
                   >
-                    {room.label}
+                    {displayLabel}
                   </text>
 
                   {/* Room index */}
@@ -324,6 +420,38 @@ export default function MapVisualizer({ map }: Props) {
                       style={{ pointerEvents: 'none' }}
                     >
                       START
+                    </text>
+                  )}
+
+                  {/* Current room indicator */}
+                  {isCurrentRoom && (
+                    <text
+                      x={room.position.x}
+                      y={room.position.y + (isStartingRoom ? 40 : 25)}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="10"
+                      fontWeight="bold"
+                      fill="#ffc107"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      CURRENT
+                    </text>
+                  )}
+
+                  {/* Chalk mark indicator */}
+                  {hasChalkMark && (
+                    <text
+                      x={room.position.x + 20}
+                      y={room.position.y - 20}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize="10"
+                      fontWeight="bold"
+                      fill="white"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      ✓
                     </text>
                   )}
 

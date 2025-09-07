@@ -42,7 +42,7 @@ export interface Connection {
   to: DoorLocation;
 }
 
-export interface Map {
+export interface MapStruct {
   rooms: number[];
   startingRoom: number;
   connections: Connection[];
@@ -50,7 +50,7 @@ export interface Map {
 
 export interface GuessRequest {
   session_id: string;
-  map: Map;
+  map: MapStruct;
 }
 
 export interface GuessResponse {
@@ -78,4 +78,43 @@ export interface SessionDetail {
 // Sessions list response
 export interface SessionsListResponse {
   sessions: Session[];
+}
+
+// Explore Visualization Types
+export interface MoveStep {
+  type: 'move';
+  door: number; // 0-5
+}
+
+export interface ChalkStep {
+  type: 'chalk';
+  label: number; // 0-3
+}
+
+export type ExploreStep = MoveStep | ChalkStep;
+
+// Path segment for visualization
+export interface PathSegment {
+  from: number;
+  to: number;
+  door: number;
+}
+
+// Explore execution state
+export interface ExploreState {
+  currentRoom: number;
+  currentPosition: { x: number; y: number };
+  pathHistory: PathSegment[];
+  chalkMarks: Map<number, number>; // roomIndex -> chalkLabel
+  observedLabels: number[]; // observed labels history
+  stepIndex: number;
+  totalSteps: number;
+}
+
+// Props for visualization components with explore state
+export interface ExploreVisualizationProps {
+  exploreState: ExploreState | null;
+  highlightCurrentRoom?: number;
+  pathHistory?: PathSegment[];
+  chalkMarks?: Map<number, number>;
 }

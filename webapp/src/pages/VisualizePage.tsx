@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { Map, ApiLog } from '../types';
+import {MapStruct, ApiLog, ExploreState, ExploreStep} from '../types';
 import { api } from '../services/api';
 import MapInput from '../components/MapInput';
 import MapVisualizer from '../components/MapVisualizer';
+import ExploreInput from "../components/ExploreInput.tsx";
+import ExploreVisualizer from "../components/ExploreVisualizer.tsx";
 
 export default function VisualizePage() {
-  const [map, setMap] = useState<Map | null>(null);
+  const [map, setMap] = useState<MapStruct | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionInfo, setSessionInfo] = useState<{
     sessionId?: string;
@@ -14,9 +16,11 @@ export default function VisualizePage() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const location = useLocation();
+  const [exploreSteps, setExploreSteps] = useState<ExploreStep[]>([]);
+  const [exploreState, setExploreState] = useState<ExploreState | null>(null);
 
   // Helper function to extract map from the last guess request
-  const extractMapFromLastGuessRequest = (apiLogs: ApiLog[]): Map | null => {
+  const extractMapFromLastGuessRequest = (apiLogs: ApiLog[]): MapStruct | null => {
     const guessLogs = apiLogs
       .filter((log) => log.endpoint === 'guess' && log.request_body)
       .sort(
@@ -77,7 +81,7 @@ export default function VisualizePage() {
     }
   }, [location.state]);
 
-  const handleMapLoad = (loadedMap: Map) => {
+  const handleMapLoad = (loadedMap: MapStruct) => {
     setMap(loadedMap);
     setError(null);
     setSessionInfo(null); // Clear session info when manually loading a new map
@@ -93,12 +97,20 @@ export default function VisualizePage() {
     setError(null);
   };
 
+  const handleExploreLoad = (newSteps: ExploreStep[]) => {
+      setExploreSteps(newSteps);
+  };
+  const handleExploreStateChange = (state: ExploreState | null) => {
+      console.log('Explore state changed:', state);
+      setExploreState(state);
+  }
+
   return (
     <div
       style={{
         minHeight: '100vh',
         backgroundColor: '#f8f9fa',
-        padding: '20px',
+        padding: '12px',
       }}
     >
       <div style={{ margin: '0 auto' }}>
@@ -106,8 +118,8 @@ export default function VisualizePage() {
           style={{
             backgroundColor: 'white',
             borderRadius: '8px',
-            padding: '20px',
-            marginBottom: '20px',
+            padding: '12px',
+            marginBottom: '12px',
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
           }}
         >
@@ -115,7 +127,7 @@ export default function VisualizePage() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              marginBottom: '20px',
+              marginBottom: '12px',
             }}
           >
             <h1 style={{ margin: 0, color: '#343a40', flexGrow: 1 }}>
@@ -191,15 +203,15 @@ export default function VisualizePage() {
           </div>
         </div>
 
-        {/* Map Visualization - Top Panel */}
+        {/* Visualization - Top Panel */}
         <div
           style={{
             backgroundColor: 'white',
             borderRadius: '8px',
-            padding: '20px',
-            marginBottom: '20px',
+            padding: '12px',
+            marginBottom: '12px',
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-            minHeight: '600px',
+            height: '600px',
           }}
         >
           {loading ? (
@@ -223,7 +235,13 @@ export default function VisualizePage() {
               </div>
             </div>
           ) : map ? (
-            <MapVisualizer map={map} />
+            <MapVisualizer 
+              map={map} 
+              exploreState={exploreState}
+              highlightCurrentRoom={exploreState?.currentRoom}
+              pathHistory={exploreState?.pathHistory}
+              chalkMarks={exploreState?.chalkMarks}
+            />
           ) : (
             <div
               style={{
@@ -240,16 +258,55 @@ export default function VisualizePage() {
           )}
         </div>
 
-        {/* Load Map Data - Bottom Panel */}
+        {/* Explore Controls Panel */}
+        {map && (
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '12px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            {exploreSteps.length > 0 ? (
+              <ExploreVisualizer
+                map={map}
+                steps={exploreSteps}
+                onStateChange={handleExploreStateChange}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px',
+                  color: '#6c757d',
+                  fontSize: '16px',
+                }}
+              >
+                Enter an explore string below to start the simulation
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Input Panel - Bottom */}
         <div
           style={{
             backgroundColor: 'white',
             borderRadius: '8px',
-            padding: '20px',
+            padding: '12px',
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
           }}
         >
-          <MapInput onMapLoad={handleMapLoad} onError={handleError} />
+            <ExploreInput
+                onExploreLoad={handleExploreLoad}
+                onError={handleError}
+                roomCount={map?.rooms.length || 0}
+            />
+        <MapInput onMapLoad={handleMapLoad} onError={handleError} />
 
           {error && (
             <div

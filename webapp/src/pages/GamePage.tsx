@@ -4,14 +4,14 @@ import ProblemSelector from '../components/ProblemSelector';
 import ExploreInterface from '../components/ExploreInterface';
 import MapBuilder from '../components/MapBuilder';
 import GuessInterface from '../components/GuessInterface';
-import { Map } from '../types';
+import { MapStruct } from '../types';
 import { api } from '../services/api';
 
 export default function GamePage() {
   const { state, dispatch } = useSession();
 
   // Mock map for GuessInterface - in a real implementation, this would come from MapBuilder
-  const mockMap: Map = {
+  const mockMap: MapStruct = {
     rooms: [1, 2, 3],
     startingRoom: 1,
     connections: [
