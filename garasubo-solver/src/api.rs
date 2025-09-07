@@ -2,6 +2,8 @@ use anyhow::Context;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Serialize)]
 pub struct ExploreRequest {
@@ -76,6 +78,86 @@ impl ApiClient {
         }
     }
 
+    async fn send_request_with_retry<T: serde::de::DeserializeOwned>(
+        &self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> anyhow::Result<T> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: usize = 3;
+        const BASE_DELAY: Duration = Duration::from_millis(100);
+
+        loop {
+            let response = request_builder
+                .try_clone()
+                .context("Failed to clone request builder")?
+                .send()
+                .await
+                .context("Failed to send request")?;
+
+            let status = response.status();
+
+            if status.is_success() {
+                let result = response
+                    .json()
+                    .await
+                    .context("Failed to parse response JSON")?;
+                return Ok(result);
+            } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                retry_count += 1;
+                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                eprintln!(
+                    "Server error {}, retrying in {:?} (attempt {}/{})",
+                    status, delay, retry_count, MAX_RETRIES + 1
+                );
+                sleep(delay).await;
+            } else {
+                let text = response
+                    .text()
+                    .await
+                    .context("Failed to read error response body")?;
+                anyhow::bail!("API request failed with status {}: {}", status, text);
+            }
+        }
+    }
+
+    async fn send_request_with_retry_no_response(
+        &self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> anyhow::Result<()> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: usize = 3;
+        const BASE_DELAY: Duration = Duration::from_millis(100);
+
+        loop {
+            let response = request_builder
+                .try_clone()
+                .context("Failed to clone request builder")?
+                .send()
+                .await
+                .context("Failed to send request")?;
+
+            let status = response.status();
+
+            if status.is_success() {
+                return Ok(());
+            } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                retry_count += 1;
+                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                eprintln!(
+                    "Server error {}, retrying in {:?} (attempt {}/{})",
+                    status, delay, retry_count, MAX_RETRIES + 1
+                );
+                sleep(delay).await;
+            } else {
+                let text = response
+                    .text()
+                    .await
+                    .context("Failed to read error response body")?;
+                anyhow::bail!("API request failed with status {}: {}", status, text);
+            }
+        }
+    }
+
     fn add_auth_headers(
         &self,
         request_builder: reqwest::RequestBuilder,
@@ -102,48 +184,19 @@ impl ApiClient {
         };
         println!("{}", json!(request).to_string());
 
-        let response = self
+        let request_builder = self
             .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send select request to {}", url))?;
+            .json(&request);
 
-        if response.status().is_success() {
-            let result: SelectResponse = response
-                .json()
-                .await
-                .context("Failed to parse select response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read error response body")?;
-            anyhow::bail!("Select API request failed with status {}: {}", status, text);
-        }
+        self.send_request_with_retry(request_builder).await
     }
 
     pub async fn abort_session(&self, session_id: &str) -> anyhow::Result<()> {
         let url = format!("{}/sessions/{}/abort", self.base_url, session_id);
 
-        let response = self
-            .add_auth_headers(self.client.put(&url))
-            .send()
-            .await
-            .with_context(|| format!("Failed to send abort request to {}", url))?;
+        let request_builder = self.add_auth_headers(self.client.put(&url));
 
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read abort error response body")?;
-            anyhow::bail!("Session abort failed with status {}: {}", status, text);
-        }
+        self.send_request_with_retry_no_response(request_builder).await
     }
 
     pub async fn explore(
@@ -158,31 +211,11 @@ impl ApiClient {
             plans: Vec::from(plans),
         };
 
-        let response = self
+        let request_builder = self
             .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send explore request to {}", url))?;
+            .json(&request);
 
-        if response.status().is_success() {
-            let result: ExploreResponse = response
-                .json()
-                .await
-                .context("Failed to parse explore response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read explore error response body")?;
-            anyhow::bail!(
-                "Explore API request failed with status {}: {}",
-                status,
-                text
-            );
-        }
+        self.send_request_with_retry(request_builder).await
     }
 
     pub async fn guess(
@@ -197,27 +230,11 @@ impl ApiClient {
             map: guess_map,
         };
 
-        let response = self
+        let request_builder = self
             .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send guess request to {}", url))?;
+            .json(&request);
 
-        if response.status().is_success() {
-            let result: GuessResponse = response
-                .json()
-                .await
-                .context("Failed to parse guess response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read guess error response body")?;
-            anyhow::bail!("Guess API request failed with status {}: {}", status, text);
-        }
+        self.send_request_with_retry(request_builder).await
     }
 }
 
