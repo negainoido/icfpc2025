@@ -3,6 +3,7 @@ use clap::Parser;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -46,6 +47,14 @@ struct Args {
     /// Save intermediate best map every N iterations (uses --output as base)
     #[arg(long)]
     save_every: Option<usize>,
+
+    /// JSONL log file path (append). If set, emits run_start/tick/hist/stop events.
+    #[arg(long)]
+    jsonl_log: Option<String>,
+
+    /// JSONL stats window (ticks every this many proposals). If omitted, uses --log-every; fallback 100000.
+    #[arg(long)]
+    jsonl_window: Option<usize>,
 
     /// Initial temperature
     #[arg(long, default_value_t = 1.0_f32)]
@@ -438,6 +447,7 @@ fn try_two_opt(
     best_model: &mut Model,
     last_best_iter: &mut usize,
     since_log_accepts: &mut usize,
+    ws: Option<&mut WindowStats>,
 ) -> bool {
     let n_ports = inst.n * 6;
     let p1 = rng.gen_range(0..n_ports);
@@ -477,6 +487,7 @@ fn try_two_opt(
             pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
         );
     }
+    if let Some(w) = ws { w.record("two_opt", d_total, accept); }
     if accept {
         update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
     } else {
@@ -507,6 +518,7 @@ fn try_loopmove(
     best_model: &mut Model,
     last_best_iter: &mut usize,
     since_log_accepts: &mut usize,
+    ws: Option<&mut WindowStats>,
 ) -> bool {
     let n_ports = inst.n * 6;
     let dir_pair_to_loops: bool = rng.gen_bool(0.5);
@@ -537,6 +549,7 @@ fn try_loopmove(
                     a, b, c, d, d_total, t, accept, cur.total, new_e.total
                 );
             }
+            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
             if accept {
                 update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
             } else {
@@ -576,6 +589,7 @@ fn try_loopmove(
                     a, c, b, d, d_total, t, accept, cur.total, new_e.total
                 );
             }
+            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
             if accept {
                 update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
             } else {
@@ -608,6 +622,8 @@ fn anneal(
     reheat_every: Option<usize>,
     reheat_to: Option<f32>,
     p_loopmove: f32,
+    mut jsonl: Option<&mut JsonlLogger>,
+    run_seed: Option<u64>,
 ) -> Energy {
     let start_t = Instant::now();
     let mut cur = energy(inst, model, lambda_bal);
@@ -621,6 +637,13 @@ fn anneal(
     let mut since_log_moves: usize = 0;
     let mut since_log_accepts: usize = 0;
     let mut last_best_iter: usize = 0;
+    // JSONL run_start
+    let mut ws_opt: Option<WindowStats> = None;
+    if let Some(lg) = jsonl.as_mut() {
+        lg.run_start(iters, t0, tmin, run_seed);
+        let edges = lg.edges.clone();
+        ws_opt = Some(WindowStats::new(edges));
+    }
     if verbose > 0 {
         eprintln!(
             "anneal: start E={} (obs={}, bal={}), N={}, ports={}",
@@ -628,15 +651,46 @@ fn anneal(
         );
     }
     for k in 0..iters {
-        if let Some(limit) = time_limit { if start_t.elapsed() >= limit { break; } }
+        if let Some(limit) = time_limit { if start_t.elapsed() >= limit { 
+            if let Some(lg) = jsonl.as_mut() {
+                if let Some(ws) = ws_opt.as_ref() {
+                    if ws.total_prop > 0 {
+                        let mut ws_tmp = ws.clone();
+                        let elapsed_ms = start_t.elapsed().as_millis();
+                        lg.tick(k, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                        lg.hist(k, t, &ws_tmp);
+                    }
+                }
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.stop("time_budget", k, t, cur.total, best.total, elapsed_ms);
+            }
+            break; 
+        } }
         let mv: f32 = rng.r#gen();
         let p_loopmove = p_loopmove.clamp(0.0, 1.0);
         let applied = if mv >= p_loopmove {
-            try_two_opt(inst, model, rng, t, verbose, lambda_bal, k, &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts)
+            try_two_opt(
+                inst, model, rng, t, verbose, lambda_bal, k,
+                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
+                ws_opt.as_mut()
+            )
         } else {
-            try_loopmove(inst, model, rng, t, verbose, lambda_bal, k, &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts)
+            try_loopmove(
+                inst, model, rng, t, verbose, lambda_bal, k,
+                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
+                ws_opt.as_mut()
+            )
         };
         if !applied { continue; }
+        // JSONL: emit tick+hist per window proposals
+        if let (Some(lg), Some(ws)) = (jsonl.as_mut(), ws_opt.as_mut()) {
+            if ws.total_prop >= lg.window {
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.tick(k + 1, t, cur.total, best.total, elapsed_ms, ws);
+                lg.hist(k + 1, t, ws);
+                ws.reset();
+            }
+        }
         since_log_moves += 1;
         t *= alpha;
         if t < tmin { t = tmin; }
@@ -655,6 +709,18 @@ fn anneal(
             }
             if verbose > 0 {
                 eprintln!("anneal: reached E=0 at it={}", k + 1);
+            }
+            if let Some(lg) = jsonl.as_mut() {
+                if let Some(ws) = ws_opt.as_ref() {
+                    if ws.total_prop > 0 {
+                        let mut ws_tmp = ws.clone();
+                        let elapsed_ms = start_t.elapsed().as_millis();
+                        lg.tick(k + 1, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                        lg.hist(k + 1, t, &ws_tmp);
+                    }
+                }
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.stop("reached_optimum", k + 1, t, cur.total, best.total, elapsed_ms);
             }
             break;
         }
@@ -714,6 +780,18 @@ fn anneal(
             best.total, best.obs, best.balance, start_t.elapsed().as_secs_f32()
         );
     }
+    if let Some(lg) = jsonl.as_mut() {
+        if let Some(ws) = ws_opt.as_ref() {
+            if ws.total_prop > 0 {
+                let mut ws_tmp = ws.clone();
+                let elapsed_ms = start_t.elapsed().as_millis();
+                lg.tick(iters, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                lg.hist(iters, t, &ws_tmp);
+            }
+        }
+        let elapsed_ms = start_t.elapsed().as_millis();
+        lg.stop("completed", iters, t, cur.total, best.total, elapsed_ms);
+    }
     best
 }
 
@@ -769,6 +847,173 @@ fn write_output_path(inst: &Instance, model: &Model, s0: usize, path: &Path) -> 
     Ok(())
 }
 
+// --- Minimal JSONL logging -------------------------------------------------
+
+#[derive(Default, Clone)]
+struct NeighborAgg { prop: usize, acc: usize, sum_de: i64 }
+
+#[derive(Clone)]
+struct WindowStats {
+    total_prop: usize,
+    total_acc: usize,
+    two_opt: NeighborAgg,
+    loopmove: NeighborAgg,
+    edges: Vec<f64>,
+    hist_prop: Vec<u64>,
+    hist_acc: Vec<u64>,
+}
+
+impl WindowStats {
+    fn new(edges: Vec<f64>) -> Self {
+        let m = edges.len().saturating_sub(1).max(1);
+        Self {
+            total_prop: 0,
+            total_acc: 0,
+            two_opt: NeighborAgg::default(),
+            loopmove: NeighborAgg::default(),
+            edges,
+            hist_prop: vec![0; m],
+            hist_acc: vec![0; m],
+        }
+    }
+    fn reset(&mut self) {
+        self.total_prop = 0;
+        self.total_acc = 0;
+        self.two_opt = NeighborAgg::default();
+        self.loopmove = NeighborAgg::default();
+        self.hist_prop.fill(0);
+        self.hist_acc.fill(0);
+    }
+    fn bin_index(&self, de: f64) -> usize {
+        let n = self.edges.len();
+        for i in 0..(n - 1) {
+            if de <= self.edges[i + 1] { return i; }
+        }
+        n - 2
+    }
+    fn record(&mut self, kind: &str, de: i32, accepted: bool) {
+        self.total_prop += 1;
+        let de_f = de as f64;
+        let idx = self.bin_index(de_f);
+        self.hist_prop[idx] += 1;
+        if accepted { self.total_acc += 1; self.hist_acc[idx] += 1; }
+        let agg = match kind { "two_opt" => &mut self.two_opt, _ => &mut self.loopmove };
+        agg.prop += 1;
+        if accepted { agg.acc += 1; }
+        agg.sum_de += de as i64;
+    }
+}
+
+struct JsonlLogger {
+    file: File,
+    window: usize,
+    edges: Vec<f64>,
+}
+
+fn iso8601_utc_now() -> String {
+    // Simple UTC formatter: YYYY-MM-DDTHH:MM:SS.mmmZ
+    let now = std::time::SystemTime::now();
+    let dur = now.duration_since(std::time::UNIX_EPOCH).unwrap_or(Duration::from_secs(0));
+    let secs = dur.as_secs() as i64;
+    let millis = (dur.subsec_millis()) as u32;
+    // civil_from_days algorithm to convert days to date in proleptic Gregorian calendar
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400) as i64;
+    let mut z = days + 719468; // shift to civil origin
+    let era = if z >= 0 { z / 146097 } else { (z - 146096) / 146097 };
+    let doe = z - era * 146097;                          // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
+    let mut y = (yoe as i64) + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);   // [0, 365]
+    let mp = (5 * doy + 2) / 153;                        // [0, 11]
+    let d = doy - (153 * mp + 2) / 5 + 1;                // [1, 31]
+    let m = mp + if mp < 10 { 3 } else { -9 };           // [1, 12]
+    y += if m <= 2 { 1 } else { 0 };
+    let year = y;
+    let month = m as i64;
+    let day = d as i64;
+    let hh = sod / 3600;
+    let mm = (sod % 3600) / 60;
+    let ss = sod % 60;
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        year, month, day, hh, mm, ss, millis
+    )
+}
+
+impl JsonlLogger {
+    fn new(file: File, window: usize, edges: Vec<f64>) -> Self { Self { file, window, edges } }
+    fn write_line(&mut self, v: &serde_json::Value) {
+        if let Ok(s) = serde_json::to_string(v) { let _ = writeln!(self.file, "{}", s); }
+    }
+    fn run_start(&mut self, iters: usize, t0: f32, tmin: f32, seed: Option<u64>) {
+        let v = serde_json::json!({
+            "event":"run_start",
+            "ts": iso8601_utc_now(),
+            "iters": iters,
+            "t0": t0,
+            "tmin": tmin,
+            "window": self.window as i64,
+            "seed": seed.map(|x| x as i64),
+        });
+        self.write_line(&v);
+    }
+    fn tick(&mut self, it: usize, t: f32, cur_e: i32, best_e: i32, elapsed_ms: u128, ws: &WindowStats) {
+        let mut neighbor_stats = Vec::new();
+        if ws.two_opt.prop > 0 {
+            neighbor_stats.push(serde_json::json!({
+                "name":"two_opt", "prop": ws.two_opt.prop, "acc": ws.two_opt.acc,
+                "mean_de": (ws.two_opt.sum_de as f64) / (ws.two_opt.prop as f64)
+            }));
+        }
+        if ws.loopmove.prop > 0 {
+            neighbor_stats.push(serde_json::json!({
+                "name":"loopmove", "prop": ws.loopmove.prop, "acc": ws.loopmove.acc,
+                "mean_de": (ws.loopmove.sum_de as f64) / (ws.loopmove.prop as f64)
+            }));
+        }
+        let v = serde_json::json!({
+            "event":"tick",
+            "it": it as i64, "t": t,
+            "cur_e": cur_e, "best_e": best_e,
+            "acc": if ws.total_prop>0 { (ws.total_acc as f64)/(ws.total_prop as f64) } else { 0.0 },
+            "prop": ws.total_prop as i64, "acc_cnt": ws.total_acc as i64,
+            "elapsed_ms": elapsed_ms as i64,
+            "neighbor_stats": neighbor_stats,
+        });
+        self.write_line(&v);
+    }
+    fn hist(&mut self, it: usize, t: f32, ws: &WindowStats) {
+        let v = serde_json::json!({
+            "event":"hist",
+            "it": it as i64, "t": t,
+            "window": self.window as i64,
+            "de_hist": {
+                "edges": ws.edges,
+                "proposed": ws.hist_prop,
+                "accepted": ws.hist_acc,
+            }
+        });
+        self.write_line(&v);
+    }
+    fn stop(&mut self, reason: &str, it: usize, t: f32, cur_e: i32, best_e: i32, time_ms: u128) {
+        let v = serde_json::json!({
+            "event":"stop",
+            "reason": reason,
+            "it": it as i64,
+            "t": t,
+            "cur_e": cur_e,
+            "best_e": best_e,
+            "time_ms": time_ms as i64,
+        });
+        self.write_line(&v);
+    }
+}
+
+const DEFAULT_HIST_EDGES: [f64; 9] = [
+    -1_000_000_000.0, -10.0, -5.0, -1.0, 0.0, 1.0, 5.0, 10.0, 1_000_000_000.0
+];
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -814,6 +1059,15 @@ async fn main() -> Result<()> {
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
     let log_every = if args.verbose > 0 { args.log_every.or(Some(10_000)) } else { None };
 
+    // JSONL logger (optional)
+    let mut jsonl_logger_opt: Option<JsonlLogger> = if let Some(path) = &args.jsonl_log {
+        let f = File::create(path)
+            .with_context(|| format!("failed to create jsonl log: {}", path))?;
+        // Decide window: prefer explicit jsonl_window, else CLI log_every, else fallback 100000
+        let eff_window = args.jsonl_window.or(args.log_every).unwrap_or(100_000);
+        Some(JsonlLogger::new(f, eff_window, DEFAULT_HIST_EDGES.to_vec()))
+    } else { None };
+
     // Multi-start annealing (restarts)
     let restarts = args.restarts.max(1);
     let mut best_overall_model = model.clone();
@@ -849,6 +1103,8 @@ async fn main() -> Result<()> {
             args.reheat_every,
             args.reheat_to,
             args.p_loopmove,
+            jsonl_logger_opt.as_mut().map(|x| x),
+            Some(restart_seed),
         );
         finalize_match_to(&mut m);
         if args.verbose > 0 {
