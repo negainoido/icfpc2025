@@ -48,7 +48,14 @@ def simulate(mu, labels_room, s0, plan):
     return outs
 
 
-def build_model(problem, extra_constraints=None):
+def build_model(
+    problem,
+    extra_constraints=None,
+    *,
+    use_lex_symmetry=False,
+    use_pattern_c=True,
+    path_prefix=None,
+):
     """CEGIS本体が足す追加制約(extra_constraints)を受け取ってモデルを再構築"""
     traces = problem["traces"]
     N = problem["N"]
@@ -80,11 +87,12 @@ def build_model(problem, extra_constraints=None):
     # 3) ラベル割当（パターンC）
     # N = 4q + r
     q, r = divmod(N, 4)
-    # π(i)=i として決め打ち。o = 最初のトレースの先頭観測 b0 を使用
-    o = traces[0]["obs"][0] if traces else 0
-    regular = 4 * q
-    for i in range(regular):
-        model.Add(label_room[i] == (o + i) % 4)
+    if use_pattern_c:
+        # π(i)=i として決め打ち。o = 最初のトレースの先頭観測 b0 を使用
+        o = traces[0]["obs"][0] if traces else 0
+        regular = 4 * q
+        for i in range(regular):
+            model.Add(label_room[i] == (o + i) % 4)
 
     # 端数 r の個数制約: 各ラベルの合計 = q + y_ell,  sum(y)=r
     # y_ell は Bool
@@ -139,38 +147,18 @@ def build_model(problem, extra_constraints=None):
             model.Add(sum(lits) >= 1)
 
     # 6) 同一ラベル内のレキシコ順（軽めの対称性除去）
-    # 実装簡易化のため、(q<q') & label等しい ⇒ 6個の逐次比較 を reify で表現
-    for q1 in range(N):
-        for q2 in range(q1 + 1, N):
-            same = model.NewBoolVar(f"sameLabel_{q1}_{q2}")
-            model.Add(label_room[q1] == label_room[q2]).OnlyEnforceIf(same)
-            model.Add(label_room[q1] != label_room[q2]).OnlyEnforceIf(same.Not())
-
-            # v(q1) <=_lex v(q2) を緩く実装：
-            # 逐次に "前まで等しい ⇒ 次は <= " を reify
-            eq_prefix = model.NewBoolVar(f"eqpref_{q1}_{q2}_-1")
-            model.Add(eq_prefix == 1)  # 最初は真
-            for d in range(6):
-                eq_d = model.NewBoolVar(f"eq_{q1}_{q2}_{d}")
-                le_d = model.NewBoolVar(f"le_{q1}_{q2}_{d}")
-                # eq_d: label_port[q1,d] == label_port[q2,d]
-                model.Add(
-                    label_port[pid(q1, d)] == label_port[pid(q2, d)]
-                ).OnlyEnforceIf(eq_d)
-                model.Add(
-                    label_port[pid(q1, d)] != label_port[pid(q2, d)]
-                ).OnlyEnforceIf(eq_d.Not())
-                # le_d: label_port[q1,d] <= label_port[q2,d]
-                model.Add(
-                    label_port[pid(q1, d)] <= label_port[pid(q2, d)]
-                ).OnlyEnforceIf(le_d)
-                # レキシコ条件: (eq_prefix ⇒ le_d) ∧ (eq_prefix ⇒ eq_d or レキシコ決定)
-                # 簡略: same ⇒ (eq_prefix ⇒ le_d)
-                model.AddImplication(
-                    same, le_d
-                )  # 強すぎるのでコメントアウトした方が安全な場合あり
-                # 正確にやると拘束が増えるので、当面は弱くしておく（性能優先）。
-                # ※ 本格運用では lex_circuit 制約を自作推奨。
+    if use_lex_symmetry:
+        # 実装簡易化のため、(q<q') & label等しい ⇒ 6個の逐次比較 を reify で表現
+        for q1 in range(N):
+            for q2 in range(q1 + 1, N):
+                same = model.NewBoolVar(f"sameLabel_{q1}_{q2}")
+                model.Add(label_room[q1] == label_room[q2]).OnlyEnforceIf(same)
+                model.Add(label_room[q1] != label_room[q2]).OnlyEnforceIf(same.Not())
+                # 簡易: same ⇒ (各dで port値の非減少)。必要時のみ有効化。
+                for d in range(6):
+                    model.Add(
+                        label_port[pid(q1, d)] <= label_port[pid(q2, d)]
+                    ).OnlyEnforceIf(same)
 
     # 追加制約（CEGISの反例で積み増し）
     if extra_constraints:
@@ -188,14 +176,53 @@ def build_model(problem, extra_constraints=None):
             else:
                 raise ValueError(f"Unknown extra constraint type: {typ}")
 
+    # パス接地制約（長さ prefix の実在パスを要求）
+    if path_prefix:
+        for t_idx, L in path_prefix.items():
+            t = traces[t_idx]
+            L = min(L, len(t["plan"]))
+            # r[0..L] ∈ [0..N-1]
+            r = [model.NewIntVar(0, N - 1, f"r_t{t_idx}_{j}") for j in range(L + 1)]
+            # 開始部屋
+            model.Add(r[0] == s0)
+            # 観測ラベルと一致
+            for j in range(L + 1):
+                tmp = model.NewIntVar(0, 3, f"obs_t{t_idx}_{j}")
+                model.AddElement(r[j], label_room, tmp)
+                model.Add(tmp == t["obs"][j])
+            # 遷移 r[j+1] = roomOf[mate[ 6*r[j] + a_j ]]
+            for j in range(L):
+                p_idx = model.NewIntVar(0, 6 * N - 1, f"pidx_t{t_idx}_{j}")
+                model.Add(p_idx == r[j] * 6 + t["plan"][j])
+                p_to = model.NewIntVar(0, 6 * N - 1, f"pto_t{t_idx}_{j}")
+                model.AddElement(p_idx, mate, p_to)
+                next_r = model.NewIntVar(0, N - 1, f"nextr_t{t_idx}_{j}")
+                model.AddElement(p_to, roomOf, next_r)
+                model.Add(r[j + 1] == next_r)
+
     return model, label_room, label_port, mate
 
 
-def cegis_solve(problem, max_iters=20, time_limit_s=10.0, verbose=True):
-    extra = []  # 反例から積む制約
+def cegis_solve(
+    problem,
+    max_iters=20,
+    time_limit_s=10.0,
+    verbose=True,
+    *,
+    use_lex_symmetry=False,
+    use_pattern_c=True,
+):
+    extra = []  # 反例から積む制約（ports固定モード用）
+    path_prefix = {}  # t_idx -> L（パス接地モード用）
+    fixed_room = {}
+    fixed_port = {}
     for it in range(max_iters):
         model, label_room, label_port, mate = build_model(
-            problem, extra_constraints=extra
+            problem,
+            extra_constraints=extra,
+            use_lex_symmetry=use_lex_symmetry,
+            use_pattern_c=use_pattern_c,
+            path_prefix=path_prefix,
         )
 
         solver = cp_model.CpSolver()
@@ -226,27 +253,11 @@ def cegis_solve(problem, max_iters=20, time_limit_s=10.0, verbose=True):
                 any_fail = True
                 # 最短失敗位置 i*
                 i_star = next(i for i, (x, y) in enumerate(zip(got, want)) if x != y)
-                # 反例の prefix から強い（ハード）制約を追加（帰結ではなく固定にする簡易版）
-                # 実運用では帰結(reify)が推奨だが、テンプレではシンプルに固定する。
-                s = s0
-                # 始点ラベル
-                extra.append({"type": "fix_label_room", "q": s, "val": want[0]})
-                for j in range(min(i_star, len(t["plan"]))):
-                    a = t["plan"][j]
-                    p = pid(s, a)
-                    # 出ポートラベルも固定
-                    extra.append({"type": "fix_label_port", "p": p, "val": want[j + 1]})
-                    p_to = mu[p]
-                    # mate も固定
-                    extra.append({"type": "fix_mate", "p": p, "p_to": p_to})
-                    # 次の部屋へ
-                    s = room_of(p_to, N)
-                    # 部屋ラベルも固定
-                    extra.append({"type": "fix_label_room", "q": s, "val": want[j + 1]})
+                # 反例位置までの実在パスを要求（アンカーを強くしていく）
+                prev = path_prefix.get(t_idx, 0)
+                path_prefix[t_idx] = max(prev, i_star)
                 if verbose:
-                    print(
-                        f"  -> counterexample on trace {t_idx} at i*={i_star}, added {len(extra)} constraints total"
-                    )
+                    print(f"  -> counterexample on trace {t_idx} at i*={i_star}, path_prefix={path_prefix[t_idx]}")
                 break
 
         if not any_fail:
@@ -312,12 +323,33 @@ def main():
         action="store_true",
         help="Reduce logging",
     )
+    parser.add_argument(
+        "--lex-sym",
+        action="store_true",
+        help="Enable lexicographic symmetry breaking within equal labels",
+    )
+    parser.add_argument(
+        "--no-pattern-c",
+        action="store_true",
+        help="Disable pattern-C fixed prefix labeling",
+    )
+    parser.add_argument(
+        "--pattern-c",
+        action="store_true",
+        help="Enable pattern-C fixed prefix labeling (overrides --no-pattern-c)",
+    )
     args = parser.parse_args()
 
     prob = load_problem(args.input)
 
+    use_pattern_c = (args.pattern_c and not args.no_pattern_c)
     sol, meta = cegis_solve(
-        prob, max_iters=args.iters, time_limit_s=args.time_limit, verbose=not args.quiet
+        prob,
+        max_iters=args.iters,
+        time_limit_s=args.time_limit,
+        verbose=not args.quiet,
+        use_lex_symmetry=args.lex_sym,
+        use_pattern_c=use_pattern_c,
     )
     if sol is None:
         print("CEGIS 失敗:", meta)
