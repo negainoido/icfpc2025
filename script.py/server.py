@@ -5,10 +5,12 @@ FastAPIを使用してすべてのプロトコルを実装
 """
 
 import copy
+import json
 import logging
 import random
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -173,6 +175,88 @@ class Team:
 teams: dict[str, Team] = {}
 
 
+def build_problem(problem_name: str, size: int, limit: int) -> Problem:
+    problem = get_solved_problem(problem_name)
+    if problem is None:
+        logger.info(
+            f"No known problem found for {problem_name}, generating random problem"
+        )
+        problem = generate_random_problem(problem_name, size, limit)
+
+    # 生成された問題情報をログ出力
+    print(f"\n=== 生成された問題 ({problem_name}) ===")
+    print(f"部屋数: {size}")
+    print(f"ドア制限: x{limit}")
+    print(f"開始部屋: {problem.starting_room}")
+    print("部屋ラベル:")
+    for i, room in enumerate(problem.rooms):
+        print(f"  部屋{i}: ラベル{room.label}")
+    print("\nJSON形式グラフ:")
+    json_graph = generate_json_graph(problem)
+    print(json_graph)
+    print("=" * 50)
+
+    # JSON形式の地図を /tmp/map.json に保存
+    with open("/tmp/map.true.json", "w", encoding="utf-8") as f:
+        print("Saved as /tmp/map.true.json")
+        f.write(json_graph)
+
+    return problem
+
+
+def get_solved_problem(problem_name: str) -> Problem | None:
+    """解決済み既知の問題を取得する
+
+    Parameters
+    ----------
+    problem_name
+        aleph 以上を想定
+
+    Returns
+    -------
+        ./problems/{problem_name}/*.json があれば, ここからランダムに一つ取得する
+        無ければ None を返す
+    """
+    server_dir = Path(__file__).parent
+    problems_dir = server_dir / "problems" / problem_name
+    if not problems_dir.exists():
+        return None
+
+    json_files = list(problems_dir.glob("*.json"))
+    if not json_files:
+        return None
+
+    selected_file = random.choice(json_files)
+
+    try:
+        with open(selected_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "api_history" not in data or not data["api_history"]:
+            logger.warning(f"No api_history in {selected_file}")
+            return None
+
+        last_request = data["api_history"][-1]
+        if "request" not in last_request or "map" not in last_request["request"]:
+            logger.warning(f"No map in last request of {selected_file}")
+            return None
+
+        map_data_dict = last_request["request"]["map"]
+
+        map_data = MapData(**map_data_dict)
+        problem = Problem.from_map_data(map_data)
+        problem.name = problem_name
+
+        limit = DOOR_LIMITS.get(problem_name, DOOR_LIMITS["__default"])
+        problem.limit = limit
+
+        logger.info(f"Loaded problem from {selected_file}")
+        return problem
+
+    except Exception as e:
+        logger.warning(f"Failed to load problem from {selected_file}: {e}")
+        return None
+
+
 def generate_random_problem(problem_name: str, size: int, limit: int) -> Problem:
     """指定された問題名に基づいてランダムな問題を生成する
 
@@ -219,23 +303,6 @@ def generate_random_problem(problem_name: str, size: int, limit: int) -> Problem
         rooms[room2].doors[door2] = (room1, door1)
 
     problem = Problem(name=problem_name, rooms=rooms, starting_room=0, limit=limit)
-
-    # 生成された問題情報をログ出力
-    print(f"\n=== 生成された問題 ({problem_name}) ===")
-    print(f"部屋数: {size}")
-    print(f"ドア制限: x{limit}")
-    print(f"開始部屋: {problem.starting_room}")
-    print("部屋ラベル:")
-    for i, room in enumerate(rooms):
-        print(f"  部屋{i}: ラベル{room.label}")
-    print("\nJSON形式グラフ:")
-    json_graph = generate_json_graph(problem)
-    print(json_graph)
-    print("=" * 50)
-
-    # JSON形式の地図を /tmp/map.json に保存
-    with open("/tmp/map.json", "w", encoding="utf-8") as f:
-        f.write(json_graph)
 
     return problem
 
@@ -400,7 +467,7 @@ async def select(request: SelectRequest):
     teams[request.id] = team
 
     # 新しい問題を生成
-    problem = generate_random_problem(problem_name, size, limit)
+    problem = build_problem(problem_name, size, limit)
     team.current_problem = problem
     team.query_count = 0  # クエリカウントをリセット
 
