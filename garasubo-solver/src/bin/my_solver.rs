@@ -22,23 +22,23 @@ struct Cli {
     api_base_url: String,
 }
 
-const PROBLEM_SET: [(&str, usize); _] = [
-    ["probatio", 3],
-    ["primus", 6],
-    ["secundus", 12],
-    ["tertius", 18],
-    ["quartus", 24],
-    ["quintus", 30],
-    ["aleph", 12],
-    ["beth", 24],
-    ["gimel", 36],
-    ["daleth", 48],
-    ["he", 60],
-    ["vau", 18],
-    ["zain", 36],
-    ["hhet", 54],
-    ["teth", 72],
-    ["iod", 90],
+const PROBLEM_SET: [(&str, usize); 16] = [
+    ("probatio", 3),
+    ("primus", 6),
+    ("secundus", 12),
+    ("tertius", 18),
+    ("quartus", 24),
+    ("quintus", 30),
+    ("aleph", 12),
+    ("beth", 24),
+    ("gimel", 36),
+    ("daleth", 48),
+    ("he", 60),
+    ("vau", 18),
+    ("zain", 36),
+    ("hhet", 54),
+    ("teth", 72),
+    ("iod", 90),
 ];
 
 #[derive(Clone, Debug, Default, PartialEq)]
