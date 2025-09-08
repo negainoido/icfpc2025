@@ -38,28 +38,40 @@ pub struct MergeResult {
 #[derive(Debug, Clone, Default)]
 pub struct MergeStats {
     pub attempted_candidates: usize,
-    pub accepted_merges: usize,   // 候補受け入れ回数（1 回で複数 Union が起きることがある）
+    pub accepted_merges: usize, // 候補受け入れ回数（1 回で複数 Union が起きることがある）
     pub rejected_merges: usize,
     pub final_components: usize,
 }
 
 /// 内部状態（Union-Find + δ + ラベル）
 struct MergeState {
-    n_nodes: usize,                // = L+1
+    n_nodes: usize, // = L+1
     parent: Vec<usize>,
     size: Vec<usize>,
-    label: Vec<u8>,                // 各代表ノードのラベル（非代表インデックスにも持たせるが参照は rep() 越し）
-    delta: Vec<[Option<usize>; 6]>,// δ[node][door] = Some(next_node) or None
-    components: usize,             // 現在の連結成分（クラスター）数
-    changes: Vec<Change>,          // ロールバックログ
+    label: Vec<u8>, // 各代表ノードのラベル（非代表インデックスにも持たせるが参照は rep() 越し）
+    delta: Vec<[Option<usize>; 6]>, // δ[node][door] = Some(next_node) or None
+    components: usize, // 現在の連結成分（クラスター）数
+    changes: Vec<Change>, // ロールバックログ
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Change {
-    Parent { v: usize, prev: usize },
-    Size   { v: usize, prev: usize },
-    Delta  { node: usize, door: u8, prev: Option<usize> },
-    Comps  { prev: usize },
+    Parent {
+        v: usize,
+        prev: usize,
+    },
+    Size {
+        v: usize,
+        prev: usize,
+    },
+    Delta {
+        node: usize,
+        door: u8,
+        prev: Option<usize>,
+    },
+    Comps {
+        prev: usize,
+    },
 }
 
 impl MergeState {
@@ -68,8 +80,10 @@ impl MergeState {
         let l = w.len();
         let n = l + 1;
         let mut parent = vec![0usize; n];
-        let mut size   = vec![1usize; n];
-        for i in 0..n { parent[i] = i; }
+        let mut size = vec![1usize; n];
+        for i in 0..n {
+            parent[i] = i;
+        }
 
         // ラベルと δ を初期化
         let mut delta = vec![[None; 6]; n];
@@ -98,15 +112,17 @@ impl MergeState {
         x
     }
 
-    fn snapshot(&self) -> usize { self.changes.len() }
+    fn snapshot(&self) -> usize {
+        self.changes.len()
+    }
 
     fn rollback(&mut self, mark: usize) {
         while self.changes.len() > mark {
             match self.changes.pop().unwrap() {
                 Change::Parent { v, prev } => self.parent[v] = prev,
-                Change::Size   { v, prev } => self.size[v] = prev,
-                Change::Delta  { node, door, prev } => self.delta[node][door as usize] = prev,
-                Change::Comps  { prev } => self.components = prev,
+                Change::Size { v, prev } => self.size[v] = prev,
+                Change::Delta { node, door, prev } => self.delta[node][door as usize] = prev,
+                Change::Comps { prev } => self.components = prev,
             }
         }
     }
@@ -114,7 +130,9 @@ impl MergeState {
     fn set_delta(&mut self, node: usize, door: u8, val: Option<usize>) {
         let d = door as usize;
         let prev = self.delta[node][d];
-        if prev == val { return; }
+        if prev == val {
+            return;
+        }
         self.changes.push(Change::Delta { node, door, prev });
         self.delta[node][d] = val;
     }
@@ -124,7 +142,9 @@ impl MergeState {
     fn unite(&mut self, x: usize, y: usize) -> Option<(usize, usize)> {
         let mut rx = self.rep(x);
         let mut ry = self.rep(y);
-        if rx == ry { return None; }
+        if rx == ry {
+            return None;
+        }
 
         if self.size[rx] < self.size[ry] {
             std::mem::swap(&mut rx, &mut ry);
@@ -135,12 +155,18 @@ impl MergeState {
         self.components = self.components.saturating_sub(1);
 
         // parent
-        self.changes.push(Change::Parent { v: ry, prev: self.parent[ry] });
+        self.changes.push(Change::Parent {
+            v: ry,
+            prev: self.parent[ry],
+        });
         self.parent[ry] = rx;
 
         // size
         let prev_size = self.size[rx];
-        self.changes.push(Change::Size { v: rx, prev: prev_size });
+        self.changes.push(Change::Size {
+            v: rx,
+            prev: prev_size,
+        });
         self.size[rx] = prev_size + self.size[ry];
 
         // ラベルは一致前提、保持側（rx）の値をそのまま使う
@@ -157,7 +183,9 @@ impl MergeState {
         while let Some((x0, y0)) = stack.pop() {
             let mut x = self.rep(x0);
             let mut y = self.rep(y0);
-            if x == y { continue; }
+            if x == y {
+                continue;
+            }
 
             // ラベル一致の確認
             if self.label[x] != self.label[y] {
@@ -281,12 +309,7 @@ impl MergeState {
 }
 
 /// API：候補に基づく貪欲マージを実行
-pub fn run_phase_c(
-    w: &[u8],
-    y: &[u8],
-    cand: &CandidateList,
-    target_n: usize,
-) -> MergeResult {
+pub fn run_phase_c(w: &[u8], y: &[u8], cand: &CandidateList, target_n: usize) -> MergeResult {
     let mut st = MergeState::new_from_walk(w, y);
     let mut attempted = 0usize;
     let mut accepted = 0usize;
@@ -304,14 +327,18 @@ pub fn run_phase_c(
 
     let mut comps = st.count_components();
     for c in list {
-        if comps <= target_n { break; }
+        if comps <= target_n {
+            break;
+        }
         attempted += 1;
 
         let a = c.a as usize;
         let b = c.b as usize;
 
         // 既に同じ代表ならスキップ
-        if st.rep(a) == st.rep(b) { continue; }
+        if st.rep(a) == st.rep(b) {
+            continue;
+        }
 
         // 原子的マージを試す
         if st.closure_merge(a, b) {
@@ -346,7 +373,10 @@ impl MergeState {
         assert!(!y_flat.is_empty(), "y_flat must be non-empty");
         // 各ランの y 長の総和 - ラン数  == w_flat.len()
         // ここでは breaks[i] はラン i の開始 y オフセット（i=0 は 0 のはず）
-        assert!(breaks.first().copied().unwrap_or(0) == 0, "breaks[0] must be 0");
+        assert!(
+            breaks.first().copied().unwrap_or(0) == 0,
+            "breaks[0] must be 0"
+        );
         let mut sum_l = 0usize;
         let mut prev = 0usize;
         for &b in breaks.iter().skip(1) {
@@ -361,20 +391,26 @@ impl MergeState {
         // ベース配列
         let n = y_flat.len();
         let mut parent = vec![0usize; n];
-        let mut size   = vec![1usize; n];
-        for i in 0..n { parent[i] = i; }
+        let mut size = vec![1usize; n];
+        for i in 0..n {
+            parent[i] = i;
+        }
 
         let mut delta = vec![[None; 6]; n];
 
         // 各ランに対して δ を張る（境界は跨がない）
         let mut w_cursor = 0usize;
         for (i, &start) in breaks.iter().enumerate() {
-            let end = if i + 1 < breaks.len() { breaks[i + 1] } else { y_flat.len() };
+            let end = if i + 1 < breaks.len() {
+                breaks[i + 1]
+            } else {
+                y_flat.len()
+            };
             assert!(end > start, "empty run detected");
             let li = end - start - 1; // このランのステップ数
             for k in 0..li {
-                let t  = start + k;
-                let d  = w_flat[w_cursor + k] as usize;
+                let t = start + k;
+                let d = w_flat[w_cursor + k] as usize;
                 assert!(d < 6, "door must be 0..=5");
                 delta[t][d] = Some(t + 1);
             }
@@ -428,7 +464,11 @@ impl MergeState {
                 if let Some(next) = self.delta[r][door] {
                     let cnext = time_to_cluster[self.rep(next)];
                     if let Some(cur) = delta_by_cluster[rid][door] {
-                        debug_assert_eq!(cur, cnext, "delta mismatch on cluster={}, door={}", rid, door);
+                        debug_assert_eq!(
+                            cur, cnext,
+                            "delta mismatch on cluster={}, door={}",
+                            rid, door
+                        );
                     } else {
                         delta_by_cluster[rid][door] = Some(cnext);
                     }
@@ -465,8 +505,8 @@ pub fn run_phase_c_internal_from_flat(
     let mut st = MergeState::new_from_flat_runs(w_flat, y_flat, breaks);
 
     let mut attempted = 0usize;
-    let mut accepted  = 0usize;
-    let mut rejected  = 0usize;
+    let mut accepted = 0usize;
+    let mut rejected = 0usize;
 
     // スコア降順で安定ソート（CandidateList は既に降順が多いが念のため）
     let mut list = cand.list.clone();
@@ -480,11 +520,15 @@ pub fn run_phase_c_internal_from_flat(
 
     let mut comps = st.count_components();
     for c in list {
-        if comps <= target_n { break; }
+        if comps <= target_n {
+            break;
+        }
         attempted += 1;
         let a = c.a as usize;
         let b = c.b as usize;
-        if st.rep(a) == st.rep(b) { continue; }
+        if st.rep(a) == st.rep(b) {
+            continue;
+        }
         if st.closure_merge(a, b) {
             accepted += 1;
             comps = st.count_components();
@@ -506,14 +550,14 @@ pub fn run_phase_c_internal_from_flat(
 
 #[test]
 fn multi_runs_no_cross_boundary_edges() {
-    use crate::candidate_gen::{CandidateList, Candidate, Hits};
+    use crate::candidate_gen::{Candidate, CandidateList, Hits};
 
     // ラン1: y=[0,0,0], w=[0,0]
     // ラン2: y=[1,1,1], w=[1,1]
-    let y1 = vec![0u8,0,0];
-    let w1 = vec![0u8,0];
-    let y2 = vec![1u8,1,1];
-    let w2 = vec![1u8,1];
+    let y1 = vec![0u8, 0, 0];
+    let w1 = vec![0u8, 0];
+    let y2 = vec![1u8, 1, 1];
+    let w2 = vec![1u8, 1];
 
     // フラット
     let w_flat = [w1.as_slice(), w2.as_slice()].concat();

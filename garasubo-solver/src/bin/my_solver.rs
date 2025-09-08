@@ -1,15 +1,10 @@
 use clap::Parser;
 use garasubo_solver::api::{ApiClient, Connection, GuessMap, RoomDoor};
+use garasubo_solver::cover_walk::generate_cover_walk;
 use garasubo_solver::session_manager::SessionManager;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use tokio::signal;
-use garasubo_solver::candidate_gen::{build_candidates, CandParams, Candidate, CandidateList};
-use garasubo_solver::cover_walk::generate_cover_walk;
-use garasubo_solver::pass2_ingest::apply_pass2_and_recluster;
-use garasubo_solver::pass2_scheduler::{build_pass2_plan, PlanOutput, SchedulerParams};
-use garasubo_solver::phase_c::{run_phase_c, MergeResult};
-use garasubo_solver::signature_index::{build_signature_index, BuildParams};
 
 #[derive(Parser)]
 #[command(name = "garasubo-solver")]
@@ -104,7 +99,10 @@ fn plan_to_string(plan: &Vec<Action>) -> String {
 impl Plan {
     fn to_query_string(&self) -> String {
         match self {
-            Plan::Walk(walk) => walk.iter().map(|i| ('0' as u8 + *i) as char).collect::<String>(),
+            Plan::Walk(walk) => walk
+                .iter()
+                .map(|i| ('0' as u8 + *i) as char)
+                .collect::<String>(),
             Plan::MarkedWalk { plan, .. } => plan_to_string(plan),
         }
     }
@@ -144,9 +142,13 @@ impl MySolver {
     }
 
     fn initial_plan(&mut self) -> Vec<String> {
-        let plans = vec![ self.cover_walk.iter().map(|i| ('0' as u8 + *i) as char).collect::<String>() ];
+        let plans = vec![self
+            .cover_walk
+            .iter()
+            .map(|i| ('0' as u8 + *i) as char)
+            .collect::<String>()];
 
-        self.prev_query = vec![ Plan::Walk(self.cover_walk.clone()) ];
+        self.prev_query = vec![Plan::Walk(self.cover_walk.clone())];
 
         plans
     }
@@ -165,7 +167,7 @@ impl MySolver {
                     let y = results[result_idx].clone();
                     // 最初に登場したラベルのノードの位置をメモ
                     let mut memo = vec![None; 4];
-                    let mut rewrite_target= HashSet::new();
+                    let mut rewrite_target = HashSet::new();
                     let mut known_nodes = HashMap::new();
                     let mut used_nodes = HashSet::new();
 
@@ -176,15 +178,19 @@ impl MySolver {
                         for (pos, w) in walk.iter().enumerate() {
                             let node = &self.nodes[current_node_id];
                             if let Some(edge) = &node.edges[*w as usize] {
-                                known_nodes.insert(pos+1, edge.node_id);
-                                println!("known node: {} label: {} id: {}", pos+1, edge.node_id, edge.node_id);
+                                known_nodes.insert(pos + 1, edge.node_id);
+                                println!(
+                                    "known node: {} label: {} id: {}",
+                                    pos + 1,
+                                    edge.node_id,
+                                    edge.node_id
+                                );
                                 current_node_id = edge.node_id;
                             } else {
                                 break;
                             }
                         }
                     }
-
 
                     for (i, &c) in y.iter().enumerate() {
                         if memo[c as usize] == None {
@@ -194,7 +200,7 @@ impl MySolver {
                                 used_nodes.insert(*node_id);
                             } else {
                                 let label = c;
-                                let node_id= self.nodes.len();
+                                let node_id = self.nodes.len();
                                 let node = KnownNode::new(node_id, label, vec![]);
                                 self.nodes.push(node);
                                 known_nodes.insert(i, node_id);
@@ -208,7 +214,7 @@ impl MySolver {
                     for (i, w) in walk.iter().enumerate() {
                         if rewrite_target.contains(&i) {
                             let label = y[i] as usize;
-                            new_walk.push(Action::Mark((label+1) % 4));
+                            new_walk.push(Action::Mark((label + 1) % 4));
                         }
                         new_walk.push(Action::Move(*w as usize));
                     }
@@ -226,10 +232,13 @@ impl MySolver {
                         used_nodes,
                     });
 
-
                     result_idx += 1;
                 }
-                Plan::MarkedWalk { plan, rewrite_target, state_idx } => {
+                Plan::MarkedWalk {
+                    plan,
+                    rewrite_target,
+                    state_idx,
+                } => {
                     println!("marked walk");
                     let y2 = &results[result_idx];
                     let state = &mut self.states[*state_idx];
@@ -240,15 +249,23 @@ impl MySolver {
                     for (i, action) in plan.iter().enumerate() {
                         match action {
                             Action::Move(x) => {
-                                if y[y_idx+1] != y2[i+1] {
-                                    if let Some(idx) = rewrite_memo.get(&y[y_idx+1]) {
-                                        println!("detect rewrite: {} to {} at {}", y[y_idx+1], y2[i+1], y_idx+1);
+                                if y[y_idx + 1] != y2[i + 1] {
+                                    if let Some(idx) = rewrite_memo.get(&y[y_idx + 1]) {
+                                        println!(
+                                            "detect rewrite: {} to {} at {}",
+                                            y[y_idx + 1],
+                                            y2[i + 1],
+                                            y_idx + 1
+                                        );
                                         println!("known node: {} {:?}", idx, rewrite_memo);
                                         let known_node_id = state.known_nodes[idx];
-                                        if let Some(node_id) = state.known_nodes.get(&(y_idx+1)) {
-                                            assert_eq!(*node_id, known_node_id, "rewrite target is not same as known node");
+                                        if let Some(node_id) = state.known_nodes.get(&(y_idx + 1)) {
+                                            assert_eq!(
+                                                *node_id, known_node_id,
+                                                "rewrite target is not same as known node"
+                                            );
                                         } else {
-                                            state.known_nodes.insert(y_idx+1, known_node_id);
+                                            state.known_nodes.insert(y_idx + 1, known_node_id);
                                         }
                                     } else {
                                         panic!("invalid rewrite");
@@ -274,7 +291,7 @@ impl MySolver {
                         }
                         let node_id = if let Some(node_id) = state.known_nodes.get(&i) {
                             if state.used_nodes.contains(node_id) {
-                                continue
+                                continue;
                             }
                             *node_id
                         } else {
@@ -297,19 +314,22 @@ impl MySolver {
                         for (i, &w) in state.walk.iter().enumerate() {
                             let w = w as usize;
                             let c = y[i];
-                            let dest_id = self.nodes[state.known_nodes[&(i+1)]].id;
+                            let dest_id = self.nodes[state.known_nodes[&(i + 1)]].id;
                             let node = &mut self.nodes[state.known_nodes[&i]];
                             match &node.edges[w] {
                                 Some(edge) => {
-                                    assert_eq!(edge.node_id, dest_id, "existing edge is not same as new edge");
-                                },
+                                    assert_eq!(
+                                        edge.node_id, dest_id,
+                                        "existing edge is not same as new edge"
+                                    );
+                                }
                                 None => {
-                                    node.edges[w] = Some(KnownNodeConnection {
-                                        node_id: dest_id,
-                                    });
+                                    node.edges[w] = Some(KnownNodeConnection { node_id: dest_id });
                                 }
                             }
                         }
+                        // 更にエッジを制約から推測
+                        self.find_more_edges();
                         // 全ノードを探索するパスから始める
                         let base_walk = self.get_all_node_visit_path();
                         println!("base_walk_len: {:?}", base_walk);
@@ -321,7 +341,7 @@ impl MySolver {
                             match &node.edges[w] {
                                 Some(edge) => {
                                     pos = edge.node_id;
-                                },
+                                }
                                 None => {
                                     panic!("invalid base walk at {} {}", i, pos);
                                 }
@@ -334,18 +354,25 @@ impl MySolver {
                             println!("no empty edge");
                             continue;
                         }
-                        println!("base_walk_len: {} path_len: {:?}", base_walk.len(), path.len());
+                        println!(
+                            "base_walk_len: {} path_len: {:?}",
+                            base_walk.len(),
+                            path.len()
+                        );
                         let new_walk = base_walk.iter().map(|x| *x as u8);
-                        let new_walk = new_walk.chain(path.iter().copied()).chain(self.cover_walk.iter().copied()).take(self.size * 6).collect::<Vec<_>>();
+                        let new_walk = new_walk
+                            .chain(path.iter().copied())
+                            .chain(self.cover_walk.iter().copied())
+                            .take(self.size * 6)
+                            .collect::<Vec<_>>();
                         next_plan.push(Plan::Walk(new_walk));
-
                     } else {
                         println!("new marked walk planning: {:?}", new_rewrite_target);
                         let mut new_walk = vec![];
                         for (i, w) in state.walk.iter().enumerate() {
                             if new_rewrite_target.contains(&i) {
                                 let label = y[i] as usize;
-                                new_walk.push(Action::Mark((label+1) % 4));
+                                new_walk.push(Action::Mark((label + 1) % 4));
                             }
                             new_walk.push(Action::Move(*w as usize));
                         }
@@ -358,7 +385,6 @@ impl MySolver {
                         });
                     }
 
-
                     result_idx += 1;
                 }
             }
@@ -369,7 +395,96 @@ impl MySolver {
         queries
     }
 
+    // ノードfromからノードtoへの確定済みエッジ数をカウント
+    fn count_edges_between_nodes(&self, from_idx: usize, to_idx: usize) -> usize {
+        if from_idx >= self.nodes.len() || to_idx >= self.nodes.len() {
+            return 0;
+        }
 
+        let from_node = &self.nodes[from_idx];
+        let to_node_id = self.nodes[to_idx].id;
+
+        from_node
+            .edges
+            .iter()
+            .filter_map(|edge| edge.as_ref())
+            .filter(|conn| conn.node_id == to_node_id)
+            .count()
+    }
+
+    // ノードの未判明エッジ数をカウント
+    fn count_unknown_edges(&self, node_idx: usize) -> usize {
+        if node_idx >= self.nodes.len() {
+            return 0;
+        }
+
+        self.nodes[node_idx]
+            .edges
+            .iter()
+            .filter(|edge| edge.is_none())
+            .count()
+    }
+
+    // ノードの未判明ドアのインデックスを取得
+    fn get_unknown_door_indices(&self, node_idx: usize) -> Vec<usize> {
+        if node_idx >= self.nodes.len() {
+            return vec![];
+        }
+
+        self.nodes[node_idx]
+            .edges
+            .iter()
+            .enumerate()
+            .filter_map(|(i, edge)| if edge.is_none() { Some(i) } else { None })
+            .collect()
+    }
+
+    fn find_more_edges(&mut self) -> bool {
+        let mut found_new_edges = false;
+
+        // すべてのノードペア(A, B)について調査
+        for a_idx in 0..self.nodes.len() {
+            for b_idx in 0..self.nodes.len() {
+                if a_idx == b_idx {
+                    continue;
+                }
+
+                let a_to_b_count = self.count_edges_between_nodes(a_idx, b_idx);
+                let b_to_a_count = self.count_edges_between_nodes(b_idx, a_idx);
+                let b_unknown_count = self.count_unknown_edges(b_idx);
+
+                // 推論条件: B未判明数 == A→B数 - B→A数 かつ A→B数 > B→A数
+                if a_to_b_count > b_to_a_count && b_unknown_count == (a_to_b_count - b_to_a_count) {
+                    // Bの未判明エッジをすべてAへの接続として確定
+                    let unknown_doors_b = self.get_unknown_door_indices(b_idx);
+
+                    if unknown_doors_b.len() == b_unknown_count {
+                        println!(
+                            "Inferring edges: node {} -> node {} (need {} connections)",
+                            b_idx,
+                            a_idx,
+                            unknown_doors_b.len()
+                        );
+
+                        for (i, &door_b) in unknown_doors_b.iter().enumerate() {
+                            // B→A接続を設定
+                            self.nodes[b_idx].edges[door_b] = Some(KnownNodeConnection {
+                                node_id: self.nodes[a_idx].id,
+                            });
+
+                            found_new_edges = true;
+                            println!(
+                                "Connected: node {}[door {}] <-> node {}",
+                                b_idx, door_b, a_idx
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        found_new_edges
+    }
 
     // すべてのノードを訪問するpathを得る（ノードの再訪問を許可）
     fn get_all_node_visit_path(&self) -> Vec<usize> {
@@ -383,19 +498,23 @@ impl MySolver {
         let mut visited = vec![false; self.nodes.len()];
         let mut path = vec![];
         let mut current_node_idx = start_node_idx;
-        
+
         // すべてのノードを訪問するまでループ
         while visited.iter().any(|&v| !v) {
             visited[current_node_idx] = true;
-            
+
             // 現在のノードから未訪問のノードを探す
-            if let Some((door_idx, next_node_idx)) = self.find_unvisited_neighbor(current_node_idx, &visited) {
+            if let Some((door_idx, next_node_idx)) =
+                self.find_unvisited_neighbor(current_node_idx, &visited)
+            {
                 path.push(door_idx);
                 current_node_idx = next_node_idx;
             } else {
                 // 現在のノードから未訪問のノードに直接行けない場合、
                 // 他の未訪問ノードへのパスを探す
-                if let Some((path_to_unvisited, target_node_idx)) = self.find_path_to_unvisited(current_node_idx, &visited) {
+                if let Some((path_to_unvisited, target_node_idx)) =
+                    self.find_path_to_unvisited(current_node_idx, &visited)
+                {
                     path.extend(path_to_unvisited);
                     current_node_idx = target_node_idx;
                 } else {
@@ -404,19 +523,21 @@ impl MySolver {
                 }
             }
         }
-        
+
         path
     }
 
     // 現在のノードから直接行ける未訪問のノードを探す
     fn find_unvisited_neighbor(&self, node_idx: usize, visited: &[bool]) -> Option<(usize, usize)> {
         let current_node = &self.nodes[node_idx];
-        
+
         for door_idx in 0..6 {
             if let Some(connection) = &current_node.edges[door_idx] {
-                if let Some(next_node_idx) = self.nodes.iter()
-                    .position(|node| node.id == connection.node_id) {
-                    
+                if let Some(next_node_idx) = self
+                    .nodes
+                    .iter()
+                    .position(|node| node.id == connection.node_id)
+                {
                     if !visited[next_node_idx] {
                         return Some((door_idx, next_node_idx));
                     }
@@ -427,44 +548,50 @@ impl MySolver {
     }
 
     // 現在のノードから未訪問のノードへのパスをBFSで探す
-    fn find_path_to_unvisited(&self, start_node_idx: usize, visited: &[bool]) -> Option<(Vec<usize>, usize)> {
+    fn find_path_to_unvisited(
+        &self,
+        start_node_idx: usize,
+        visited: &[bool],
+    ) -> Option<(Vec<usize>, usize)> {
         use std::collections::VecDeque;
-        
+
         let mut queue = VecDeque::new();
         let mut bfs_visited = vec![false; self.nodes.len()];
         let mut parent = vec![None; self.nodes.len()];
         let mut parent_door = vec![None; self.nodes.len()];
-        
+
         queue.push_back(start_node_idx);
         bfs_visited[start_node_idx] = true;
-        
+
         while let Some(current_idx) = queue.pop_front() {
             let current_node = &self.nodes[current_idx];
-            
+
             for door_idx in 0..6 {
                 if let Some(connection) = &current_node.edges[door_idx] {
-                    if let Some(next_node_idx) = self.nodes.iter()
-                        .position(|node| node.id == connection.node_id) {
-                        
+                    if let Some(next_node_idx) = self
+                        .nodes
+                        .iter()
+                        .position(|node| node.id == connection.node_id)
+                    {
                         if !bfs_visited[next_node_idx] {
                             bfs_visited[next_node_idx] = true;
                             parent[next_node_idx] = Some(current_idx);
                             parent_door[next_node_idx] = Some(door_idx);
                             queue.push_back(next_node_idx);
-                            
+
                             // 未訪問のノードを見つけた
                             if !visited[next_node_idx] {
                                 // パスを再構築
                                 let mut path = vec![];
                                 let mut node_idx = next_node_idx;
-                                
+
                                 while let Some(p_idx) = parent[node_idx] {
                                     if let Some(door) = parent_door[node_idx] {
                                         path.push(door);
                                     }
                                     node_idx = p_idx;
                                 }
-                                
+
                                 path.reverse();
                                 return Some((path, next_node_idx));
                             }
@@ -473,56 +600,58 @@ impl MySolver {
                 }
             }
         }
-        
+
         None
     }
 
     // start nodeから最も近い未確定のedgeを探す
     fn find_empty_edge_path(&self, start_node_idx: usize) -> Vec<u8> {
         use std::collections::VecDeque;
-        
+
         if self.nodes.is_empty() || start_node_idx >= self.nodes.len() {
             return vec![];
         }
-        
+
         // BFSでノードを探索し、各ノードの未確定エッジをチェック
         let mut queue = VecDeque::new();
         let mut visited = vec![false; self.nodes.len()];
         let mut parent = vec![None; self.nodes.len()];
         let mut parent_door = vec![None; self.nodes.len()];
-        
+
         queue.push_back(start_node_idx);
         visited[start_node_idx] = true;
-        
+
         while let Some(current_idx) = queue.pop_front() {
             let current_node = &self.nodes[current_idx];
-            
+
             // 現在のノードで未確定のエッジを探す
             for door_idx in 0..6 {
                 if current_node.edges[door_idx].is_none() {
                     // パスを再構築して返す
                     let mut path = vec![];
                     let mut node_idx = current_idx;
-                    
+
                     while let Some(p_idx) = parent[node_idx] {
                         if let Some(door) = parent_door[node_idx] {
                             path.push(door);
                         }
                         node_idx = p_idx;
                     }
-                    
+
                     path.reverse();
                     path.push(door_idx as u8); // 未確定エッジへの最後の遷移
                     return path;
                 }
             }
-            
+
             // 隣接ノードをキューに追加
             for door_idx in 0..6 {
                 if let Some(connection) = &current_node.edges[door_idx] {
-                    if let Some(next_node_idx) = self.nodes.iter()
-                        .position(|node| node.id == connection.node_id) {
-                        
+                    if let Some(next_node_idx) = self
+                        .nodes
+                        .iter()
+                        .position(|node| node.id == connection.node_id)
+                    {
                         if !visited[next_node_idx] {
                             visited[next_node_idx] = true;
                             parent[next_node_idx] = Some(current_idx);
@@ -533,14 +662,16 @@ impl MySolver {
                 }
             }
         }
-        
+
         vec![] // 未確定のエッジが見つからない場合
     }
 
     fn build_map(&self) -> GuessMap {
-        let rooms = self.nodes.iter().map(|node| {
-            node.label as i32
-        }).collect::<Vec<_>>();
+        let rooms = self
+            .nodes
+            .iter()
+            .map(|node| node.label as i32)
+            .collect::<Vec<_>>();
 
         let mut connections = vec![];
         let mut used_edges = HashSet::new();
@@ -554,8 +685,14 @@ impl MySolver {
                     let next_node_id = connection.node_id;
                     if next_node_id == id {
                         connections.push(Connection {
-                            from: RoomDoor { room: id, door: door_idx },
-                            to: RoomDoor { room: id, door: door_idx },
+                            from: RoomDoor {
+                                room: id,
+                                door: door_idx,
+                            },
+                            to: RoomDoor {
+                                room: id,
+                                door: door_idx,
+                            },
                         })
                     } else {
                         for door_jdx in 0..6 {
@@ -565,8 +702,14 @@ impl MySolver {
                             if let Some(connection) = &self.nodes[next_node_id].edges[door_jdx] {
                                 if connection.node_id == id {
                                     connections.push(Connection {
-                                        from: RoomDoor { room: id, door: door_idx },
-                                        to: RoomDoor { room: next_node_id, door: door_jdx },
+                                        from: RoomDoor {
+                                            room: id,
+                                            door: door_idx,
+                                        },
+                                        to: RoomDoor {
+                                            room: next_node_id,
+                                            door: door_jdx,
+                                        },
                                     });
                                     used_edges.insert((id, door_idx));
                                     used_edges.insert((next_node_id, door_jdx));
@@ -582,7 +725,6 @@ impl MySolver {
                 }
             }
         }
-
 
         GuessMap {
             rooms,
@@ -667,11 +809,11 @@ mod tests {
     #[test]
     fn test_get_all_node_visit_path_single_node() {
         let mut solver = MySolver::new(3);
-        
+
         // 単一ノードを追加
         let node = KnownNode::new(0, 1, vec![]);
         solver.nodes.push(node);
-        
+
         let path = solver.get_all_node_visit_path();
         assert_eq!(path, Vec::<usize>::new());
     }
@@ -679,40 +821,32 @@ mod tests {
     #[test]
     fn test_get_all_node_visit_path_linear_graph() {
         let mut solver = MySolver::new(3);
-        
+
         // 線形グラフを作成: 0 - 1 - 2
         let mut node0 = KnownNode::new(0, 1, vec![]);
-        node0.edges[0] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
-        
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+
         let mut node1 = KnownNode::new(1, 2, vec![0]);
-        node1.edges[1] = Some(KnownNodeConnection {
-            node_id: 0,
-        });
-        node1.edges[2] = Some(KnownNodeConnection {
-            node_id: 2,
-        });
-        
+        node1.edges[1] = Some(KnownNodeConnection { node_id: 0 });
+        node1.edges[2] = Some(KnownNodeConnection { node_id: 2 });
+
         let mut node2 = KnownNode::new(2, 3, vec![0, 2]);
-        node2.edges[3] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
-        
+        node2.edges[3] = Some(KnownNodeConnection { node_id: 1 });
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
         solver.nodes.push(node2);
-        
+
         let path = solver.get_all_node_visit_path();
-        
+
         // パスが空でないことを確認
         assert!(!path.is_empty());
-        
+
         // パスの各要素が0-5の範囲内であることを確認
         for &door in &path {
             assert!(door < 6, "Door number {} is out of range", door);
         }
-        
+
         // パスの長さが合理的であることを確認（最大でもノード数-1の2倍程度）
         assert!(path.len() <= (solver.nodes.len() - 1) * 2);
     }
@@ -720,46 +854,34 @@ mod tests {
     #[test]
     fn test_get_all_node_visit_path_triangle_graph() {
         let mut solver = MySolver::new(3);
-        
+
         // 三角形グラフを作成: 0 - 1 - 2 - 0
         let mut node0 = KnownNode::new(0, 1, vec![]);
-        node0.edges[0] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
-        node0.edges[5] = Some(KnownNodeConnection {
-            node_id: 2,
-        });
-        
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[5] = Some(KnownNodeConnection { node_id: 2 });
+
         let mut node1 = KnownNode::new(1, 2, vec![0]);
-        node1.edges[1] = Some(KnownNodeConnection {
-            node_id: 0,
-        });
-        node1.edges[3] = Some(KnownNodeConnection {
-            node_id: 2,
-        });
-        
+        node1.edges[1] = Some(KnownNodeConnection { node_id: 0 });
+        node1.edges[3] = Some(KnownNodeConnection { node_id: 2 });
+
         let mut node2 = KnownNode::new(2, 3, vec![0, 3]);
-        node2.edges[2] = Some(KnownNodeConnection {
-            node_id: 0,
-        });
-        node2.edges[4] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
-        
+        node2.edges[2] = Some(KnownNodeConnection { node_id: 0 });
+        node2.edges[4] = Some(KnownNodeConnection { node_id: 1 });
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
         solver.nodes.push(node2);
-        
+
         let path = solver.get_all_node_visit_path();
-        
+
         // パスが空でないことを確認
         assert!(!path.is_empty());
-        
+
         // パスの各要素が0-5の範囲内であることを確認
         for &door in &path {
             assert!(door < 6, "Door number {} is out of range", door);
         }
-        
+
         // 三角形グラフなので、最低2ステップは必要
         assert!(path.len() >= 2);
     }
@@ -767,22 +889,20 @@ mod tests {
     #[test]
     fn test_find_unvisited_neighbor() {
         let mut solver = MySolver::new(2);
-        
+
         let mut node0 = KnownNode::new(0, 1, vec![]);
-        node0.edges[0] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
-        
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+
         let node1 = KnownNode::new(1, 2, vec![0]);
-        
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
-        
+
         let visited = vec![true, false]; // node0は訪問済み、node1は未訪問
-        
+
         let result = solver.find_unvisited_neighbor(0, &visited);
         assert_eq!(result, Some((0, 1))); // ドア0でnode1に行ける
-        
+
         let visited_all = vec![true, true]; // すべて訪問済み
         let result = solver.find_unvisited_neighbor(0, &visited_all);
         assert_eq!(result, None);
@@ -800,7 +920,7 @@ mod tests {
         let mut solver = MySolver::new(3);
         let node = KnownNode::new(0, 1, vec![]);
         solver.nodes.push(node);
-        
+
         let path = solver.find_empty_edge_path(10); // 存在しないノード
         assert_eq!(path, Vec::<u8>::new());
     }
@@ -808,19 +928,17 @@ mod tests {
     #[test]
     fn test_find_empty_edge_path_start_node_has_empty_edge() {
         let mut solver = MySolver::new(3);
-        
+
         // ノード0を作成し、エッジ1だけを接続、他は未確定
         let mut node0 = KnownNode::new(0, 1, vec![]);
-        node0.edges[1] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
+        node0.edges[1] = Some(KnownNodeConnection { node_id: 1 });
         // エッジ0,2,3,4,5は未確定（None）
-        
+
         let node1 = KnownNode::new(1, 2, vec![1]);
-        
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
-        
+
         let path = solver.find_empty_edge_path(0);
         assert_eq!(path, vec![0u8]); // 最初の未確定エッジ（ドア0）に直接アクセス
     }
@@ -828,44 +946,36 @@ mod tests {
     #[test]
     fn test_find_empty_edge_path_multi_hop() {
         let mut solver = MySolver::new(3);
-        
+
         // グラフ構造: 0 --[door0]--> 1 --[door2]--> 2
         // ノード2にのみ未確定エッジがある
         let mut node0 = KnownNode::new(0, 1, vec![]);
-        node0.edges[0] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
         // 他のエッジは全て確定済みと仮定
         for i in 1..6 {
             node0.edges[i] = Some(KnownNodeConnection {
                 node_id: 0, // 自分自身への循環
             });
         }
-        
+
         let mut node1 = KnownNode::new(1, 2, vec![0]);
-        node1.edges[1] = Some(KnownNodeConnection {
-            node_id: 0,
-        });
-        node1.edges[2] = Some(KnownNodeConnection {
-            node_id: 2,
-        });
+        node1.edges[1] = Some(KnownNodeConnection { node_id: 0 });
+        node1.edges[2] = Some(KnownNodeConnection { node_id: 2 });
         // 他のエッジは確定済み
         for i in [0, 3, 4, 5] {
             node1.edges[i] = Some(KnownNodeConnection {
                 node_id: 1, // 自分自身への循環
             });
         }
-        
+
         let mut node2 = KnownNode::new(2, 3, vec![0, 2]);
-        node2.edges[3] = Some(KnownNodeConnection {
-            node_id: 1,
-        });
+        node2.edges[3] = Some(KnownNodeConnection { node_id: 1 });
         // エッジ0,1,2,4,5は未確定（None）
-        
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
         solver.nodes.push(node2);
-        
+
         let path = solver.find_empty_edge_path(0);
         assert_eq!(path, vec![0u8, 2u8, 0u8]); // 0->1->2, そして2のドア0が未確定
     }
@@ -873,25 +983,164 @@ mod tests {
     #[test]
     fn test_find_empty_edge_path_no_empty_edges() {
         let mut solver = MySolver::new(2);
-        
+
         // すべてのエッジが確定済みのグラフ
         let mut node0 = KnownNode::new(0, 1, vec![]);
         let mut node1 = KnownNode::new(1, 2, vec![0]);
-        
+
         // すべてのエッジを確定済みにする
         for i in 0..6 {
-            node0.edges[i] = Some(KnownNodeConnection {
-                node_id: 1,
-            });
-            node1.edges[i] = Some(KnownNodeConnection {
-                node_id: 0,
-            });
+            node0.edges[i] = Some(KnownNodeConnection { node_id: 1 });
+            node1.edges[i] = Some(KnownNodeConnection { node_id: 0 });
         }
-        
+
         solver.nodes.push(node0);
         solver.nodes.push(node1);
-        
+
         let path = solver.find_empty_edge_path(0);
         assert_eq!(path, Vec::<u8>::new()); // 未確定エッジがないので空
+    }
+
+    #[test]
+    fn test_count_edges_between_nodes() {
+        let mut solver = MySolver::new(3);
+
+        // ノード0からノード1への複数エッジを作成
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[1] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[2] = Some(KnownNodeConnection { node_id: 2 }); // 異なるノード
+
+        let node1 = KnownNode::new(1, 2, vec![]);
+        let node2 = KnownNode::new(2, 3, vec![]);
+
+        solver.nodes.push(node0);
+        solver.nodes.push(node1);
+        solver.nodes.push(node2);
+
+        assert_eq!(solver.count_edges_between_nodes(0, 1), 2); // 0→1は2本
+        assert_eq!(solver.count_edges_between_nodes(0, 2), 1); // 0→2は1本
+        assert_eq!(solver.count_edges_between_nodes(1, 0), 0); // 1→0は0本
+    }
+
+    #[test]
+    fn test_count_unknown_edges() {
+        let mut solver = MySolver::new(2);
+
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[1] = Some(KnownNodeConnection { node_id: 1 });
+        // edges[2-5]はNone
+
+        solver.nodes.push(node0);
+
+        assert_eq!(solver.count_unknown_edges(0), 4); // 4つのエッジが未判明
+    }
+
+    #[test]
+    fn test_get_unknown_door_indices() {
+        let mut solver = MySolver::new(2);
+
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[2] = Some(KnownNodeConnection { node_id: 1 });
+        // edges[1,3,4,5]はNone
+
+        solver.nodes.push(node0);
+
+        let unknown_doors = solver.get_unknown_door_indices(0);
+        assert_eq!(unknown_doors, vec![1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_find_more_edges_basic_case() {
+        let mut solver = MySolver::new(3);
+
+        // ノード0からノード1への2本のエッジ
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[1] = Some(KnownNodeConnection { node_id: 1 });
+        for i in 3..6 {
+            node0.edges[i] = Some(KnownNodeConnection { node_id: 0 }); // 自分自身への循環
+        }
+
+        // ノード1からノード0への1本のエッジと1つの未判明エッジ
+        let mut node1 = KnownNode::new(1, 2, vec![]);
+        node1.edges[0] = Some(KnownNodeConnection { node_id: 0 });
+        // edges[1]は未判明（これが推論されるべきエッジ）
+        for i in 2..6 {
+            node1.edges[i] = Some(KnownNodeConnection { node_id: 1 }); // 自分自身への循環
+        }
+
+        solver.nodes.push(node0);
+        solver.nodes.push(node1);
+
+        // A→B=2, B→A=1, B未判明=1 なので推論可能
+        let result = solver.find_more_edges();
+
+        assert_eq!(result, true); // 新しいエッジが見つかった
+
+        // node1のdoor1がnode0に接続されているはず
+        if let Some(connection) = &solver.nodes[1].edges[1] {
+            assert_eq!(connection.node_id, 0);
+        } else {
+            panic!("Expected edge was not created");
+        }
+
+        // node0のdoor2は変化がない
+        assert!(solver.nodes[0].edges[2].is_none());
+    }
+
+    #[test]
+    fn test_find_more_edges_cannot_infer() {
+        let mut solver = MySolver::new(3);
+
+        // ノード0からノード1への2本のエッジ
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        node0.edges[0] = Some(KnownNodeConnection { node_id: 1 });
+        node0.edges[1] = Some(KnownNodeConnection { node_id: 1 });
+        for i in 2..6 {
+            node0.edges[i] = Some(KnownNodeConnection { node_id: 0 }); // 自分自身への循環
+        }
+
+        // ノード1からノード0への1本のエッジと2つの未判明エッジ（推論不可）
+        let mut node1 = KnownNode::new(1, 2, vec![]);
+        node1.edges[0] = Some(KnownNodeConnection { node_id: 0 });
+        // edges[1,2]は未判明（2つあるのでどちらがnode0か決定できない）
+        for i in 3..6 {
+            node1.edges[i] = Some(KnownNodeConnection { node_id: 1 }); // 自分自身への循環
+        }
+
+        solver.nodes.push(node0);
+        solver.nodes.push(node1);
+
+        // A→B=2, B→A=1, B未判明=2 なので推論不可（2 != 2-1）
+        let result = solver.find_more_edges();
+
+        assert_eq!(result, false); // エッジは推論できない
+
+        // 未判明エッジは変更されていないはず
+        assert!(solver.nodes[1].edges[1].is_none());
+        assert!(solver.nodes[1].edges[2].is_none());
+    }
+
+    #[test]
+    fn test_find_more_edges_all_known() {
+        let mut solver = MySolver::new(2);
+
+        // すべてのエッジが確定済み
+        let mut node0 = KnownNode::new(0, 1, vec![]);
+        let mut node1 = KnownNode::new(1, 2, vec![]);
+
+        for i in 0..6 {
+            node0.edges[i] = Some(KnownNodeConnection { node_id: 1 });
+            node1.edges[i] = Some(KnownNodeConnection { node_id: 0 });
+        }
+
+        solver.nodes.push(node0);
+        solver.nodes.push(node1);
+
+        let result = solver.find_more_edges();
+        assert_eq!(result, false); // 新しいエッジは見つからない
     }
 }

@@ -15,10 +15,10 @@
 //   use crate::candidate_gen::CandidateList;
 //   use crate::phase_c::MergeResult;
 
-use std::collections::{HashMap, HashSet};
 use crate::candidate_gen::CandidateList;
-use crate::phase_c::MergeResult;
 use crate::pass2_scheduler::{WatchEntry, WatchKind};
+use crate::phase_c::MergeResult;
+use std::collections::{HashMap, HashSet};
 
 /// 同一性二重確認の生成パラメータ
 #[derive(Debug, Clone, Copy)]
@@ -43,17 +43,24 @@ impl Default for DoubleIdParams {
 
 /// （オプション）否定確証ペアの除外キー
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PairKey { pub a: usize, pub b: usize }
+pub struct PairKey {
+    pub a: usize,
+    pub b: usize,
+}
 impl PairKey {
     pub fn new(a: usize, b: usize) -> Self {
-        if a < b { Self { a, b } } else { Self { a: b, b: a } }
+        if a < b {
+            Self { a, b }
+        } else {
+            Self { a: b, b: a }
+        }
     }
 }
 
 /// 1つのペアに対する 2 本のプラン
 #[derive(Debug, Clone)]
 pub struct IdDoublePlan {
-    pub pair_index: usize,      // バッチ内のインデックス
+    pub pair_index: usize, // バッチ内のインデックス
     pub cluster_a: usize,
     pub cluster_b: usize,
     pub plan1: String,
@@ -92,43 +99,59 @@ pub fn build_double_id_plans_from_candidates(
         let b_t = c.b as usize;
         let ca = merge.time_to_cluster[a_t];
         let cb = merge.time_to_cluster[b_t];
-        if ca == cb { continue; }
+        if ca == cb {
+            continue;
+        }
         let key = PairKey::new(ca, cb);
         if let Some(fb) = forbid {
-            if fb.contains(&key) { continue; }
+            if fb.contains(&key) {
+                continue;
+            }
         }
         *agg.entry(key).or_insert(0.0) += c.score;
     }
     // 2) スコア降順にペア候補を並べる
     let mut pairs: Vec<(PairKey, f64)> = agg.into_iter().collect();
-    pairs.sort_by(|x, y2|
-        y2.1.partial_cmp(&x.1).unwrap_or(std::cmp::Ordering::Equal)
+    pairs.sort_by(|x, y2| {
+        y2.1.partial_cmp(&x.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| x.0.a.cmp(&y2.0.a))
             .then_with(|| x.0.b.cmp(&y2.0.b))
-    );
+    });
 
     // 3) 各ペアについて二重証人 (s1,r1),(s2,r2) を見つけ、2プランを構築
     let mut items: Vec<IdDoublePlan> = Vec::new();
     for (pair_i, (pk, _score)) in pairs.into_iter().enumerate() {
-        if items.len() >= params.max_pairs { break; }
+        if items.len() >= params.max_pairs {
+            break;
+        }
 
         // A→B 優先で探し、無理なら B→A、さらに混在許容
         let w1 = pick_two_witnesses(&visits[pk.a], &visits[pk.b], params.min_separation);
         let (dir_ab, s1, r1, s2, r2) = if let Some((x1, x2)) = w1 {
             (true, x1.0, x1.1, x2.0, x2.1)
-        } else if let Some((y1, y2)) = pick_two_witnesses(&visits[pk.b], &visits[pk.a], params.min_separation) {
+        } else if let Some((y1, y2)) =
+            pick_two_witnesses(&visits[pk.b], &visits[pk.a], params.min_separation)
+        {
             (false, y1.0, y1.1, y2.0, y2.1)
         } else if params.allow_mixed_directions {
             // 混在：まず A→B を1本、残りを B→A で
             if let Some(x1) = pick_one_witness(&visits[pk.a], &visits[pk.b]) {
-                if let Some(y1) = pick_one_witness_disjoint(&visits[pk.b], &visits[pk.a], x1, params.min_separation) {
+                if let Some(y1) = pick_one_witness_disjoint(
+                    &visits[pk.b],
+                    &visits[pk.a],
+                    x1,
+                    params.min_separation,
+                ) {
                     // x1: A→B, y1: B→A
                     // 記録の都合上、plan1=先に見つけた方
                     (true, x1.0, x1.1, y1.0, y1.1)
                 } else {
                     continue; // 2本揃わないのでスキップ
                 }
-            } else { continue; }
+            } else {
+                continue;
+            }
         } else {
             continue;
         };
@@ -147,8 +170,10 @@ pub fn build_double_id_plans_from_candidates(
             pair_index: items.len(),
             cluster_a: ca,
             cluster_b: cb,
-            plan1, watches1: watch1,
-            plan2, watches2: watch2,
+            plan1,
+            watches1: watch1,
+            plan2,
+            watches2: watch2,
         });
     }
 
@@ -165,7 +190,12 @@ pub fn build_double_id_plans_from_candidates(
         watches_per_plan.push(it.watches2.clone());
     }
 
-    DoubleIdBatch { plans, watches_per_plan, per_pair, items }
+    DoubleIdBatch {
+        plans,
+        watches_per_plan,
+        per_pair,
+        items,
+    }
 }
 
 // ================== 内部ユーティリティ ==================
@@ -173,10 +203,14 @@ pub fn build_double_id_plans_from_candidates(
 /// W 上で A の訪問列 a_times, B の訪問列 b_times から
 /// a< b を満たす (s,r) を1つ
 fn pick_one_witness(a_times: &[usize], b_times: &[usize]) -> Option<(usize, usize)> {
-    if a_times.is_empty() || b_times.is_empty() { return None; }
+    if a_times.is_empty() || b_times.is_empty() {
+        return None;
+    }
     let mut j = 0usize;
     for &s in a_times {
-        while j < b_times.len() && b_times[j] <= s { j += 1; }
+        while j < b_times.len() && b_times[j] <= s {
+            j += 1;
+        }
         if j < b_times.len() {
             return Some((s, b_times[j]));
         }
@@ -191,12 +225,16 @@ fn pick_one_witness_disjoint(
     used: (usize, usize),
     min_sep: usize,
 ) -> Option<(usize, usize)> {
-    if a_times.is_empty() || b_times.is_empty() { return None; }
+    if a_times.is_empty() || b_times.is_empty() {
+        return None;
+    }
     let (s0, r0) = used;
     let mut j = 0usize;
     for &s in a_times {
         if s + min_sep <= r0 || s >= r0 + min_sep {
-            while j < b_times.len() && b_times[j] <= s { j += 1; }
+            while j < b_times.len() && b_times[j] <= s {
+                j += 1;
+            }
             if j < b_times.len() {
                 let r = b_times[j];
                 if r + min_sep <= s0 || r >= s0 + min_sep {

@@ -52,10 +52,10 @@ impl Default for SchedulerParams {
 
 #[derive(Debug, Clone)]
 pub struct PlanOutput {
-    pub plan: String,                // "/explore" に投げるプラン文字列
-    pub watches: Vec<WatchEntry>,    // 出力ラベル列のどのインデックスをどう読むか
-    pub id_tasks: Vec<IdTaskPlan>,   // 採用 ID タスク（色割り当て済み）
-    pub rp_tasks: Vec<RpTaskPlan>,   // 採用 RP タスク（色割り当てはビルド時に確定/一部スキップあり）
+    pub plan: String,              // "/explore" に投げるプラン文字列
+    pub watches: Vec<WatchEntry>,  // 出力ラベル列のどのインデックスをどう読むか
+    pub id_tasks: Vec<IdTaskPlan>, // 採用 ID タスク（色割り当て済み）
+    pub rp_tasks: Vec<RpTaskPlan>, // 採用 RP タスク（色割り当てはビルド時に確定/一部スキップあり）
     pub stats: PlanStats,
 }
 
@@ -73,22 +73,32 @@ pub struct WatchEntry {
 #[derive(Debug, Clone)]
 pub enum WatchKind {
     /// ID：クラスタ (a,b) の同一性確認（a と b は cluster_id）
-    IdCheck { id_index: usize, cluster_a: usize, cluster_b: usize },
+    IdCheck {
+        id_index: usize,
+        cluster_a: usize,
+        cluster_b: usize,
+    },
     /// RP：t における Cf --d--> Ct1 の後、Ct1 で j を試した結果を読む
-    RpCheck { rp_index: usize, t: usize, from_cluster: usize, to_cluster: usize, j: u8 },
+    RpCheck {
+        rp_index: usize,
+        t: usize,
+        from_cluster: usize,
+        to_cluster: usize,
+        j: u8,
+    },
 }
 
 // 統計
 #[derive(Debug, Clone, Default)]
 pub struct PlanStats {
-    pub baseline_steps: usize,     // |W|
+    pub baseline_steps: usize, // |W|
     pub id_tasks_selected: usize,
-    pub rp_tasks_selected: usize,  // （ビルド時に色が空かずスキップされた分は含まない）
-    pub id_markers: usize,         // 実際に入った [c] の個数（=ID採用数）
-    pub rp_markers: usize,         // 実際に入った RP 用 [c] の個数
-    pub rp_loops_steps: usize,     // Σ(2*|J|)
-    pub total_actions: usize,      // baseline + id_markers + rp_markers + rp_loops_steps
-    pub token_budget: usize,       // floor(limit_ratio * n)
+    pub rp_tasks_selected: usize, // （ビルド時に色が空かずスキップされた分は含まない）
+    pub id_markers: usize,        // 実際に入った [c] の個数（=ID採用数）
+    pub rp_markers: usize,        // 実際に入った RP 用 [c] の個数
+    pub rp_loops_steps: usize,    // Σ(2*|J|)
+    pub total_actions: usize,     // baseline + id_markers + rp_markers + rp_loops_steps
+    pub token_budget: usize,      // floor(limit_ratio * n)
     pub budget_used_ratio: f64,
 }
 
@@ -98,20 +108,20 @@ pub struct PlanStats {
 pub struct IdTaskPlan {
     pub cluster_a: usize,
     pub cluster_b: usize,
-    pub s_time: usize,  // マーカーを置く基準時刻 s（W 上）
-    pub r_time: usize,  // 読む基準時刻 r（W 上、s < r）
+    pub s_time: usize, // マーカーを置く基準時刻 s（W 上）
+    pub r_time: usize, // 読む基準時刻 r（W 上、s < r）
     pub score: f64,
     pub color: Option<u8>, // 色は割り当て後に Some になる
 }
 
 #[derive(Debug, Clone)]
 pub struct RpTaskPlan {
-    pub t: usize,               // 基準時刻 t（W 上で Cf --d--> Ct1 を踏む位置）
-    pub d: u8,                  // Cf から出る扉（W[t]）
-    pub from_cluster: usize,    // Cf
-    pub to_cluster: usize,      // Ct1
-    pub j_candidates: Vec<u8>,  // Ct1 で試す候補ドア集合（max_rp_candidates_per_task 以下）
-    pub color: Option<u8>,      // 実行時に空いていれば割り当て（そうでなければスキップ）
+    pub t: usize,              // 基準時刻 t（W 上で Cf --d--> Ct1 を踏む位置）
+    pub d: u8,                 // Cf から出る扉（W[t]）
+    pub from_cluster: usize,   // Cf
+    pub to_cluster: usize,     // Ct1
+    pub j_candidates: Vec<u8>, // Ct1 で試す候補ドア集合（max_rp_candidates_per_task 以下）
+    pub color: Option<u8>,     // 実行時に空いていれば割り当て（そうでなければスキップ）
 }
 
 // ========== メイン API ==========
@@ -152,7 +162,8 @@ pub fn build_pass2_plan(
     if params.enable_rp {
         let rp_candidates = collect_rp_candidates(w, merge, params.max_rp_candidates_per_task);
         let mut budget_left = token_budget.saturating_sub(l + id_cost);
-        if budget_left >= 3 { // [c] + j;j（最小 1 候補で 1+2=3）
+        if budget_left >= 3 {
+            // [c] + j;j（最小 1 候補で 1+2=3）
             rp_selected = select_rp_tasks(rp_candidates, &mut budget_left, params.max_rp_tasks);
             rp_cost = token_budget.saturating_sub(l + id_cost + budget_left);
         }
@@ -197,8 +208,14 @@ fn collect_id_candidates(
         let b = c.b as usize;
         let ca = merge.time_to_cluster[a];
         let cb = merge.time_to_cluster[b];
-        if ca == cb { continue; } // 既に同クラスタ
-        let k = if ca < cb { PairKey(ca, cb) } else { PairKey(cb, ca) };
+        if ca == cb {
+            continue;
+        } // 既に同クラスタ
+        let k = if ca < cb {
+            PairKey(ca, cb)
+        } else {
+            PairKey(cb, ca)
+        };
         *agg.entry(k).or_insert(0.0) += c.score;
     }
     // 2) 各ペアに証人 (s,r) を割り当て（W 上で s < r）
@@ -228,18 +245,26 @@ fn collect_id_candidates(
         }
     }
     // スコア降順
-    out.sort_by(|x, y| y.score.partial_cmp(&x.score).unwrap_or(Ordering::Equal)
-        .then_with(|| x.s_time.cmp(&y.s_time)));
+    out.sort_by(|x, y| {
+        y.score
+            .partial_cmp(&x.score)
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| x.s_time.cmp(&y.s_time))
+    });
     out
 }
 
 /// 証人 (s,r) を見つける：A の来訪時刻列 a_times と B の来訪時刻列 b_times（昇順）
 /// から、a ∈ A, b ∈ B で a < b を満たす最初の組を返す
 fn pick_witness_sr(a_times: &[usize], b_times: &[usize]) -> Option<(usize, usize)> {
-    if a_times.is_empty() || b_times.is_empty() { return None; }
+    if a_times.is_empty() || b_times.is_empty() {
+        return None;
+    }
     let mut j = 0usize;
     for &s in a_times {
-        while j < b_times.len() && b_times[j] <= s { j += 1; }
+        while j < b_times.len() && b_times[j] <= s {
+            j += 1;
+        }
         if j < b_times.len() {
             return Some((s, b_times[j]));
         }
@@ -253,7 +278,9 @@ fn select_id_tasks(
     need: usize,
     params: SchedulerParams,
 ) -> Vec<IdTaskPlan> {
-    if need == 0 { return Vec::new(); }
+    if need == 0 {
+        return Vec::new();
+    }
     let target = {
         let base = ((need as f64) * params.id_overselect).ceil() as usize;
         match params.max_id_tasks {
@@ -265,11 +292,15 @@ fn select_id_tasks(
     let mut used: HashSet<usize> = HashSet::new();
     let mut out: Vec<IdTaskPlan> = Vec::new();
     for cand in pool.drain(..) {
-        if used.contains(&cand.cluster_a) || used.contains(&cand.cluster_b) { continue; }
+        if used.contains(&cand.cluster_a) || used.contains(&cand.cluster_b) {
+            continue;
+        }
         used.insert(cand.cluster_a);
         used.insert(cand.cluster_b);
         out.push(cand);
-        if out.len() >= target { break; }
+        if out.len() >= target {
+            break;
+        }
     }
     out
 }
@@ -279,7 +310,11 @@ fn enforce_color_concurrency(mut ids: Vec<IdTaskPlan>) -> Vec<IdTaskPlan> {
     // s 昇順で見て、任意の時点で同時に 4 を超えるならスコアの低い区間を捨てる
     ids.sort_by_key(|x| x.s_time);
     #[derive(Clone)]
-    struct Act { r: usize, score: f64, idx: usize }
+    struct Act {
+        r: usize,
+        score: f64,
+        idx: usize,
+    }
     let mut active: Vec<Act> = Vec::new();
     let mut keep = vec![true; ids.len()];
 
@@ -287,13 +322,19 @@ fn enforce_color_concurrency(mut ids: Vec<IdTaskPlan>) -> Vec<IdTaskPlan> {
         // 終了済みを削除
         active.retain(|a| a.r > it.s_time);
         // 追加
-        active.push(Act { r: it.r_time, score: it.score, idx: i });
+        active.push(Act {
+            r: it.r_time,
+            score: it.score,
+            idx: i,
+        });
         // 同時 >4 なら、一番スコアの低いものを落とす（複数必要なら複数）
         while active.len() > 4 {
             // 最低スコアを探す
             let mut worst = 0usize;
             for k in 1..active.len() {
-                if active[k].score < active[worst].score { worst = k; }
+                if active[k].score < active[worst].score {
+                    worst = k;
+                }
             }
             let drop_idx = active[worst].idx;
             keep[drop_idx] = false;
@@ -303,7 +344,9 @@ fn enforce_color_concurrency(mut ids: Vec<IdTaskPlan>) -> Vec<IdTaskPlan> {
     // keep だけ残す
     let mut out = Vec::new();
     for (i, it) in ids.into_iter().enumerate() {
-        if keep[i] { out.push(it) }
+        if keep[i] {
+            out.push(it)
+        }
     }
     // 色割り当て（0..3 を r で開放しながら s 順に割付）
     assign_colors_for_id(&mut out);
@@ -321,10 +364,15 @@ fn assign_colors_for_id(ids: &mut [IdTaskPlan]) {
         // 期限切れ色を開放
         active.retain(|(r, _, _)| *r > s);
         let mut used = [false; 4];
-        for &(_, c, _) in &active { used[c as usize] = true; }
+        for &(_, c, _) in &active {
+            used[c as usize] = true;
+        }
         let mut color = None;
         for c in 0..4u8 {
-            if !used[c as usize] { color = Some(c); break; }
+            if !used[c as usize] {
+                color = Some(c);
+                break;
+            }
         }
         if let Some(c) = color {
             // 採用
@@ -339,11 +387,7 @@ fn assign_colors_for_id(ids: &mut [IdTaskPlan]) {
 
 // ========== RP 候補の集約・選択 ==========
 
-fn collect_rp_candidates(
-    w: &[u8],
-    merge: &MergeResult,
-    max_j_per_task: usize,
-) -> Vec<RpTaskPlan> {
+fn collect_rp_candidates(w: &[u8], merge: &MergeResult, max_j_per_task: usize) -> Vec<RpTaskPlan> {
     let l = w.len();
     let mut out = Vec::new();
     // 同じ t に複数作らない
@@ -365,7 +409,9 @@ fn collect_rp_candidates(
                 None => unknown.push(j),
             }
         }
-        if unknown.is_empty() { continue; }
+        if unknown.is_empty() {
+            continue;
+        }
         // 候補幅を制限（小さい j を優先）
         unknown.sort_unstable();
         unknown.truncate(max_j_per_task);
@@ -380,8 +426,12 @@ fn collect_rp_candidates(
         });
     }
     // |J| 昇順、t 昇順で安価なものを優先
-    out.sort_by(|a, b| a.j_candidates.len().cmp(&b.j_candidates.len())
-        .then_with(|| a.t.cmp(&b.t)));
+    out.sort_by(|a, b| {
+        a.j_candidates
+            .len()
+            .cmp(&b.j_candidates.len())
+            .then_with(|| a.t.cmp(&b.t))
+    });
     out
 }
 
@@ -397,7 +447,9 @@ fn select_rp_tasks(
             *budget_left -= cost;
             out.push(cand);
             if let Some(m) = max_rp_tasks {
-                if out.len() >= m { break; }
+                if out.len() >= m {
+                    break;
+                }
             }
         }
     }
@@ -455,18 +507,20 @@ fn build_plan_with_watch(
     let mut total_actions = 0usize;
 
     // ユーティリティ
-    let mut push_marker = |plan: &mut String, c: u8, out_pos: &mut usize, total_actions: &mut usize| {
-        plan.push('[');
-        plan.push(char::from(b'0' + c));
-        plan.push(']');
-        *out_pos += 1;       // [c] でもラベルは 1 つ増える
-        *total_actions += 1; // アクション +1
-    };
-    let mut push_door = |plan: &mut String, d: u8, out_pos: &mut usize, total_actions: &mut usize| {
-        plan.push(char::from(b'0' + d));
-        *out_pos += 1;       // 移動でラベル +1
-        *total_actions += 1; // アクション +1
-    };
+    let mut push_marker =
+        |plan: &mut String, c: u8, out_pos: &mut usize, total_actions: &mut usize| {
+            plan.push('[');
+            plan.push(char::from(b'0' + c));
+            plan.push(']');
+            *out_pos += 1; // [c] でもラベルは 1 つ増える
+            *total_actions += 1; // アクション +1
+        };
+    let mut push_door =
+        |plan: &mut String, d: u8, out_pos: &mut usize, total_actions: &mut usize| {
+            plan.push(char::from(b'0' + d));
+            *out_pos += 1; // 移動でラベル +1
+            *total_actions += 1; // アクション +1
+        };
 
     // 進行
     for t in 0..l {
@@ -476,12 +530,16 @@ fn build_plan_with_watch(
             .filter(|(_, &r)| r <= t)
             .map(|(&c, _)| c)
             .collect();
-        for c in expired { id_active_colors.remove(&c); }
+        for c in expired {
+            id_active_colors.remove(&c);
+        }
 
         // (1) ここで “置く” ID タスク
         if let Some(list) = id_by_s.get(&t) {
             for &idx in list {
-                if total_actions >= token_budget { break; }
+                if total_actions >= token_budget {
+                    break;
+                }
                 if let Some(color) = ids[idx].color {
                     // 同色がアクティブでないことを確認
                     if id_active_colors.contains_key(&color) {
@@ -501,10 +559,15 @@ fn build_plan_with_watch(
             if total_actions < token_budget {
                 // 空き色を探す（ID で使用中の色は避ける）
                 let mut used = [false; 4];
-                for (&c, _) in id_active_colors.iter() { used[c as usize] = true; }
+                for (&c, _) in id_active_colors.iter() {
+                    used[c as usize] = true;
+                }
                 let mut color = None;
                 for c in 0..4u8 {
-                    if !used[c as usize] { color = Some(c); break; }
+                    if !used[c as usize] {
+                        color = Some(c);
+                        break;
+                    }
                 }
                 if let Some(c) = color {
                     // 実行：[c] → d → (j;j)*
@@ -513,7 +576,9 @@ fn build_plan_with_watch(
                     push_door(&mut plan, rps[rp_idx].d, &mut out_pos, &mut total_actions);
                     // j;j を順に
                     for &j in &rps[rp_idx].j_candidates {
-                        if total_actions + 2 > token_budget { break; }
+                        if total_actions + 2 > token_budget {
+                            break;
+                        }
                         push_door(&mut plan, j, &mut out_pos, &mut total_actions);
                         // 1 回目 j の直後に観測（当たれば色 c が見える）
                         watches.push(WatchEntry {

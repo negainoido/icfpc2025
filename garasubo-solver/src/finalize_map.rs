@@ -12,10 +12,23 @@ use crate::phase_c::MergeResult;
 
 #[derive(Debug)]
 pub enum FinalizeError {
-    NeedMoreId { current: usize, target: usize },
-    NeedMoreExploreAtNode { node: usize, out_known: usize, in_stubs: usize },
-    NeedMoreRp { node: usize, need: Vec<(usize, usize, usize)> }, // (u, need, have)
-    DanglingPort { node: usize, door: u8 },
+    NeedMoreId {
+        current: usize,
+        target: usize,
+    },
+    NeedMoreExploreAtNode {
+        node: usize,
+        out_known: usize,
+        in_stubs: usize,
+    },
+    NeedMoreRp {
+        node: usize,
+        need: Vec<(usize, usize, usize)>,
+    }, // (u, need, have)
+    DanglingPort {
+        node: usize,
+        door: u8,
+    },
     InvalidDelta,
 }
 
@@ -40,8 +53,8 @@ pub struct FinalizeReport {
 }
 #[derive(Debug, Default, Clone)]
 pub struct FinalizeStats {
-    pub edges: usize,         // 無向辺数（= connections.len()）
-    pub ports_used: usize,    // 2*edges
+    pub edges: usize,      // 無向辺数（= connections.len()）
+    pub ports_used: usize, // 2*edges
 }
 
 /// 入口: 判定→構成
@@ -74,7 +87,9 @@ pub fn finalize_guess_map(merge: &MergeResult) -> Result<FinalizeReport, Finaliz
         let lhs = in_stubs[v].len() + out_known[v];
         if lhs != 6 {
             return Err(FinalizeError::NeedMoreExploreAtNode {
-                node: v, out_known: out_known[v], in_stubs: in_stubs[v].len()
+                node: v,
+                out_known: out_known[v],
+                in_stubs: in_stubs[v].len(),
             });
         }
     }
@@ -113,7 +128,8 @@ pub fn finalize_guess_map(merge: &MergeResult) -> Result<FinalizeReport, Finaliz
         // どのノード v で、どの隣接 u が、あと何本足りないかを返す
         // → これは RP の追加だけで埋まる
         return Err(FinalizeError::NeedMoreRp {
-            node: rp_short[0].0, need: rp_short[0].1.clone()
+            node: rp_short[0].0,
+            need: rp_short[0].1.clone(),
         });
     }
 
@@ -140,12 +156,18 @@ pub fn finalize_guess_map(merge: &MergeResult) -> Result<FinalizeReport, Finaliz
         for d in 0..6u8 {
             if let Some(v) = delta[u][d as usize] {
                 // すでに (v, j) 側として登録済みなら skip（無向重複防止）
-                if seen_edge.contains(&(u, d)) { continue; }
+                if seen_edge.contains(&(u, d)) {
+                    continue;
+                }
 
                 // v 側で u に出る j を一つ確保
-                let js = avail_v_to_u[v].get_mut(&u).expect("have(v,u) >= need(v,u) のはず");
+                let js = avail_v_to_u[v]
+                    .get_mut(&u)
+                    .expect("have(v,u) >= need(v,u) のはず");
                 // まだ割り当てていない j を探す
-                let j = js.iter().find(|&&jj| !used_vj[v].contains(&jj))
+                let j = js
+                    .iter()
+                    .find(|&&jj| !used_vj[v].contains(&jj))
                     .copied()
                     .ok_or(FinalizeError::DanglingPort { node: v, door: 255 })?;
                 used_vj[v].insert(j);
@@ -159,8 +181,10 @@ pub fn finalize_guess_map(merge: &MergeResult) -> Result<FinalizeReport, Finaliz
                 };
                 if push_this {
                     connections.push(GuessConnection {
-                        from_room: u, from_door: d,
-                        to_room: v, to_door: j,
+                        from_room: u,
+                        from_door: d,
+                        to_room: v,
+                        to_door: j,
                     });
                 }
 
@@ -176,7 +200,11 @@ pub fn finalize_guess_map(merge: &MergeResult) -> Result<FinalizeReport, Finaliz
     let connections_len = connections.len();
 
     Ok(FinalizeReport {
-        map: GuessMap { rooms, starting_room, connections },
+        map: GuessMap {
+            rooms,
+            starting_room,
+            connections,
+        },
         stats: FinalizeStats {
             edges: connections_len,
             ports_used: connections_len * 2,
