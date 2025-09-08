@@ -37,7 +37,7 @@ class Problem(TypedDict):
 
 class Solution(TypedDict):
     status: int  # 1=feasible, 0=infeasible
-    rooms: List[int]
+    rooms: List[int]  # room labels
     startingRoom: int
     connections: List[Dict[str, Dict[str, int]]]
 
