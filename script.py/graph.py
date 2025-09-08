@@ -1,10 +1,31 @@
+import random
+
 import api
+
+class UnionFind:
+    def __init__(self, n):
+        self.parent = list(range(n))
+
+    def find(self, i):
+        if self.parent[i] == i:
+            return i
+        self.parent[i] = self.find(self.parent[i])
+        return self.parent[i]
+
+    def union(self, i, j):
+        root_i = self.find(i)
+        root_j = self.find(j)
+        if root_i != root_j:
+            self.parent[root_i] = root_j
+            return True
+        return False
 
 
 class Graph:
-    def __init__(self, N):
+    def __init__(self, N, plan_limit_multiplier: int = 18):
         self.N = N
         self.M = N * 6  # Total number of possible edges
+        self.plan_limit = plan_limit_multiplier * N
         self.graph: list[list[int | None]] = [[None] * 6 for _ in range(N)]
         self.reverse_door: list[list[int | None]] = [[None] * 6 for _ in range(N)]
         self.graph_labels: list[int | None] = [None for _ in range(N)]
@@ -23,11 +44,21 @@ class Graph:
         return cnt
 
     def add_edge(self, u: int, v: int, door: int, reverse_door: int | None = None):
+        if self.graph[u][door] is not None and reverse_door is None:
+            return
+
         self.graph[u][door] = v
-        self.reverse_door[u][door] = reverse_door
         if reverse_door is not None:
+            self.reverse_door[u][door] = reverse_door
             self.graph[v][reverse_door] = u
             self.reverse_door[v][reverse_door] = door
+            return
+
+        for i in range(6):
+            if self.graph[v][i] is u and self.reverse_door[v][i] is None:
+                self.reverse_door[u][door] = i
+                self.reverse_door[v][i] = door
+                return
 
     def get_path(self, u: int, v: int) -> str:
         queue = [(u, "")]
@@ -71,9 +102,75 @@ class Graph:
     def get_unknown_edge(self) -> tuple[int, int] | None:
         for v in self.reachable:
             for i in range(6):
-                if self.graph[v][i] is None:
+                if self.graph[v][i] is None or self.reverse_door[v][i] is None:
                     return v, i
         return None
+
+    def gen_randome_walk(self):
+        return [random.randint(0, 5) for _ in range(self.plan_limit)]
+
+    def solve_random_walk(self):
+        path = self.gen_randome_walk()
+        labels = self.get_labels("".join(map(str, path)))
+        uf = UnionFind(len(labels))
+        merged = [False for _ in range(len(labels))]
+
+        for _ in range(len(labels)):
+            # while not all(merged):
+            next_path = []
+            checking_label = {}
+            for i, label in enumerate(labels[:-1]):
+                if merged[i] or label in checking_label:
+                    next_path.append((path[i], None))
+                    continue
+
+                checking_label[label] = i
+                next_path.append((path[i], (label + 1) % 4))
+
+            next_paths_str = "".join(
+                f"{d}" if l is None else f"[{l}]{d}" for d, l in next_path
+            )
+            next_labels = self.get_labels(next_paths_str)
+            next_label_idx = 1
+            for i, (d, l) in enumerate(next_path):
+                if l is not None:
+                    next_label_idx += 1
+                original_label = labels[i + 1]
+                if next_labels[next_label_idx] != original_label:
+                    j = checking_label[original_label]
+                    uf.union(i + 1, j)
+                    merged[i + 1] = True
+                    merged[j] = True
+
+                next_label_idx += 1
+
+        assert all(merged), merged
+
+        uf_to_node = {}
+        for i, p in enumerate(path):
+            u = uf.find(i)
+            v = uf.find(i + 1)
+            if u not in uf_to_node:
+                uf_to_node[u] = self.add_new_node(labels[i])
+            if v not in uf_to_node:
+                uf_to_node[v] = self.add_new_node(labels[i + 1])
+            self.add_edge(uf_to_node[u], uf_to_node[v], p, None)
+
+        print(self.graph)
+        print(self.reverse_door)
+        print(self.graph_labels)
+        q = [0]
+        while q:
+            cv = q[0]
+            q = q[1:]
+            self.reachable.add(cv)
+            for i in range(6):
+                to = self.graph[cv][i]
+                if to is None or to in self.reachable:
+                    continue
+                if self.reverse_door[cv][i] is None:
+                    continue
+                q.append(to)
 
     # pathの先のノードと、その一つ先のノードのラベルを得る
     def get_surround_labels(self, path: str) -> tuple[int, list]:
@@ -87,6 +184,7 @@ class Graph:
         if v_e is None:
             return False
         v, e = v_e
+        print(v, e)
 
         label_v = self.get_node_label(v)
         path_0_v = self.get_path(0, v)
@@ -144,6 +242,8 @@ class Graph:
                 nv = self.graph[v][i]
                 if nv is None or nv in visited:
                     continue
+                if self.reverse_door[v][i] is None:
+                    continue
                 ret += str(i)
                 ret += dfs(nv)
                 ret += str(self.reverse_door[v][i])
@@ -184,7 +284,9 @@ class Graph:
             label_r = visit_all_path_labels[idx + 1]
             if label_r == label_v_e1:
                 for reverse_door in reverse_doors:
-                    if self.graph[current_v][reverse_door] is not None:
+                    cv_reverse = self.graph[current_v][reverse_door]
+                    cv_reverse_door = self.reverse_door[current_v][reverse_door]
+                    if cv_reverse is not None and cv_reverse_door is not None:
                         continue
 
                     self.add_edge(v, current_v, e, reverse_door)
