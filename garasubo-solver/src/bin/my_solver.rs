@@ -75,7 +75,6 @@ enum Plan {
     // 炭を使ったマーキングにより部屋を識別するwalk
     MarkedWalk {
         plan: Vec<Action>,
-        rewrite_target: HashSet<usize>,
         state_idx: usize,
         rewrite_plan: LabelRewritePlan,
     },
@@ -128,6 +127,7 @@ struct State {
     used_nodes: HashSet<usize>,
 }
 
+#[derive(Debug)]
 struct LabelRewritePlan {
     rewrite_targets: HashMap<u8, [Option<usize>; 3]>,
 }
@@ -137,6 +137,18 @@ impl LabelRewritePlan {
         Self {
             rewrite_targets: HashMap::new(),
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.rewrite_targets.is_empty()
+    }
+
+    fn get_all_write_targets(&self) -> Vec<usize> {
+        self.rewrite_targets
+            .iter()
+            .map(|(_, targets)| targets.iter().filter_map(|t| *t))
+            .flatten()
+            .collect()
     }
 
     fn try_add_rewrite_target(&mut self, label: u8, pos: usize) -> bool {
@@ -153,10 +165,10 @@ impl LabelRewritePlan {
     // rewrite対象かどうかをしる
     fn should_rewrite(&self, label: u8, pos: usize) -> Option<u8> {
         if let Some(targets) = self.rewrite_targets.get(&label) {
-            for (i,target) in targets.iter().enumerate() {
+            for (i, target) in targets.iter().enumerate() {
                 if let Some(target) = target {
                     if *target == pos {
-                        return Some((label + 1 + i as u8) %4);
+                        return Some((label + 1 + i as u8) % 4);
                     }
                 }
             }
@@ -167,17 +179,17 @@ impl LabelRewritePlan {
     // rewriteが発生した場合、どこ由来のものかを知る
     fn find_rewrite_source(&self, original_label: u8, rewritten_label: u8) -> usize {
         if let Some(targets) = self.rewrite_targets.get(&original_label) {
-            for (i, target) in targets.iter().enumerate() {
-                let index = (rewritten_label + 3 - original_label) % 4;
-                if let Some(pos) = target {
-                    return *pos;
-                }
+            let index = (rewritten_label + 3 - original_label) % 4;
+            if let Some(pos) = targets[index as usize] {
+                return pos;
             }
         }
-        panic!("invalid rewrite target from {} to {}", original_label, rewritten_label);
+        panic!(
+            "invalid rewrite target from {} to {}",
+            original_label, rewritten_label
+        );
     }
 }
-
 
 impl MySolver {
     fn new(size: usize) -> Self {
@@ -216,9 +228,6 @@ impl MySolver {
                 Plan::Walk(walk) => {
                     let n = self.size;
                     let y = results[result_idx].clone();
-                    // 最初に登場したラベルのノードの位置をメモ
-                    let mut memo = vec![None; 4];
-                    let mut rewrite_target = HashSet::new();
                     let mut known_nodes = HashMap::new();
                     let mut used_nodes = HashSet::new();
                     let mut rewrite_plan = LabelRewritePlan::new();
@@ -245,27 +254,17 @@ impl MySolver {
                     }
 
                     for (i, &c) in y.iter().enumerate() {
-                        if memo[c as usize] == None {
-                            memo[c as usize] = Some(i);
-                            rewrite_target.insert(i);
-                           assert!(rewrite_plan.try_add_rewrite_target(c, i));
+                        if rewrite_plan.try_add_rewrite_target(c, i) {
                             if let Some(node_id) = known_nodes.get(&i) {
                                 used_nodes.insert(*node_id);
                             } else {
-                                let label = c;
-                                let node_id = self.nodes.len();
-                                let node = KnownNode::new(node_id, label);
-                                self.nodes.push(node);
-                                known_nodes.insert(i, node_id);
-                                println!("x known node: {} label: {} id: {}", i, label, node_id);
-                                used_nodes.insert(node_id);
+                                // 未出のnodeではあるが、まだ他の書き換え対象との同一性が保証できないので一旦保留
                             }
                         }
                     }
-                    // 最初に登場したラベルのノードを書き換えるwalkをつくる
+                    // 同定したいノードのラベルを書き換えるwalkをつくる
                     let mut new_walk = vec![];
                     for (i, w) in walk.iter().enumerate() {
-                        //if rewrite_target.contains(&i) {
                         if let Some(new_label) = rewrite_plan.should_rewrite(y[i], i) {
                             new_walk.push(Action::Mark(new_label as usize));
                         }
@@ -275,7 +274,6 @@ impl MySolver {
                     // 次のクエリとして登録
                     next_plan.push(Plan::MarkedWalk {
                         plan: new_walk,
-                        rewrite_target,
                         state_idx: self.states.len(),
                         rewrite_plan,
                     });
@@ -290,7 +288,6 @@ impl MySolver {
                 }
                 Plan::MarkedWalk {
                     plan,
-                    rewrite_target,
                     state_idx,
                     rewrite_plan,
                 } => {
@@ -299,79 +296,95 @@ impl MySolver {
                     let state = &mut self.states[*state_idx];
                     let y = &state.y;
                     let mut y_idx = 0;
-                    // ラベルが変わっていたときにどのノードと同一かとわかるか
-                    let mut rewrite_memo = HashMap::new();
                     for (i, action) in plan.iter().enumerate() {
                         match action {
                             Action::Move(x) => {
                                 let original_label = y[y_idx + 1];
                                 let rewritten_label = y2[i + 1];
                                 if original_label != rewritten_label {
-                                    let source_idx = rewrite_plan.find_rewrite_source(original_label, rewritten_label);
-                                    if let Some(idx) = rewrite_memo.get(&y[y_idx + 1]) {
-                                        println!(
-                                            "detect rewrite: {} to {} at {}",
-                                            y[y_idx + 1],
-                                            y2[i + 1],
-                                            y_idx + 1
-                                        );
-                                        println!("known node: {} {:?}", idx, rewrite_memo);
-                                        let known_node_id = state.known_nodes[&source_idx]; // TODO: 書き換えが複数にある場合、ここでknown_nodesが見つからない可能性がある
+                                    let source_idx = rewrite_plan
+                                        .find_rewrite_source(original_label, rewritten_label);
+                                    println!(
+                                        "detect rewrite: {} to {} at {}",
+                                        y[y_idx + 1],
+                                        y2[i + 1],
+                                        y_idx + 1
+                                    );
+                                    if let Some(known_node_id) = state.known_nodes.get(&source_idx)
+                                    {
                                         if let Some(node_id) = state.known_nodes.get(&(y_idx + 1)) {
                                             assert_eq!(
-                                                *node_id, known_node_id,
+                                                *node_id, *known_node_id,
                                                 "rewrite target is not same as known node"
                                             );
                                         } else {
-                                            state.known_nodes.insert(y_idx + 1, known_node_id);
+                                            state.known_nodes.insert(y_idx + 1, *known_node_id);
                                         }
                                     } else {
-                                        panic!("invalid rewrite");
+                                        // まだ同定していないノードを書き換え対象にしていた
+                                        panic!("rewrite source is not known node");
                                     }
                                 }
                                 y_idx += 1;
                             }
-                            Action::Mark(x) => {
+                            Action::Mark(new_label) => {
                                 // もともとの色
                                 let label = y[y_idx];
-                                rewrite_memo.insert(label, y_idx);
-                                println!("found rewrite: {} to {} at {}", label, x, y_idx);
-                                assert!(rewrite_target.contains(&y_idx), "invalid rewrite");
+                                println!("found rewrite: {} to {} at {}", label, new_label, y_idx);
+                                let source_idx =
+                                    rewrite_plan.find_rewrite_source(label, *new_label as u8);
+                                assert_eq!(
+                                    source_idx, y_idx,
+                                    "rewrite source is not same as target"
+                                );
+                                if !state.known_nodes.contains_key(&source_idx) {
+                                    // ここまでknown_nodesに登録されていないのは、色の書き換えが起きておらず、未知のnodeに対してリライトが計画されていたから
+                                    // よってユニークなノードとわかるので登録する
+                                    let new_node_id = self.nodes.len();
+                                    let new_node = KnownNode::new(new_node_id, label);
+                                    self.nodes.push(new_node);
+                                    state.known_nodes.insert(source_idx, new_node_id);
+                                    println!(
+                                        "found new known node: {} label: {} id: {}",
+                                        source_idx, label, new_node_id
+                                    );
+                                }
                                 // y_idxは更新しない
                             }
                         }
                     }
                     // 次の計画を建てる
-                    let mut new_target = HashMap::new();
+                    // 今回rewriteした点はすべて次回はrewrite対象にしない
+                    for pos in rewrite_plan.get_all_write_targets() {
+                        let node_id = state.known_nodes[&pos];
+                        println!("rewrite target: {} {}", pos, node_id);
+                        state.used_nodes.insert(node_id);
+                    }
+
                     let mut new_rewrite_plan = LabelRewritePlan::new();
                     // どのノードのラベルを置き換えるか決める
                     for (i, label) in y.iter().enumerate() {
-                        // すでに書き換え計画が決定したlabelについてはskip
-                        if new_target.contains_key(label) {
-                            continue;
-                        }
-                        let node_id = if let Some(node_id) = state.known_nodes.get(&i) {
+                        let node_id_op = state.known_nodes.get(&i);
+                        if let Some(node_id) = node_id_op {
                             // 同定済みノード
                             if state.used_nodes.contains(node_id) {
                                 continue;
                             }
-                            *node_id
                         } else {
                             // 未同定なノード
-                            let node_id = self.nodes.len();
-                            let node = KnownNode::new(node_id, *label);
-                            self.nodes.push(node);
-                            state.known_nodes.insert(i, node_id);
-                            println!("known node: {} label: {} id: {}", i, label, node_id);
-                            node_id
-                        };
-                        new_target.insert(*label, i);
-                        assert!(new_rewrite_plan.try_add_rewrite_target(*label, i));
-                        state.used_nodes.insert(node_id);
+                            // この時点ではノードIDを振らない
+                        }
+                        if !new_rewrite_plan.try_add_rewrite_target(*label, i) {
+                            continue;
+                        }
+                        if let Some(node_id) = node_id_op {
+                            state.used_nodes.insert(*node_id);
+                        } else {
+                            // 未同定なノードは探索中にusedに登録される
+                        }
                     }
-                    let new_rewrite_target = new_target.values().copied().collect::<HashSet<_>>();
 
-                    if new_target.is_empty() {
+                    if new_rewrite_plan.is_empty() {
                         println!("no new target");
                         // もう未知のノードがないならランダムウォーク
                         // まずはグラフを構築
@@ -431,12 +444,12 @@ impl MySolver {
                             .collect::<Vec<_>>();
                         next_plan.push(Plan::Walk(new_walk));
                     } else {
-                        println!("new marked walk planning: {:?}", new_rewrite_target);
+                        println!("new marked walk planning: {:?}", new_rewrite_plan);
                         let mut new_walk = vec![];
                         for (i, w) in state.walk.iter().enumerate() {
-                            if new_rewrite_target.contains(&i) {
-                                let label = y[i] as usize;
-                                new_walk.push(Action::Mark((label + 1) % 4));
+                            let label = y[i];
+                            if let Some(new_label) = new_rewrite_plan.should_rewrite(label, i) {
+                                new_walk.push(Action::Mark(new_label as usize));
                             }
                             new_walk.push(Action::Move(*w as usize));
                         }
@@ -444,7 +457,6 @@ impl MySolver {
                         // 次のクエリとして登録
                         next_plan.push(Plan::MarkedWalk {
                             plan: new_walk,
-                            rewrite_target: new_rewrite_target,
                             state_idx: *state_idx,
                             rewrite_plan: new_rewrite_plan,
                         });
