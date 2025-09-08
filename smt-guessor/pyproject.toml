@@ -5,11 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "click>=8.2.1",
+    "dotenv>=0.9.9",
     "matplotlib>=3.9.4",
     "ortools>=9.14.6206",
     "passagemath-environment>=10.6",
     "passagemath-kissat>=10.5.48",
     "pysat>=3.2.2",
     "python-sat>=0.1.8",
+    "requests>=2.32.5",
     "z3-solver>=4.15.3.0",
 ]
