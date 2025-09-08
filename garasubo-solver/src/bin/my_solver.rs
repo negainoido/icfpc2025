@@ -193,6 +193,16 @@ impl LabelRewritePlan {
 
 impl MySolver {
     fn new(size: usize) -> Self {
+        let mut cover_walk = generate_cover_walk(size);
+        
+        // 6 * room_numの限界まで拡張するため、適当なsuffixを追加
+        let target_length = size * 6;
+        while cover_walk.len() < target_length {
+            // 0-5の範囲でランダムなsuffixを追加
+            let suffix = (cover_walk.len() % 6) as u8;
+            cover_walk.push(suffix);
+        }
+        
         Self {
             size,
             nodes: Vec::new(),
@@ -200,7 +210,7 @@ impl MySolver {
             histories: Vec::new(),
             prev_query: Vec::new(),
             states: Vec::new(),
-            cover_walk: generate_cover_walk(size),
+            cover_walk,
         }
     }
 
@@ -859,6 +869,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let mut solver = MySolver::new(room_num);
+    let mut last_score = 0;
     let initial_plan = solver.initial_plan();
     println!("initial plan: {:?}", initial_plan);
     let mut result = session_guard.explore(&initial_plan).await?;
@@ -871,13 +882,14 @@ async fn main() -> anyhow::Result<()> {
         println!("next plan: {:?}", next_plan);
         result = session_guard.explore(&next_plan).await?;
         println!("next walk done {:?}", result.results);
+        last_score = result.query_count;
     }
 
     let guess_response = session_guard.guess(solver.build_map()).await?;
     println!("Guess response: {:?}", guess_response);
 
     if guess_response.correct {
-        println!("🎉 Guess was CORRECT!");
+        println!("🎉 Guess was CORRECT! Score: {}", last_score);
     } else {
         println!("❌ Guess was incorrect.");
     }
