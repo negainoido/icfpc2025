@@ -134,7 +134,6 @@ def main():
     st.set_page_config(
         page_title="ICFPC 2025 Leaderboard", page_icon="📊", layout="wide"
     )
-
     st.title("ICFPC 2025 Leaderboard")
 
     # Load data
@@ -178,20 +177,27 @@ def main():
         if problem_df.empty:
             st.error("No problem data found")
         else:
-            # Calculate total Borda Count
+            # Calculate total Borda Count and max teams
             total_borda = 0
+            max_teams = 0
             for _, row in problem_df.iterrows():
                 borda = row["borda_count"]
                 if borda != "Not found" and borda is not None:
                     total_borda += borda
 
-            # Display total Borda Count as a large metric
-            st.metric(label="Total Borda Count", value=int(total_borda))
+                # Track maximum number of teams across all problems
+                if row["total_teams"] > max_teams:
+                    max_teams = row["total_teams"]
 
+            # Display total Borda Count as a large metric
+            cs = st.columns(2)
+            with cs[0]:
+                st.metric(label="Total Borda Count", value=int(total_borda))
+            with cs[1]:
+                st.metric(label="Total Teams", value=int(max_teams))
             st.write("")  # Add some spacing
 
-            # Display problem rankings
-            display_columns = ["problem", "rank", "score", "borda_count", "total_teams"]
+            display_columns = ["problem", "rank", "score", "borda_count"]
             st.dataframe(
                 problem_df[display_columns],
                 column_config={
@@ -199,7 +205,6 @@ def main():
                     "rank": st.column_config.NumberColumn("Rank"),
                     "score": st.column_config.NumberColumn("Score"),
                     "borda_count": st.column_config.NumberColumn("Borda Count"),
-                    "total_teams": st.column_config.NumberColumn("Total Teams"),
                 },
                 use_container_width=True,
                 hide_index=True,
