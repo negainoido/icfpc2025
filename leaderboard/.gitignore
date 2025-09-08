@@ -1,4 +1,4 @@
-results/*.json
+*.json
 .claude/
 .ruff_cache/
 .venv/
