@@ -97,10 +97,9 @@ impl ApiClient {
             let status = response.status();
 
             if status.is_success() {
-                let result = response
-                    .json()
-                    .await
-                    .context("Failed to parse response JSON")?;
+                let text = response.text().await.context("Failed to read response text")?;
+                let result = serde_json::from_str(&text)
+                    .with_context(|| format!("Failed to parse response JSON. Original text: {}", text))?;
                 return Ok(result);
             } else if status.is_server_error() && retry_count < MAX_RETRIES {
                 retry_count += 1;
@@ -173,6 +172,7 @@ impl ApiClient {
                 .header("CF-Access-Client-Id", client_id)
                 .header("CF-Access-Client-Secret", client_secret)
         } else {
+            println!("no client_id or client_secret");
             request_builder
         }
     }
