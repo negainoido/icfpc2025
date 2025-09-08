@@ -16,11 +16,30 @@ struct Cli {
     user_name: Option<String>,
 
     #[arg(long)]
-    room_num: usize,
+    room_num: Option<usize>,
 
     #[arg(long, default_value = "https://negainoido.garasubo.com/api")]
     api_base_url: String,
 }
+
+const PROBLEM_SET: [(&str, usize); _] = [
+    ["probatio", 3],
+    ["primus", 6],
+    ["secundus", 12],
+    ["tertius", 18],
+    ["quartus", 24],
+    ["quintus", 30],
+    ["aleph", 12],
+    ["beth", 24],
+    ["gimel", 36],
+    ["daleth", 48],
+    ["he", 60],
+    ["vau", 18],
+    ["zain", 36],
+    ["hhet", 54],
+    ["teth", 72],
+    ["iod", 90],
+];
 
 #[derive(Clone, Debug, Default, PartialEq)]
 enum WorkingConnection {
@@ -765,7 +784,23 @@ async fn main() -> anyhow::Result<()> {
         .start_session_with_guard(cli.problem_name.clone(), cli.user_name)
         .await?;
 
-    let mut solver = MySolver::new(cli.room_num);
+    // room_numを問題名から自動で取得
+    let room_num = match cli.room_num {
+        Some(num) => num,
+        None => PROBLEM_SET
+            .iter()
+            .find(|&&(name, _)| name == cli.problem_name)
+            .map(|&(_, num)| num)
+            .unwrap_or_else(|| {
+                eprintln!(
+                    "Error: Problem '{}' not found in PROBLEM_SET",
+                    cli.problem_name
+                );
+                std::process::exit(1);
+            }),
+    };
+
+    let mut solver = MySolver::new(room_num);
     let initial_plan = solver.initial_plan();
     println!("initial plan: {:?}", initial_plan);
     let mut result = session_guard.explore(&initial_plan).await?;
