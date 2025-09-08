@@ -87,41 +87,62 @@ impl ApiClient {
         const BASE_DELAY: Duration = Duration::from_millis(400);
 
         loop {
-            let response = request_builder
+            let response_result = request_builder
                 .try_clone()
                 .context("Failed to clone request builder")?
                 .send()
-                .await
-                .context("Failed to send request")?;
+                .await;
 
-            let status = response.status();
+            match response_result {
+                Ok(response) => {
+                    let status = response.status();
 
-            if status.is_success() {
-                let text = response
-                    .text()
-                    .await
-                    .context("Failed to read response text")?;
-                let result = serde_json::from_str(&text).with_context(|| {
-                    format!("Failed to parse response JSON. Original text: {}", text)
-                })?;
-                return Ok(result);
-            } else if status.is_server_error() && retry_count < MAX_RETRIES {
-                retry_count += 1;
-                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
-                eprintln!(
-                    "Server error {}, retrying in {:?} (attempt {}/{})",
-                    status,
-                    delay,
-                    retry_count,
-                    MAX_RETRIES + 1
-                );
-                sleep(delay).await;
-            } else {
-                let text = response
-                    .text()
-                    .await
-                    .context("Failed to read error response body")?;
-                anyhow::bail!("API request failed with status {}: {}", status, text);
+                    if status.is_success() {
+                        let text = response
+                            .text()
+                            .await
+                            .context("Failed to read response text")?;
+                        let result = serde_json::from_str(&text).with_context(|| {
+                            format!("Failed to parse response JSON. Original text: {}", text)
+                        })?;
+                        return Ok(result);
+                    } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                        eprintln!(
+                            "Server error {}, retrying in {:?} (attempt {}/{})",
+                            status,
+                            delay,
+                            retry_count,
+                            MAX_RETRIES + 1
+                        );
+                        sleep(delay).await;
+                    } else {
+                        let text = response
+                            .text()
+                            .await
+                            .context("Failed to read error response body")?;
+                        anyhow::bail!("API request failed with status {}: {}", status, text);
+                    }
+                }
+                Err(err) => {
+                    let should_retry = err.is_connect() || err.is_timeout() || err.is_request();
+
+                    if should_retry && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                        eprintln!(
+                            "Connection error: {}, retrying in {:?} (attempt {}/{})",
+                            err,
+                            delay,
+                            retry_count,
+                            MAX_RETRIES + 1
+                        );
+                        sleep(delay).await;
+                    } else {
+                        anyhow::bail!("Request failed after {} retries: {}", MAX_RETRIES, err);
+                    }
+                }
             }
         }
     }
@@ -135,34 +156,55 @@ impl ApiClient {
         const BASE_DELAY: Duration = Duration::from_millis(100);
 
         loop {
-            let response = request_builder
+            let response_result = request_builder
                 .try_clone()
                 .context("Failed to clone request builder")?
                 .send()
-                .await
-                .context("Failed to send request")?;
+                .await;
 
-            let status = response.status();
+            match response_result {
+                Ok(response) => {
+                    let status = response.status();
 
-            if status.is_success() {
-                return Ok(());
-            } else if status.is_server_error() && retry_count < MAX_RETRIES {
-                retry_count += 1;
-                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
-                eprintln!(
-                    "Server error {}, retrying in {:?} (attempt {}/{})",
-                    status,
-                    delay,
-                    retry_count,
-                    MAX_RETRIES + 1
-                );
-                sleep(delay).await;
-            } else {
-                let text = response
-                    .text()
-                    .await
-                    .context("Failed to read error response body")?;
-                anyhow::bail!("API request failed with status {}: {}", status, text);
+                    if status.is_success() {
+                        return Ok(());
+                    } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                        eprintln!(
+                            "Server error {}, retrying in {:?} (attempt {}/{})",
+                            status,
+                            delay,
+                            retry_count,
+                            MAX_RETRIES + 1
+                        );
+                        sleep(delay).await;
+                    } else {
+                        let text = response
+                            .text()
+                            .await
+                            .context("Failed to read error response body")?;
+                        anyhow::bail!("API request failed with status {}: {}", status, text);
+                    }
+                }
+                Err(err) => {
+                    let should_retry = err.is_connect() || err.is_timeout() || err.is_request();
+
+                    if should_retry && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                        eprintln!(
+                            "Connection error: {}, retrying in {:?} (attempt {}/{})",
+                            err,
+                            delay,
+                            retry_count,
+                            MAX_RETRIES + 1
+                        );
+                        sleep(delay).await;
+                    } else {
+                        anyhow::bail!("Request failed after {} retries: {}", MAX_RETRIES, err);
+                    }
+                }
             }
         }
     }
