@@ -325,6 +325,16 @@ def solve_with_kissat(
         assign[var] = val
     return status, assign
 
+def move_assignment_var(n: int, c: int, d: int, c2: int, pool: IDPool) -> int:
+    assert 0 <= n
+    assert 0 <= d < D
+    return pool.id(("M", n, c, d, c2))
+
+
+def stage2_trace_location_assign_var(t: int, c: int, pool: IDPool) -> int:
+    assert 0 <= t
+    return pool.id(("X", t, c))
+
 
 def build_stage2_cnf(
     stage1_rooms: List[int],
@@ -369,7 +379,98 @@ def build_stage2_cnf(
            * X(t, c) == X(t’, c) 
 
     """
-    pass
+    T = len(plan[0])
+
+    # Compute n(t) and d(t) for each t in advance
+    n_at_t: List[int] = []
+    d_at_t: List[int] = []
+    curr_room = 0
+    n_at_t.append(curr_room)
+    for t in range(T):
+        door = plan[0][t]
+        assert 0 <= door < D, f"Invalid action {door} at time {t}"
+        next_room = None
+        for c in stage1_connections:
+            if c["from"]["room"] == curr_room and c["from"]["door"] == door:
+                next_room = c["to"]["room"]
+                break
+            if c["to"]["room"] == curr_room and c["to"]["door"] == door:
+                next_room = c["from"]["room"]
+                break
+        if next_room is None:
+            raise RuntimeError(f"No connection from room {curr_room} via door {door} at time {t}")
+        n_at_t.append(next_room)
+        d_at_t.append(door)
+        curr_room = next_room
+
+    # Compute L(t) and U(t) for each t in advance
+    doors, overwrites = plan
+    obs = result
+    assert len(doors) == len(overwrites)
+    assert len(obs) == len(doors) + 1
+    L_at_t: List[int] = []
+    U_at_t: List[int] = []
+    for t in range(T + 1):
+        L_at_t.append(obs[t])
+        if t == 0:
+            U_at_t.append(-1)
+        else:
+            U_at_t.append(overwrites[t - 1])
+
+    # Construct CNF
+    pool = IDPool()
+    cnf = SatCNF()
+
+
+    # 制約を追加
+    # \sum_{c’} M (n, c, d’, c’) == 1
+    for n in range(len(stage1_rooms)):
+        for c in range(C):
+            for d in range(D):
+                lits = [move_assignment_var(n, c, d, c2, pool) for c2 in range(C)]
+                enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
+                cnf.extend(enc.clauses)
+
+    # \sum_{c} X(t, c) == 1
+    for t in range(T + 1):
+        lits = [stage2_trace_location_assign_var(t, c, pool) for c in range(C)]
+        enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
+        cnf.extend(enc.clauses)
+
+    # X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’))
+    for t in range(T):
+        n = n_at_t[t]
+        d = d_at_t[t]
+        for c in range(C):
+            curr_var = stage2_trace_location_assign_var(t, c, pool)
+            for c2 in range(C):
+                next_var = stage2_trace_location_assign_var(t + 1, c2, pool)
+                cnf.append([-curr_var, -move_assignment_var(n, c, d, c2, pool), next_var])
+                cnf.append([-curr_var, -next_var, move_assignment_var(n, c, d, c2, pool)])
+
+    # X(0, 0) == 1
+    cnf.append([stage2_trace_location_assign_var(0, 0, pool)])
+
+    # 2つ目のプランから得られる同一性に関する制約
+    for t in range(1, T + 1):
+        # find largest t' < t such that n(t') == n(t) and U(t') == L(t)
+        t_prime = -1
+        for tp in range(t - 1, -1, -1):
+            if n_at_t[tp] == n_at_t[t] and U_at_t[tp] == L_at_t[t]:
+                t_prime = tp
+                break
+        if t_prime == -1:
+            continue
+
+        # (異なり条件) t' < t'' < t でかつ n(t'') == n(t) となる各 t'' に対して X(t, c) != X(t'', c)
+        for t2 in range(t_prime + 1, t):
+            if n_at_t[t2] != n_at_t[t]:
+                continue
+            for c in range(C):
+                cnf.append([-stage2_trace_location_assign_var(t, c, pool), -stage2_trace_location_assign_var(t2, c, pool)])
+
+
+    raise NotImplementedError("Not implemented yet")
 
 
 def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str, any]:
