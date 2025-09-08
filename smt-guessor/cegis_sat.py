@@ -84,6 +84,23 @@ def build_cnf_prefix(
         used_results.append(rs[: K + 1])
         T_used.append(K)
 
+    # 各ラベルlに対して、 l_from -d_from:?-> l -d_to:?-> l_to という形の(l_from, d_from, d_to, l_to)の組を
+    # これをlocal_window[l]という
+
+    local_window: list[Set[Tuple[int, int, int, int]]] = [set() for _ in range(4)]
+    for pl, rs, K in zip(plans, results, prefix_steps):
+        # prefixに関しては遷移制約の方が強いので、local_windowの対象外とする
+        for i in range(K, len(pl)):
+            l_from = rs[i - 1]
+            d_from = pl[i - 1]
+            l = rs[i]
+            d_to = pl[i]
+            l_to = rs[i + 1]
+            local_window[l].add((l_from, d_from, d_to, l_to))
+    for l in range(4):
+        lw = list(local_window[l])
+        print(f"local_window[{l}]: {lw[:5]} ... (total {len(lw)})")
+
     P = D * N
 
     cnf = SatCNF()
@@ -211,7 +228,70 @@ def build_cnf_prefix(
                     # Linking helps propagation
                     cnf.append([-v_loc(tid, k, r), -v_loc(tid, k + 1, g), m])
 
+    # (6) Local window constraints
+    # 各ラベルlに対して、 l_from -d_from:?-> l -d_to:?-> l_to という形の(l_from, d_from, d_to, l_to)のそれぞれのくみに対して
+    # ある部屋qが存在して、以下を満たす
+    # L[q] == l
+    # Lp[D*q + d_to] == l_to
+    # or_{d in range(D)} Lp[D*q + d] == l_from
+    #
+    # tuple = (l_from, d_from, d_to, l_to) だが、d_from は arrival ではなく前の部屋の出口なので
+    # ここでは「存在 d: Lp[q,d] == l_from」の形にする（arrival ポートを特定できないため）。
+    # (6) Local window constraints (∃q)
+    # tuple = (l_from, d_from, d_to, l_to)
+    # 要件:
+    #  ∃q.  L[q]==l  ∧  Lp[q,d_to]==l_to  ∧  (∨_d Lp[q,d]==l_from)
+    def lit_eq_lp_guarded(p, label):
+        """ガード付きに使う z 変数（片方向）： z -> (Lp[p] == label)"""
+        z = pool.id(("EQ_LP_G", p, label))
+        a0, a1 = v_port_label(p)
+        b0, b1 = label2bits(label)
+        # 片方向のみ
+        cnf.append([-z, a0 if b0 else -a0])
+        cnf.append([-z, a1 if b1 else -a1])
+        return z
+
+    def lit_eq_l_guarded(r, label):
+        """ガード付きに使う z 変数（片方向）： z -> (L[r] == label)"""
+        z = pool.id(("EQ_L_G", r, label))
+        v0, v1 = v_label(r)
+        b0, b1 = label2bits(label)
+        cnf.append([-z, v0 if b0 else -v0])
+        cnf.append([-z, v1 if b1 else -v1])
+        return z
+
+    for l in range(4):
+        tuples = list(local_window[l])
+        for idx, (l_from, d_from, d_to, l_to) in enumerate(tuples):
+            # ∃q: セレクタ W[idx,q]
+            Wq = []
+            for q in range(N):
+                w = pool.id(("W", "lw", l, idx, q))
+                Wq.append(w)
+
+                # (1) w -> L[q] == l
+                zL = lit_eq_l_guarded(q, l)
+                cnf.append([-w, zL])
+
+                # (2) w -> Lp[q, d_to] == l_to
+                p_to = q * D + d_to
+                z_to = lit_eq_lp_guarded(p_to, l_to)
+                cnf.append([-w, z_to])
+
+                # (3) w -> ∨_d (Lp[q,d] == l_from)
+                or_lits = []
+                base = q * D
+                for d in range(D):
+                    z_from_d = lit_eq_lp_guarded(base + d, l_from)
+                    or_lits.append(z_from_d)
+                cnf.append([-w] + or_lits)
+
+            # 存在：∨_q W[idx,q]
+            cnf.append(Wq)
+
     cnf.nv = max(getattr(cnf, "nv", 0) or 0, pool.top)
+    print(f"CNF variables: {cnf.nv}, clauses: {len(cnf.clauses)}")
+
     meta = {
         "N": N,
         "D": D,
@@ -378,6 +458,7 @@ def cegis_sat(
 ) -> Tuple[Optional[Solution], Dict[str, object]]:
     # initialize per-trace prefixes
     prefixes = [min(init_prefix, len(pl)) for pl in plans]
+    prefixes[0] = len(plans[0])  # always use full first trace
 
     for it in range(max_iters):
         chosen = backend
