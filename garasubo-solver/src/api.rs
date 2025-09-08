@@ -2,6 +2,8 @@ use anyhow::Context;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Serialize)]
 pub struct ExploreRequest {
@@ -14,7 +16,7 @@ pub struct ExploreRequest {
 
 #[derive(Deserialize, Debug)]
 pub struct ExploreResponse {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub results: Vec<Vec<u8>>,
     #[serde(rename = "queryCount")]
     pub query_count: i32,
@@ -33,7 +35,7 @@ pub struct GuessRequest {
 pub struct GuessMap {
     pub rooms: Vec<i32>,
     #[serde(rename = "startingRoom")]
-    pub starting_room: i32,
+    pub starting_room: usize,
     pub connections: Vec<Connection>,
 }
 
@@ -45,13 +47,13 @@ pub struct Connection {
 
 #[derive(Serialize)]
 pub struct RoomDoor {
-    pub room: i32,
-    pub door: i32,
+    pub room: usize,
+    pub door: usize,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct GuessResponse {
-    pub session_id: String,
+    pub session_id: Option<String>,
     pub correct: bool,
 }
 
@@ -64,15 +66,100 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: &String) -> Self {
         let client_id = std::env::var("CLIENT_ID").ok();
         let client_secret = std::env::var("CLIENT_SECRET").ok();
 
         Self {
             client: Client::new(),
-            base_url,
+            base_url: base_url.clone(),
             client_id,
             client_secret,
+        }
+    }
+
+    async fn send_request_with_retry<T: serde::de::DeserializeOwned>(
+        &self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> anyhow::Result<T> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: usize = 3;
+        const BASE_DELAY: Duration = Duration::from_millis(100);
+
+        loop {
+            let response = request_builder
+                .try_clone()
+                .context("Failed to clone request builder")?
+                .send()
+                .await
+                .context("Failed to send request")?;
+
+            let status = response.status();
+
+            if status.is_success() {
+                let text = response.text().await.context("Failed to read response text")?;
+                let result = serde_json::from_str(&text)
+                    .with_context(|| format!("Failed to parse response JSON. Original text: {}", text))?;
+                return Ok(result);
+            } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                retry_count += 1;
+                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                eprintln!(
+                    "Server error {}, retrying in {:?} (attempt {}/{})",
+                    status,
+                    delay,
+                    retry_count,
+                    MAX_RETRIES + 1
+                );
+                sleep(delay).await;
+            } else {
+                let text = response
+                    .text()
+                    .await
+                    .context("Failed to read error response body")?;
+                anyhow::bail!("API request failed with status {}: {}", status, text);
+            }
+        }
+    }
+
+    async fn send_request_with_retry_no_response(
+        &self,
+        request_builder: reqwest::RequestBuilder,
+    ) -> anyhow::Result<()> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: usize = 3;
+        const BASE_DELAY: Duration = Duration::from_millis(100);
+
+        loop {
+            let response = request_builder
+                .try_clone()
+                .context("Failed to clone request builder")?
+                .send()
+                .await
+                .context("Failed to send request")?;
+
+            let status = response.status();
+
+            if status.is_success() {
+                return Ok(());
+            } else if status.is_server_error() && retry_count < MAX_RETRIES {
+                retry_count += 1;
+                let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
+                eprintln!(
+                    "Server error {}, retrying in {:?} (attempt {}/{})",
+                    status,
+                    delay,
+                    retry_count,
+                    MAX_RETRIES + 1
+                );
+                sleep(delay).await;
+            } else {
+                let text = response
+                    .text()
+                    .await
+                    .context("Failed to read error response body")?;
+                anyhow::bail!("API request failed with status {}: {}", status, text);
+            }
         }
     }
 
@@ -85,6 +172,7 @@ impl ApiClient {
                 .header("CF-Access-Client-Id", client_id)
                 .header("CF-Access-Client-Secret", client_secret)
         } else {
+            println!("no client_id or client_secret");
             request_builder
         }
     }
@@ -94,7 +182,7 @@ impl ApiClient {
         problem_name: String,
         user_name: Option<String>,
     ) -> anyhow::Result<SelectResponse> {
-        let url = format!("{}/api/select", self.base_url);
+        let url = format!("{}/select", self.base_url);
         println!("{}", url);
         let request = SelectRequest {
             problem_name,
@@ -102,48 +190,18 @@ impl ApiClient {
         };
         println!("{}", json!(request).to_string());
 
-        let response = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send select request to {}", url))?;
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
-        if response.status().is_success() {
-            let result: SelectResponse = response
-                .json()
-                .await
-                .context("Failed to parse select response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read error response body")?;
-            anyhow::bail!("Select API request failed with status {}: {}", status, text);
-        }
+        self.send_request_with_retry(request_builder).await
     }
 
     pub async fn abort_session(&self, session_id: &str) -> anyhow::Result<()> {
-        let url = format!("{}/api/sessions/{}/abort", self.base_url, session_id);
+        let url = format!("{}/sessions/{}/abort", self.base_url, session_id);
 
-        let response = self
-            .add_auth_headers(self.client.put(&url))
-            .send()
+        let request_builder = self.add_auth_headers(self.client.put(&url));
+
+        self.send_request_with_retry_no_response(request_builder)
             .await
-            .with_context(|| format!("Failed to send abort request to {}", url))?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read abort error response body")?;
-            anyhow::bail!("Session abort failed with status {}: {}", status, text);
-        }
     }
 
     pub async fn explore(
@@ -151,38 +209,16 @@ impl ApiClient {
         session_id: &str,
         plans: &[String],
     ) -> anyhow::Result<ExploreResponse> {
-        let url = format!("{}/api/explore", self.base_url);
+        let url = format!("{}/explore", self.base_url);
         let request = ExploreRequest {
             session_id: Some(session_id.to_string()),
             user_name: None,
             plans: Vec::from(plans),
         };
 
-        let response = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send explore request to {}", url))?;
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
-        if response.status().is_success() {
-            let result: ExploreResponse = response
-                .json()
-                .await
-                .context("Failed to parse explore response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read explore error response body")?;
-            anyhow::bail!(
-                "Explore API request failed with status {}: {}",
-                status,
-                text
-            );
-        }
+        self.send_request_with_retry(request_builder).await
     }
 
     pub async fn guess(
@@ -190,41 +226,25 @@ impl ApiClient {
         session_id: &str,
         guess_map: GuessMap,
     ) -> anyhow::Result<GuessResponse> {
-        let url = format!("{}/api/guess", self.base_url);
+        let url = format!("{}/guess", self.base_url);
         let request = GuessRequest {
             session_id: Some(session_id.to_string()),
             user_name: None,
             map: guess_map,
         };
 
-        let response = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send guess request to {}", url))?;
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
-        if response.status().is_success() {
-            let result: GuessResponse = response
-                .json()
-                .await
-                .context("Failed to parse guess response JSON")?;
-            Ok(result)
-        } else {
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .context("Failed to read guess error response body")?;
-            anyhow::bail!("Guess API request failed with status {}: {}", status, text);
-        }
+        self.send_request_with_retry(request_builder).await
     }
 }
 
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct SelectResponse {
-    pub session_id: String,
+    #[serde(default)]
+    pub id: String,
+    pub session_id: Option<String>,
     #[serde(rename = "problemName")]
     problem_name: String,
 }

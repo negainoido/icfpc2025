@@ -72,7 +72,7 @@ pub enum BuildError {
 ///   全部屋を少なくとも 1 つの s がカバーしている前提で完全な map が組み上がります。
 pub fn build_map_fixed_tail(
     plans: &[String],
-    results: &[Vec<i32>],
+    results: &[Vec<u8>],
     suffixes: &[String],
 ) -> Result<GuessMap, BuildError> {
     if plans.len() != results.len() {
@@ -112,7 +112,7 @@ pub fn build_map_fixed_tail(
                 return Err(BuildError::BadLabelValue {
                     plan_idx: i,
                     pos: j,
-                    value: v,
+                    value: v as i32,
                 });
             }
             row.push(v as u8);
