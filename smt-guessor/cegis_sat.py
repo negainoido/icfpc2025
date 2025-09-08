@@ -136,11 +136,67 @@ def build_cnf_prefix(
         loc_keys.add((tid, k, rid))
         return pool.id(("X", tid, k, rid))
 
+    # == ビット等号（XNOR）の補助変数 ==
+    def lit_xnor(a, b, tag):
+        z = pool.id((tag, a, b))
+        cnf.append([z, a, b])
+        cnf.append([z, -a, -b])
+        cnf.append([-z, a, -b])
+        cnf.append([-z, -a, b])
+        return z
+
+    # == 2bit 等号 ==
+    def lit_eq2(a1, a0, b1, b0, tag):
+        e1 = lit_xnor(a1, b1, (tag, "xnor1"))
+        e0 = lit_xnor(a0, b0, (tag, "xnor0"))
+        z = pool.id((tag, "eq2"))
+        # z <-> (e1 ∧ e0)
+        cnf.append([-z, e1])
+        cnf.append([-z, e0])
+        cnf.append([z, -e1, -e0])
+        return z
+
+    # == 2bit 厳密比較 a<b ==
+    def lit_lt2(a1, a0, b1, b0, tag):
+        # (a1<b1) ∨ (a1==b1 ∧ a0<b0)
+        l1 = pool.id((tag, "l1"))  # ¬a1 ∧ b1
+        cnf.append([-l1, -a1])
+        cnf.append([-l1, b1])
+
+        e1 = lit_xnor(a1, b1, (tag, "xnor1"))
+        l0 = pool.id((tag, "l0"))  # ¬a0 ∧ b0
+        cnf.append([-l0, -a0])
+        cnf.append([-l0, b0])
+
+        u = pool.id((tag, "u"))  # u <-> (e1 ∧ l0)
+        cnf.append([-u, e1])
+        cnf.append([-u, l0])
+        cnf.append([u, -e1, -l0])
+
+        lt = pool.id((tag, "lt"))
+        # lt <-> (l1 ∨ u)
+        cnf.append([-lt, l1, u])
+        cnf.append([lt, -l1])
+        cnf.append([lt, -u])
+        return lt
+
+    # == ガード（ラベル等号の前提）をリテラルとして直に使う ==
+    def guard_literals_for_label(r, lab):
+        # lab は 0..3。label2bits(l) -> (b0,b1) で既に使っているはず
+        b0, b1 = label2bits(lab)
+        v0, v1 = v_label(r)  # 2bit 変数
+        # 「L[r]==lab」を1本のリテラルにはできないので、
+        # clauseガードに使うための“2つの前提リテラル（否定形で使う）”を返す
+        lit_ok0 = v0 if b0 else -v0
+        lit_ok1 = v1 if b1 else -v1
+        # これらの否定を clause に足せば “(L[r]==lab) が成り立つときにだけ効く” になる
+        return lit_ok0, lit_ok1
+
     # (1) Room Labels: ラベルは均等に分布する。
     q, r = divmod(N, 4)
     o = int(used_results[0][0]) if used_results else 0
     regular = 4 * q
-    for i in range(regular, N):
+    for i in range(0, regular):
         lab = (o + i) % 4
         bits = label2bits(lab)
         v0, v1 = v_label(i)
@@ -288,6 +344,54 @@ def build_cnf_prefix(
 
             # 存在：∨_q W[idx,q]
             cnf.append(Wq)
+
+    # (7) Symmetry breaking for port labels
+    # 各ラベルlについて、ラベルlの部屋1 < r1 < r2に対して
+    # r1のポートラベルのビット列 <= r2のポートラベルのビット列
+    # (7) Symmetry breaking for port labels (lex ≤ within same-room-label)
+    for lab in range(4):
+        # 部屋0はアンカーなので、比較ペアから除外（r1>=1）
+        for r1 in range(1, N):  # ★ ここを 1 から
+            for r2 in range(r1 + 1, N):
+                # ガード: (L[r1]==lab) ∧ (L[r2]==lab)
+                g1a, g1b = guard_literals_for_label(r1, lab)
+                g2a, g2b = guard_literals_for_label(r2, lab)
+
+                # 各桁の等号/比較
+                eq = []
+                lt = []
+                for d in range(D):
+                    a0, a1 = v_port_label(r1 * D + d)
+                    b0, b1 = v_port_label(r2 * D + d)
+                    eq_d = lit_eq2(a1, a0, b1, b0, ("LEX", "EQ", lab, r1, r2, d))
+                    lt_d = lit_lt2(a1, a0, b1, b0, ("LEX", "LT", lab, r1, r2, d))
+                    eq.append(eq_d)
+                    lt.append(lt_d)
+
+                # prefix 等号
+                pref: list[int] = [-1] * D
+                for d in range(D):
+                    z = pool.id(("LEX", "PREF", lab, r1, r2, d))
+                    cnf.append([-z, eq[d]])
+                    if d > 0:
+                        cnf.append([-z, pref[d - 1]])
+                        cnf.append([z, -eq[d], -pref[d - 1]])
+                    else:
+                        cnf.append([z, -eq[d]])
+                    pref[d] = z
+
+                # lex ≤ ： pref[5] ∨ lt[0] ∨ (pref[0]∧lt[1]) ∨ … ∨ (pref[4]∧lt[5])
+                terms = [lt[0]]
+                for d in range(1, D):
+                    t = pool.id(("LEX", "TERM", lab, r1, r2, d))
+                    cnf.append([-t, pref[d - 1]])
+                    cnf.append([-t, lt[d]])
+                    cnf.append([t, -pref[d - 1], -lt[d]])
+                    terms.append(t)
+
+                # ガード付き大OR
+                head = [-g1a, -g1b, -g2a, -g2b, pref[D - 1]] + terms
+                cnf.append(head)
 
     cnf.nv = max(getattr(cnf, "nv", 0) or 0, pool.top)
     print(f"CNF variables: {cnf.nv}, clauses: {len(cnf.clauses)}")
