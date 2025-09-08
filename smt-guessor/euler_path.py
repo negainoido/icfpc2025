@@ -34,7 +34,9 @@ def _endpoints_of_edge(conn: dict) -> Tuple[int, int]:
     return a, b
 
 
-def _build_multigraph(connections: List[dict]) -> Tuple[Dict[int, List[Tuple[int, int]]], Dict[int, int]]:
+def _build_multigraph(
+    connections: List[dict],
+) -> Tuple[Dict[int, List[Tuple[int, int]]], Dict[int, int]]:
     """Return (adj, degree) for an undirected multigraph on rooms.
 
     - adj[u] holds a list of (v, edge_index) entries; duplicates allowed.
@@ -57,21 +59,10 @@ def _build_multigraph(connections: List[dict]) -> Tuple[Dict[int, List[Tuple[int
 def _choose_start_room(
     degree: Dict[int, int], start_pref: Optional[int]
 ) -> Optional[int]:
-    """Pick a start room: prefer start_pref if valid; then an odd-degree node; else any with deg>0."""
-    odd = [u for u, d in degree.items() if d % 2 == 1]
+    """Pick a start room: strictly prefer start_pref if it has deg>0; else any with deg>0."""
     if start_pref is not None and degree.get(start_pref, 0) > 0:
-        # If an Euler trail exists and start_pref is reasonable, allow it.
-        # If there are exactly 2 odd nodes and start_pref is not one of them,
-        # the trail can still start at an even-degree node only for an Euler circuit.
-        # To be conservative, if there are 2 odd nodes, require start among them.
-        if len(odd) in (0, 2):
-            if len(odd) == 2 and start_pref not in odd:
-                # Not a valid start for an open trail; fall back to odd[0]
-                return odd[0]
-            return start_pref
-    if len(odd) == 2:
-        return odd[0]
-    # Euler circuit case or degenerate
+        return start_pref
+    # fallback to any node with degree>0
     for u, d in degree.items():
         if d > 0:
             return u
@@ -93,19 +84,57 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
     # Build basic structures
     adj, degree = _build_multigraph(connections)
     M = len(connections)
-    edges: List[Tuple[int, int]] = [
-        _endpoints_of_edge(conn) for conn in connections
-    ]
 
     # Fast path: Eulerian case -> exact trail with Hierholzer
     odd = [u for u, d in degree.items() if d % 2 == 1]
     preferred = start_room if start_room is not None else map_json.get("startingRoom")
     if len(odd) in (0, 2):
-        s = _choose_start_room(degree, int(preferred) if preferred is not None else None)
-        if s is None:
-            raise ValueError("No valid start room (graph may be edgeless)")
+        if preferred is None:
+            raise ValueError("start_room must be provided (or in map) to anchor start")
+        s_pref = int(preferred)
+        if degree.get(s_pref, 0) <= 0:
+            raise ValueError("Preferred start room has no incident edges")
+
+        # Build optional prefix to reach a valid Euler start when there are 2 odd nodes
+        prefix: List[int] = []
+        if len(odd) == 2 and s_pref not in odd:
+            # BFS path from s_pref to the nearest odd-degree node
+            targets = set(odd)
+            q = deque([s_pref])
+            prev: Dict[int, Tuple[int, int]] = {s_pref: (-1, -1)}
+            dest: Optional[int] = None
+            while q:
+                u = q.popleft()
+                for v, ei in adj.get(u, []):
+                    if v in prev:
+                        continue
+                    prev[v] = (u, ei)
+                    if v in targets:
+                        dest = v
+                        q.clear()
+                        break
+                    q.append(v)
+            if dest is None:
+                raise ValueError("No path from start_room to an odd-degree node")
+            path_edges: List[int] = []
+            cur = dest
+            while True:
+                p, ei = prev[cur]
+                if p == -1:
+                    break
+                path_edges.append(ei)
+                cur = p
+            path_edges.reverse()
+            prefix = path_edges
+            s = dest
+        else:
+            s = s_pref
+
+        # Hierholzer from s
         used: Dict[int, bool] = {}
-        adj_copy: Dict[int, List[Tuple[int, int]]] = {u: list(lst) for u, lst in adj.items()}
+        adj_copy: Dict[int, List[Tuple[int, int]]] = {
+            u: list(lst) for u, lst in adj.items()
+        }
         stack_nodes: List[int] = [s]
         stack_edges: List[int] = []
         trail_rev: List[int] = []
@@ -132,11 +161,13 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
             raise ValueError(
                 f"Graph appears disconnected: covered {len(trail)}/{M} edges"
             )
-        return trail
+        return prefix + trail
 
     # Non-Eulerian: cover all edges with possible duplication.
     # Prepare adjacency usable for BFS and greedy stepping.
-    adj_list: Dict[int, List[Tuple[int, int]]] = {u: list(lst) for u, lst in adj.items()}
+    adj_list: Dict[int, List[Tuple[int, int]]] = {
+        u: list(lst) for u, lst in adj.items()
+    }
     # Helper to check if a node has any unused incident edge
     unused = set(range(M))
 
@@ -146,7 +177,9 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
     # BFS to nearest node that still has unused edges. Returns list of (next_room, edge_idx).
     def bfs_to_unused(start: int) -> Optional[List[Tuple[int, int]]]:
         q = deque([start])
-        prev: Dict[int, Tuple[int, int]] = {start: (-1, -1)}  # room -> (parent_room, via_edge)
+        prev: Dict[int, Tuple[int, int]] = {
+            start: (-1, -1)
+        }  # room -> (parent_room, via_edge)
         target: Optional[int] = None
         while q:
             u = q.popleft()
@@ -172,7 +205,7 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
         path_edges.reverse()
         return path_edges
 
-    # Decide start node (any node with degree>0 if preference not applicable)
+    # Decide start node: strictly prefer preferred if possible
     s = _choose_start_room(degree, int(preferred) if preferred is not None else None)
     if s is None:
         raise ValueError("No valid start room (graph may be edgeless)")
@@ -196,7 +229,9 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
         bridge = bfs_to_unused(cur)
         if bridge is None:
             # Unused edges remain but unreachable => disconnected graph with multiple components
-            raise ValueError("Graph has multiple components with edges; cannot form a single continuous route")
+            raise ValueError(
+                "Graph has multiple components with edges; cannot form a single continuous route"
+            )
         for nxt_room, ei in bridge:
             route.append(ei)
             # If this bridging traverses an unused edge, count it now
@@ -205,16 +240,20 @@ def euler_path(map_json: dict, start_room: Optional[int] = None) -> List[int]:
     return route
 
 
-def rooms_from_edges(map_json: dict, edges: List[int], start_room: Optional[int]) -> List[int]:
+def rooms_from_edges(
+    map_json: dict, edges: List[int], start_room: Optional[int]
+) -> List[int]:
     """Derive the room sequence from an edge order.
 
     Returns a list of rooms of length len(edges)+1.
     """
     cons = map_json["connections"]
-    # Pick the actual start used by euler_path, mirroring its start selection logic.
+    # Start from the provided start_room when possible
     adj, degree = _build_multigraph(cons)
     preferred = start_room if start_room is not None else map_json.get("startingRoom")
-    actual_start = _choose_start_room(degree, int(preferred) if preferred is not None else None)
+    actual_start = _choose_start_room(
+        degree, int(preferred) if preferred is not None else None
+    )
     if actual_start is None:
         raise ValueError("No valid start room (graph may be edgeless)")
     rooms: List[int] = [int(actual_start)]
@@ -232,11 +271,53 @@ def rooms_from_edges(map_json: dict, edges: List[int], start_room: Optional[int]
     return rooms
 
 
+def doors_from_edges(
+    map_json: dict, edges: List[int], start_room: Optional[int]
+) -> List[int]:
+    """Derive the door sequence from an edge order.
+
+    Returns a list of doors of length len(edges).
+    """
+    cons = map_json["connections"]
+    # Start from the provided start_room when possible
+    adj, degree = _build_multigraph(cons)
+    preferred = start_room if start_room is not None else map_json.get("startingRoom")
+    actual_start = _choose_start_room(
+        degree, int(preferred) if preferred is not None else None
+    )
+    if actual_start is None:
+        raise ValueError("No valid start room (graph may be edgeless)")
+    doors: List[int] = []
+    cur = actual_start
+    for ei in edges:
+        conn = cons[ei]
+        a, b = _endpoints_of_edge(conn)
+        if cur == a:
+            doors.append(int(conn["from"]["door"]))
+            cur = b
+        elif cur == b:
+            doors.append(int(conn["to"]["door"]))
+            cur = a
+        else:
+            raise ValueError(
+                f"Edge {ei} does not continue the path from room {cur} (endpoints {a},{b})"
+            )
+    return doors
+
+
 def main():
     ap = argparse.ArgumentParser(description="Compute Euler path for a map graph JSON")
-    ap.add_argument("--input", required=True, help="Input map JSON path (like example/map-*.json)")
-    ap.add_argument("--start-room", type=int, default=None, help="Preferred start room (optional)")
-    ap.add_argument("--output", default=None, help="Write JSON result to this path (default: stdout)")
+    ap.add_argument(
+        "--input", required=True, help="Input map JSON path (like example/map-*.json)"
+    )
+    ap.add_argument(
+        "--start-room", type=int, default=None, help="Preferred start room (optional)"
+    )
+    ap.add_argument(
+        "--output",
+        default=None,
+        help="Write JSON result to this path (default: stdout)",
+    )
     args = ap.parse_args()
 
     with open(args.input, "r", encoding="utf-8") as f:

@@ -37,7 +37,7 @@ if _SCRIPTS not in sys.path:
 # Local modules
 import api  # type: ignore
 from cegis_sat import cegis_sat
-from euler_path import euler_path, rooms_from_edges
+from euler_path import doors_from_edges, euler_path, rooms_from_edges
 
 
 # Problem name -> N (number of rooms in G1)
@@ -95,13 +95,29 @@ def _door_from_to(connections: List[dict], u: int, v: int) -> Tuple[int, int, in
     raise ValueError(f"No edge connecting {u} and {v}")
 
 
-def _build_explore_plans(
-    N: int, count: int, len_factor: float, seed: Optional[int] = None
-) -> List[str]:
+def _rev_port(connections: List[dict], u: int, door: int) -> tuple[int, int]:
+    """Find the room connected to u via door.
+
+    Returns the other room.
+    Raises if not found.
+    """
+    for eid, c in enumerate(connections):
+        ru = int(c["from"]["room"])  # type: ignore[index]
+        du = int(c["from"]["door"])  # type: ignore[index]
+        rv = int(c["to"]["room"])  # type: ignore[index]
+        dv = int(c["to"]["door"])  # type: ignore[index]
+        if ru == u and du == door:
+            return rv, dv
+        if rv == u and dv == door:
+            return ru, du
+    raise ValueError(f"No edge from {u} via door {door}")
+
+
+def _build_explore_plans(N: int, seed: Optional[int] = None) -> List[str]:
     rng = random.Random(seed)
-    L = max(1, int(N * len_factor))
+    L = max(1, int(N * 2))
     plans: List[str] = []
-    for _ in range(count):
+    for _ in range(10):
         seq = [rng.randint(0, 5) for _ in range(L)]
         plans.append(_normalize_plan(seq))
     return plans
@@ -131,7 +147,7 @@ def solve_double_maze(
     api.api.select(problem_name)
 
     # Phase 1: collect exploration logs and infer the quotient graph G1
-    base_plans = _build_explore_plans(N1, plans_count, len_factor, seed)
+    base_plans = _build_explore_plans(N_total, seed)
     exp = api.api.explore(base_plans)
     results_raw: List[List[int]] = [[int(x) for x in r] for r in exp["results"]]
 
@@ -162,6 +178,7 @@ def solve_double_maze(
     if not out:
         raise RuntimeError(f"CEGIS could not find a feasible quotient: {meta}")
 
+    # rooms: 各部屋のラベル（0-3)
     rooms: List[int] = [int(x) for x in out["rooms"]]  # type: ignore[index]
     connections: List[dict] = list(out["connections"])  # type: ignore[index]
     starting_room = int(out.get("startingRoom", 0))
@@ -179,59 +196,33 @@ def solve_double_maze(
     # Phase 2: compute Euler route and build one pass plan that writes parity LSB
     edges_order = euler_path(base_map, start_room=starting_room)
     rooms_seq = rooms_from_edges(base_map, edges_order, starting_room)
+    doors_seq = doors_from_edges(base_map, edges_order, starting_room)
+    print(f"rooms_seq: {rooms_seq}", file=sys.stderr)
     # Ensure the Euler trail starts from the actual starting room by rotation if needed
-    if rooms_seq and rooms_seq[0] != starting_room:
-        try:
-            rot = rooms_seq.index(starting_room)
-        except ValueError:
-            rot = 0
-        if rot:
-            M = len(edges_order)
-            edges_order = edges_order[rot:] + edges_order[:rot]
-            # Rotate rooms_seq accordingly: start at rot, wrap around, length preserved
-            rooms_seq = rooms_seq[rot:] + rooms_seq[1 : rot + 1]
+    assert rooms_seq is not None and rooms_seq[0] == starting_room
 
     # parity and visitation bookkeeping
-    par: Dict[int, int] = {}
-    vis: Dict[int, bool] = {}
+    # やりたいこと
+    # オイラー路をたどりながら、各部屋に最初に到達した時にその部屋のラベルのLSBを反転させる。
+    vis: set[int] = set()
     sigma: Dict[int, int] = {}  # edge_id -> +1 / -1
 
+    def calc_parity(room: int) -> int:
+        return rooms[room] ^ 1
+
+    tokens: List[str] = []
+
     s = rooms_seq[0]
-    par[s] = 0
-    vis[s] = True
+    for room, door in zip(rooms_seq, doors_seq):
+        print(f"At room {room}, door {door}", file=sys.stderr)
+        if room not in vis:
+            # First visit to s: flip LSB
+            print(f" First visit to {s}, flip LSB", file=sys.stderr)
+            tokens.append(f"[{calc_parity(room)}]")
+            vis.add(room)
+        tokens.append(str(door))
 
-    # Build the token stream: start by setting start parity to 0
-    tokens: List[str] = [f"[{par[s]}]"]
-
-    # Also precompute per-step info: (eid, u, v, door_u, door_v)
-    step_info: List[Tuple[int, int, int, int, int]] = []
-    cur = rooms_seq[0]
-    for i, eid in enumerate(edges_order):
-        nxt = rooms_seq[i + 1]
-        # Use the exact connection entry for this eid; orient doors along (cur -> nxt)
-        c = connections[eid]
-        ru = int(c["from"]["room"])  # type: ignore[index]
-        du = int(c["from"]["door"])  # type: ignore[index]
-        rv = int(c["to"]["room"])  # type: ignore[index]
-        dv = int(c["to"]["door"])  # type: ignore[index]
-        if not ((ru == cur and rv == nxt) or (ru == nxt and rv == cur)):
-            # As a fallback (parallel edges or ordering), search a matching edge id
-            # But keep eid as the authoritative edge id
-            _, du, dv = _door_from_to(connections, cur, nxt)
-        step_info.append((eid, cur, nxt, du, dv))
-        # prepare parity for first-visit nodes (tree edges)
-        if not vis.get(nxt, False):
-            par[nxt] = par[cur]
-        cur = nxt
-
-    # Build tokens in one pass (move, then write target parity)
-    # Important: do not pre-mark visits; update during decoding
-    for eid, u, v, du, _ in step_info:
-        tokens.append(str(du))  # traverse edge
-        # after arrival, write LSB to par[v]
-        pv = par[v]
-        tokens.append(f"[{pv}]")
-        # visitation is updated during decode phase
+    # オイラー路をたどりつつ最初に訪れた時に部屋のLSBを反転させる
 
     # Send the composed plan and receive the full label stream
     plan_str = "".join(tokens)
@@ -256,29 +247,53 @@ def solve_double_maze(
     # Decode sigma from the result stream
     # Results semantics: initial label (at start), then one label after each token
     # We started by writing at start ([0]) -> first result after token is start label with LSB=0
-    cur = rooms_seq[0]
     # Arrival labels are at indices res[2], res[4], ..., res[2*(i+1)]
-    for i, (eid, u, v, du, _) in enumerate(step_info):
-        obs = int(res[2 * (i + 1)])
-        if eid not in sigma:
-            if not vis.get(v, False):
-                sigma[eid] = +1  # tree edge, propagate parity
-            else:
-                sigma[eid] = +1 if _label_lsb(obs) == par[u] else -1
+    rooms_seq = rooms_seq
+    vis = set()
+    idx = 0
+    # 最初の部屋はバニラ確定
+    is_vanilla = True
+    # door_info[(room, door)] = True/False (vanilla/cross)
+    door_info: Dict[Tuple[int, int], bool] = {}
+    for token, obs in zip(tokens, res[1:]):
+        # 現在の部屋
+        room = rooms_seq[idx]
+        # tokenを実行した結果obsが得られた
+        if token.startswith("["):
+            vis.add(room)
+            continue
+        # 移動したパターン
+        door = int(token)
+        next_room = rooms_seq[idx + 1]
+        # 遷移先がバニラかダブルか判定
+        next_is_vanilla = True
+        if next_room not in vis:
+            # 次のステップで色を替えるので、遷移先はバニラ確定
+            next_is_vanilla = True
+            pass
+        elif obs == rooms[next_room]:
+            # 色を変えたはずなのに変わってない -> クロスエッジ
+            next_is_vanilla = False
         else:
-            expected = +1 if _label_lsb(obs) == par[u] else -1
-            # keep existing but could assert consistency if needed
-            _ = expected
-        # mark arrival vertex visited for subsequent steps
-        vis[v] = True
-        cur = v
+            # 色を変えたノードに戻ってきた
+            next_is_vanilla = True
+        print(
+            f" Move {room} --{door}--> {next_room}, obs={obs}, "
+            f"next_is_vanilla={next_is_vanilla}, is_vanilla={is_vanilla}",
+            file=sys.stderr,
+        )
+        edge_parity = is_vanilla ^ next_is_vanilla
+        door_info[(room, door)] = edge_parity
+        door_info[_rev_port(connections, room, door)] = edge_parity
+
+        is_vanilla = next_is_vanilla
+        idx += 1
 
     # Phase 3: reconstruct 2-lift
     rooms2: List[int] = []
-    for u in range(len(rooms)):
-        msb = _label_msb(rooms[u])
-        rooms2.append((msb << 1) | 0)
-        rooms2.append((msb << 1) | 1)
+    for room in rooms:
+        rooms2.append(room)
+        rooms2.append(room)
 
     connections2: List[dict] = []
     for eid, c in enumerate(connections):
@@ -286,8 +301,9 @@ def solve_double_maze(
         du = int(c["from"]["door"])  # type: ignore[index]
         rv = int(c["to"]["room"])  # type: ignore[index]
         dv = int(c["to"]["door"])  # type: ignore[index]
-        sgn = int(sigma.get(eid, +1))
-        if sgn == +1:
+        assert (ru, du) in door_info, f"Missing door info for {(ru, du)}"
+
+        if door_info[(ru, du)] == False:
             # same-layer connections
             connections2.append(
                 {
