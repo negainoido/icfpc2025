@@ -264,7 +264,11 @@ impl ApiClient {
 
         let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
-        self.send_request_with_retry(request_builder).await
+        let res = self.send_request_with_retry(request_builder).await;
+        res.map(|r: ExploreResponse| {
+            println!("Query Count: {}", r.query_count);
+            r
+        })
     }
 
     pub async fn guess(
