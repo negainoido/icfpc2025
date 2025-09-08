@@ -110,6 +110,18 @@ def load_problem_data() -> pd.DataFrame:
                     negainoido_borda = sum(1 for _, s in teams_with_scores if s > score)
                     break
 
+            # Find the best team (rank 1, minimum score) and calculate their Borda count
+            best_team_score = teams_with_scores[0][1] if teams_with_scores else None
+            best_borda = None
+            if best_team_score is not None:
+                # Best team's Borda count = number of teams with strictly higher score (worse ranking)
+                best_borda = sum(1 for _, s in teams_with_scores if s > best_team_score)
+
+            # Calculate delta borda (Best Borda Count - Borda Count)
+            delta_borda = None
+            if best_borda is not None and negainoido_borda is not None:
+                delta_borda = best_borda - negainoido_borda
+
             problem_data.append(
                 {
                     "problem": problem_name,
@@ -119,6 +131,8 @@ def load_problem_data() -> pd.DataFrame:
                     "borda_count": negainoido_borda
                     if negainoido_borda is not None
                     else "Not found",
+                    "best_borda_count": best_borda if best_borda is not None else 0,
+                    "delta_borda": delta_borda if delta_borda is not None else "N/A",
                     "total_teams": len(teams_with_scores),
                 }
             )
@@ -197,14 +211,43 @@ def main():
                 st.metric(label="Total Teams", value=int(max_teams))
             st.write("")  # Add some spacing
 
-            display_columns = ["problem", "rank", "score", "borda_count"]
+            display_columns = [
+                "problem",
+                "rank",
+                "score",
+                "borda_count",
+                "best_borda_count",
+                "delta_borda",
+            ]
+
+            # Apply background colors to specific columns
+            def highlight_columns(s):
+                if s.name == "delta_borda":
+                    return ["background-color: #dadaa0" for _ in s]
+                elif s.name == "best_borda_count":
+                    return ["background-color: #f3f3f3" for _ in s]
+                else:
+                    return ["" for _ in s]
+
+            styled_df = problem_df[display_columns].style.apply(
+                highlight_columns, axis=0
+            )
+
             st.dataframe(
-                problem_df[display_columns],
+                styled_df,
                 column_config={
                     "problem": st.column_config.TextColumn("Problem"),
                     "rank": st.column_config.NumberColumn("Rank"),
                     "score": st.column_config.NumberColumn("Score"),
                     "borda_count": st.column_config.NumberColumn("Borda Count"),
+                    "best_borda_count": st.column_config.NumberColumn(
+                        "Best Borda Count",
+                        help="一位の人のBorda Count",
+                    ),
+                    "delta_borda": st.column_config.NumberColumn(
+                        "Δ Borda",
+                        help="一位になったら増える Borda Count",
+                    ),
                 },
                 use_container_width=True,
                 hide_index=True,
