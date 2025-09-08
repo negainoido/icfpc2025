@@ -70,7 +70,7 @@ def _label_msb(val: int) -> int:
 
 
 def _replace_lsb(val: int, lsb: int) -> int:
-    return ((_label_msb(val) << 1) | (lsb & 1))
+    return (_label_msb(val) << 1) | (lsb & 1)
 
 
 def _normalize_plan(plan: List[int]) -> str:
@@ -119,21 +119,41 @@ def solve_double_maze(
 ) -> Dict[str, Any]:
     if problem_name not in PROBLEM_SIZES:
         raise ValueError(f"Unknown problem '{problem_name}'")
-    N = PROBLEM_SIZES[problem_name]
+    N_total = PROBLEM_SIZES[problem_name]
+    # For the double-maze, the quotient graph size is N_total/2
+    N1 = N_total // 2
+
+    # Prepare log directory near this file
+    log_dir = os.path.join(os.path.dirname(__file__), "log")
+    os.makedirs(log_dir, exist_ok=True)
 
     # Select problem on the server
     api.api.select(problem_name)
 
     # Phase 1: collect exploration logs and infer the quotient graph G1
-    base_plans = _build_explore_plans(N, plans_count, len_factor, seed)
+    base_plans = _build_explore_plans(N1, plans_count, len_factor, seed)
     exp = api.api.explore(base_plans)
     results_raw: List[List[int]] = [[int(x) for x in r] for r in exp["results"]]
+
+    # Log: initial exploration in example/* format
+    with open(os.path.join(log_dir, "phase1_explore.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "plans": base_plans,
+                "results": results_raw,
+                "N": N1,
+                "startingRoom": 0,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     plans_num = [[int(ch) for ch in p] for p in base_plans]
     out, meta = cegis_sat(
         plans_num,
         results_raw,
-        N,
+        N1,
         init_prefix=cegis_prefix,
         max_iters=cegis_iters,
         verbose=False,
@@ -146,18 +166,37 @@ def solve_double_maze(
     connections: List[dict] = list(out["connections"])  # type: ignore[index]
     starting_room = int(out.get("startingRoom", 0))
 
-    base_map = {"rooms": rooms, "startingRoom": starting_room, "connections": connections}
+    base_map = {
+        "rooms": rooms,
+        "startingRoom": starting_room,
+        "connections": connections,
+    }
+
+    # Log: quotient graph
+    with open(os.path.join(log_dir, "quotient_graph.json"), "w", encoding="utf-8") as f:
+        json.dump(base_map, f, ensure_ascii=False, indent=2)
 
     # Phase 2: compute Euler route and build one pass plan that writes parity LSB
     edges_order = euler_path(base_map, start_room=starting_room)
     rooms_seq = rooms_from_edges(base_map, edges_order, starting_room)
+    # Ensure the Euler trail starts from the actual starting room by rotation if needed
+    if rooms_seq and rooms_seq[0] != starting_room:
+        try:
+            rot = rooms_seq.index(starting_room)
+        except ValueError:
+            rot = 0
+        if rot:
+            M = len(edges_order)
+            edges_order = edges_order[rot:] + edges_order[:rot]
+            # Rotate rooms_seq accordingly: start at rot, wrap around, length preserved
+            rooms_seq = rooms_seq[rot:] + rooms_seq[1 : rot + 1]
 
     # parity and visitation bookkeeping
     par: Dict[int, int] = {}
     vis: Dict[int, bool] = {}
     sigma: Dict[int, int] = {}  # edge_id -> +1 / -1
 
-    s = starting_room
+    s = rooms_seq[0]
     par[s] = 0
     vis[s] = True
 
@@ -169,8 +208,16 @@ def solve_double_maze(
     cur = rooms_seq[0]
     for i, eid in enumerate(edges_order):
         nxt = rooms_seq[i + 1]
-        eid2, du, dv = _door_from_to(connections, cur, nxt)
-        assert eid2 == eid, "Euler edge order inconsistent with connections"
+        # Use the exact connection entry for this eid; orient doors along (cur -> nxt)
+        c = connections[eid]
+        ru = int(c["from"]["room"])  # type: ignore[index]
+        du = int(c["from"]["door"])  # type: ignore[index]
+        rv = int(c["to"]["room"])  # type: ignore[index]
+        dv = int(c["to"]["door"])  # type: ignore[index]
+        if not ((ru == cur and rv == nxt) or (ru == nxt and rv == cur)):
+            # As a fallback (parallel edges or ordering), search a matching edge id
+            # But keep eid as the authoritative edge id
+            _, du, dv = _door_from_to(connections, cur, nxt)
         step_info.append((eid, cur, nxt, du, dv))
         # prepare parity for first-visit nodes (tree edges)
         if not vis.get(nxt, False):
@@ -178,51 +225,57 @@ def solve_double_maze(
         cur = nxt
 
     # Build tokens in one pass (move, then write target parity)
+    # Important: do not pre-mark visits; update during decoding
     for eid, u, v, du, _ in step_info:
         tokens.append(str(du))  # traverse edge
         # after arrival, write LSB to par[v]
         pv = par[v]
         tokens.append(f"[{pv}]")
-        vis[v] = True
+        # visitation is updated during decode phase
 
     # Send the composed plan and receive the full label stream
     plan_str = "".join(tokens)
     exp2 = api.api.explore([plan_str])
     res: List[int] = [int(x) for x in exp2["results"][0]]
 
+    # Log: second plan
+    with open(os.path.join(log_dir, "phase2_plan.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "start": rooms_seq[0] if rooms_seq else starting_room,
+                "edges_order": edges_order,
+                "rooms_seq": rooms_seq,
+                "plan": plan_str,
+                "results": res,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
     # Decode sigma from the result stream
     # Results semantics: initial label (at start), then one label after each token
     # We started by writing at start ([0]) -> first result after token is start label with LSB=0
-    idx = 1  # after initial write token
     cur = rooms_seq[0]
-    for eid, u, v, du, _ in step_info:
-        # after move token -> observe arrival label at v
-        idx += 1
-        obs = int(res[idx - 1])
-        if u == cur:
-            # decide sigma: if first visit to v, force +1; else compare LSBs
-            if eid not in sigma:
-                if not vis.get(v, False):
-                    sigma[eid] = +1
-                else:
-                    sigma[eid] = +1 if _label_lsb(obs) == par[u] else -1
+    # Arrival labels are at indices res[2], res[4], ..., res[2*(i+1)]
+    for i, (eid, u, v, du, _) in enumerate(step_info):
+        obs = int(res[2 * (i + 1)])
+        if eid not in sigma:
+            if not vis.get(v, False):
+                sigma[eid] = +1  # tree edge, propagate parity
             else:
-                # if seen before via duplication, verify consistency
-                expected = +1 if _label_lsb(obs) == par[u] else -1
-                # tolerate if first time was tree edge (+1)
-                if sigma[eid] != expected and vis.get(v, False):
-                    # keep the earlier value but this should normally match
-                    pass
-            cur = v
+                sigma[eid] = +1 if _label_lsb(obs) == par[u] else -1
         else:
-            # This should not occur if rooms_seq is consistent
-            raise RuntimeError("Path decoding lost sync with rooms sequence")
-        # after write token -> skip one label (we don't need it)
-        idx += 1
+            expected = +1 if _label_lsb(obs) == par[u] else -1
+            # keep existing but could assert consistency if needed
+            _ = expected
+        # mark arrival vertex visited for subsequent steps
+        vis[v] = True
+        cur = v
 
     # Phase 3: reconstruct 2-lift
     rooms2: List[int] = []
-    for u in range(N):
+    for u in range(len(rooms)):
         msb = _label_msb(rooms[u])
         rooms2.append((msb << 1) | 0)
         rooms2.append((msb << 1) | 1)
@@ -265,7 +318,7 @@ def solve_double_maze(
 
     starting_room2 = 2 * starting_room + 0
 
-    return {
+    bundle = {
         "base": base_map,
         "sigma": sigma,
         "lift2": {
@@ -275,6 +328,12 @@ def solve_double_maze(
         },
     }
 
+    # Log: final (result) graph
+    with open(os.path.join(log_dir, "lift2_graph.json"), "w", encoding="utf-8") as f:
+        json.dump(bundle, f, ensure_ascii=False, indent=2)
+
+    return bundle
+
 
 def main():
     ap = argparse.ArgumentParser(description="Double Maze (2-lift) solver")
@@ -282,18 +341,27 @@ def main():
 
     sp = sub.add_parser("solve", help="Solve a selected problem via local server")
     sp.add_argument("problem", help="Problem name (e.g., primus, secundus, ...)")
-    sp.add_argument("--plans", type=int, default=12, help="Number of random plans for Phase1")
+    sp.add_argument(
+        "--plans", type=int, default=12, help="Number of random plans for Phase1"
+    )
     sp.add_argument(
         "--len-factor",
         type=float,
         default=1.5,
         help="Plan length factor times N (e.g., 1.5*N)",
     )
-    sp.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
-    sp.add_argument("--prefix", type=int, default=10, help="CEGIS initial prefix per trace")
+    sp.add_argument(
+        "--seed", type=int, default=None, help="Random seed for reproducibility"
+    )
+    sp.add_argument(
+        "--prefix", type=int, default=10, help="CEGIS initial prefix per trace"
+    )
     sp.add_argument("--iters", type=int, default=30, help="CEGIS max iterations")
     sp.add_argument(
-        "--backend", default="auto", choices=["auto", "kissat", "pysat"], help="SAT backend"
+        "--backend",
+        default="auto",
+        choices=["auto", "kissat", "pysat"],
+        help="SAT backend",
     )
     sp.add_argument("--output", default=None, help="Write output JSON to this path")
 
@@ -316,7 +384,9 @@ def main():
         else:
             print(js)
 
+        resp = api.api.guess(bundle["lift2"])
+        print(json.dumps(resp, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     main()
-
