@@ -1,0 +1,6212 @@
+{
+  "session_info": {
+    "session_id": "60c98f64-1676-4436-9566-4ae4070f9f60",
+    "user_name": "tikuta",
+    "status": "completed",
+    "created_at": "2025-09-07T11:58:51Z",
+    "completed_at": "2025-09-07T12:00:49Z"
+  },
+  "api_history": [
+    {
+      "endpoint": "select",
+      "timestamp": "2025-09-07T11:58:51Z",
+      "request": {
+        "enqueue": false,
+        "problemName": "aleph",
+        "user_name": "tikuta"
+      },
+      "response": {
+        "problemName": "aleph"
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:52Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          ""
+        ]
+      },
+      "response": {
+        "queryCount": 2,
+        "results": [
+          [
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:53Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "00",
+          "01",
+          "02",
+          "03",
+          "04",
+          "05"
+        ]
+      },
+      "response": {
+        "queryCount": 9,
+        "results": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:54Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]00",
+          "[1]01",
+          "[1]02",
+          "[1]04"
+        ]
+      },
+      "response": {
+        "queryCount": 14,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:55Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "0[1]0"
+        ]
+      },
+      "response": {
+        "queryCount": 16,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:56Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15"
+        ]
+      },
+      "response": {
+        "queryCount": 23,
+        "results": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:57Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]10",
+          "[1]11",
+          "[1]12",
+          "[1]14"
+        ]
+      },
+      "response": {
+        "queryCount": 28,
+        "results": [
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:58Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1[1]1"
+        ]
+      },
+      "response": {
+        "queryCount": 30,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:58:59Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20",
+          "21",
+          "22",
+          "23",
+          "24",
+          "25"
+        ]
+      },
+      "response": {
+        "queryCount": 37,
+        "results": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:00Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]22",
+          "[1]23",
+          "[1]25"
+        ]
+      },
+      "response": {
+        "queryCount": 41,
+        "results": [
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:01Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]511"
+        ]
+      },
+      "response": {
+        "queryCount": 43,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:02Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "30",
+          "31",
+          "32",
+          "33",
+          "34",
+          "35"
+        ]
+      },
+      "response": {
+        "queryCount": 50,
+        "results": [
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:03Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]30",
+          "[1]34",
+          "[1]35"
+        ]
+      },
+      "response": {
+        "queryCount": 54,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:04Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "40",
+          "41",
+          "42",
+          "43",
+          "44",
+          "45"
+        ]
+      },
+      "response": {
+        "queryCount": 61,
+        "results": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:06Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]40",
+          "[1]41",
+          "[1]42",
+          "[1]44"
+        ]
+      },
+      "response": {
+        "queryCount": 66,
+        "results": [
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:06Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "4[1]1112530"
+        ]
+      },
+      "response": {
+        "queryCount": 68,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:08Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "50",
+          "51",
+          "52",
+          "53",
+          "54",
+          "55"
+        ]
+      },
+      "response": {
+        "queryCount": 75,
+        "results": [
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:09Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "[1]50",
+          "[1]54",
+          "[1]55"
+        ]
+      },
+      "response": {
+        "queryCount": 79,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:10Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "5[2]0112530"
+        ]
+      },
+      "response": {
+        "queryCount": 81,
+        "results": [
+          [
+            0,
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:11Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "100",
+          "101",
+          "102",
+          "103",
+          "104",
+          "105"
+        ]
+      },
+      "response": {
+        "queryCount": 88,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:11Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1[1]00",
+          "1[1]01",
+          "1[1]02",
+          "1[1]04"
+        ]
+      },
+      "response": {
+        "queryCount": 93,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:13Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "10[1]0125301"
+        ]
+      },
+      "response": {
+        "queryCount": 95,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:14Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120",
+          "121",
+          "122",
+          "123",
+          "124",
+          "125"
+        ]
+      },
+      "response": {
+        "queryCount": 102,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:14Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1[1]22",
+          "1[1]23",
+          "1[1]25"
+        ]
+      },
+      "response": {
+        "queryCount": 106,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:15Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12[1]5125301"
+        ]
+      },
+      "response": {
+        "queryCount": 108,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:16Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "130",
+          "131",
+          "132",
+          "133",
+          "134",
+          "135"
+        ]
+      },
+      "response": {
+        "queryCount": 115,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:17Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1[1]30",
+          "1[1]34",
+          "1[1]35"
+        ]
+      },
+      "response": {
+        "queryCount": 119,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:18Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13[2]012530125"
+        ]
+      },
+      "response": {
+        "queryCount": 121,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:19Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "150",
+          "151",
+          "152",
+          "153",
+          "154",
+          "155"
+        ]
+      },
+      "response": {
+        "queryCount": 128,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:20Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1[1]50",
+          "1[1]54",
+          "1[1]55"
+        ]
+      },
+      "response": {
+        "queryCount": 132,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:21Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "15[2]01253012530"
+        ]
+      },
+      "response": {
+        "queryCount": 134,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:22Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "200",
+          "201",
+          "202",
+          "203",
+          "204",
+          "205"
+        ]
+      },
+      "response": {
+        "queryCount": 141,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:22Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]00",
+          "2[1]01"
+        ]
+      },
+      "response": {
+        "queryCount": 144,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:24Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20[2]05125301302"
+        ]
+      },
+      "response": {
+        "queryCount": 146,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:25Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "210",
+          "211",
+          "212",
+          "213",
+          "214",
+          "215"
+        ]
+      },
+      "response": {
+        "queryCount": 153,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:26Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]10",
+          "2[1]14",
+          "2[1]15"
+        ]
+      },
+      "response": {
+        "queryCount": 157,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:27Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "21[2]4005125301302"
+        ]
+      },
+      "response": {
+        "queryCount": 159,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:27Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "220",
+          "221",
+          "222",
+          "223",
+          "224",
+          "225"
+        ]
+      },
+      "response": {
+        "queryCount": 166,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:28Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]22",
+          "2[1]23",
+          "2[1]25"
+        ]
+      },
+      "response": {
+        "queryCount": 170,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:29Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "22[1]2001013012534"
+        ]
+      },
+      "response": {
+        "queryCount": 172,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:30Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "230",
+          "231",
+          "232",
+          "233",
+          "234",
+          "235"
+        ]
+      },
+      "response": {
+        "queryCount": 179,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:31Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]32",
+          "2[1]33",
+          "2[1]35"
+        ]
+      },
+      "response": {
+        "queryCount": 183,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:32Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "23[1]2001013012534"
+        ]
+      },
+      "response": {
+        "queryCount": 185,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:33Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "240",
+          "241",
+          "242",
+          "243",
+          "244",
+          "245"
+        ]
+      },
+      "response": {
+        "queryCount": 192,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:34Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2[1]40",
+          "2[1]41"
+        ]
+      },
+      "response": {
+        "queryCount": 195,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:35Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "24[2]0001013012534"
+        ]
+      },
+      "response": {
+        "queryCount": 197,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:35Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "310",
+          "311",
+          "312",
+          "313",
+          "314",
+          "315"
+        ]
+      },
+      "response": {
+        "queryCount": 204,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:37Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3[2]11",
+          "3[2]12",
+          "3[2]13"
+        ]
+      },
+      "response": {
+        "queryCount": 208,
+        "results": [
+          [
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            1,
+            2,
+            3,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:38Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "320",
+          "321",
+          "322",
+          "323",
+          "324",
+          "325"
+        ]
+      },
+      "response": {
+        "queryCount": 215,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            3
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:38Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3[2]22",
+          "3[2]23"
+        ]
+      },
+      "response": {
+        "queryCount": 218,
+        "results": [
+          [
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            1,
+            2,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:39Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "32[2]201220014251312"
+        ]
+      },
+      "response": {
+        "queryCount": 220,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            2,
+            2,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:40Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "330",
+          "331",
+          "332",
+          "333",
+          "334",
+          "335"
+        ]
+      },
+      "response": {
+        "queryCount": 227,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            1,
+            1,
+            2
+          ],
+          [
+            0,
+            1,
+            1,
+            3
+          ],
+          [
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            1,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:41Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3[2]34"
+        ]
+      },
+      "response": {
+        "queryCount": 229,
+        "results": [
+          [
+            0,
+            1,
+            2,
+            1,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:42Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "33[2]401220014251312"
+        ]
+      },
+      "response": {
+        "queryCount": 231,
+        "results": [
+          [
+            0,
+            1,
+            1,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:43Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "340",
+          "341",
+          "342",
+          "343",
+          "344",
+          "345"
+        ]
+      },
+      "response": {
+        "queryCount": 238,
+        "results": [
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:44Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3[2]40",
+          "3[2]41",
+          "3[2]44"
+        ]
+      },
+      "response": {
+        "queryCount": 242,
+        "results": [
+          [
+            0,
+            1,
+            2,
+            0,
+            1
+          ],
+          [
+            0,
+            1,
+            2,
+            0,
+            2
+          ],
+          [
+            0,
+            1,
+            2,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:45Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "34[2]101220014251312"
+        ]
+      },
+      "response": {
+        "queryCount": 244,
+        "results": [
+          [
+            0,
+            1,
+            0,
+            2,
+            1,
+            0,
+            0,
+            2,
+            0,
+            1,
+            0,
+            1,
+            0,
+            2,
+            0,
+            0,
+            1,
+            3,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:46Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1200",
+          "1201",
+          "1202",
+          "1203",
+          "1204",
+          "1205"
+        ]
+      },
+      "response": {
+        "queryCount": 251,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:47Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12[1]00",
+          "12[1]01"
+        ]
+      },
+      "response": {
+        "queryCount": 254,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:48Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120[2]010134001013124"
+        ]
+      },
+      "response": {
+        "queryCount": 256,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:48Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1240",
+          "1241",
+          "1242",
+          "1243",
+          "1244",
+          "1245"
+        ]
+      },
+      "response": {
+        "queryCount": 263,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:50Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12[1]40",
+          "12[1]41"
+        ]
+      },
+      "response": {
+        "queryCount": 266,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:51Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "124[2]00010134001013124"
+        ]
+      },
+      "response": {
+        "queryCount": 268,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:52Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1310",
+          "1311",
+          "1312",
+          "1313",
+          "1314",
+          "1315"
+        ]
+      },
+      "response": {
+        "queryCount": 275,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:53Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13[2]11",
+          "13[2]12",
+          "13[2]13"
+        ]
+      },
+      "response": {
+        "queryCount": 279,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:53Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "131[0]20120412400130513"
+        ]
+      },
+      "response": {
+        "queryCount": 281,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1,
+            1,
+            3,
+            1,
+            0,
+            1,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:54Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1320",
+          "1321",
+          "1322",
+          "1323",
+          "1324",
+          "1325"
+        ]
+      },
+      "response": {
+        "queryCount": 288,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:55Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13[2]22",
+          "13[2]23"
+        ]
+      },
+      "response": {
+        "queryCount": 291,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:56Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "132[2]2012041240013051312"
+        ]
+      },
+      "response": {
+        "queryCount": 293,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            2,
+            2,
+            0,
+            0,
+            0,
+            1,
+            1,
+            3,
+            1,
+            0,
+            1,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:57Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1330",
+          "1331",
+          "1332",
+          "1333",
+          "1334",
+          "1335"
+        ]
+      },
+      "response": {
+        "queryCount": 300,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:58Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13[2]34"
+        ]
+      },
+      "response": {
+        "queryCount": 302,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            1,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T11:59:59Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "133[2]4012041240013051312"
+        ]
+      },
+      "response": {
+        "queryCount": 304,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            1,
+            2,
+            1,
+            0,
+            0,
+            0,
+            1,
+            1,
+            3,
+            1,
+            0,
+            2,
+            0,
+            1,
+            1,
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:00Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2020",
+          "2021",
+          "2022",
+          "2023",
+          "2024",
+          "2025"
+        ]
+      },
+      "response": {
+        "queryCount": 311,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:01Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20[2]20"
+        ]
+      },
+      "response": {
+        "queryCount": 313,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:01Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2030",
+          "2031",
+          "2032",
+          "2033",
+          "2034",
+          "2035"
+        ]
+      },
+      "response": {
+        "queryCount": 320,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:02Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20[2]31",
+          "20[2]32",
+          "20[2]33"
+        ]
+      },
+      "response": {
+        "queryCount": 324,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:03Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "203[0]101013124001013124020"
+        ]
+      },
+      "response": {
+        "queryCount": 326,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:04Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2050",
+          "2051",
+          "2052",
+          "2053",
+          "2054",
+          "2055"
+        ]
+      },
+      "response": {
+        "queryCount": 333,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:05Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20[2]51",
+          "20[2]52",
+          "20[2]53"
+        ]
+      },
+      "response": {
+        "queryCount": 337,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:06Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "205[0]101013124001013124020"
+        ]
+      },
+      "response": {
+        "queryCount": 339,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:07Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3100",
+          "3101",
+          "3102",
+          "3103",
+          "3104",
+          "3105"
+        ]
+      },
+      "response": {
+        "queryCount": 346,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            2,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:08Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "31[0]01"
+        ]
+      },
+      "response": {
+        "queryCount": 348,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            0,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:09Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "310[0]110101340010131240203"
+        ]
+      },
+      "response": {
+        "queryCount": 350,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            2,
+            0,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:10Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3140",
+          "3141",
+          "3142",
+          "3143",
+          "3144",
+          "3145"
+        ]
+      },
+      "response": {
+        "queryCount": 357,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:11Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "31[0]44",
+          "31[0]45"
+        ]
+      },
+      "response": {
+        "queryCount": 360,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:11Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "314[0]400010134001013124021"
+        ]
+      },
+      "response": {
+        "queryCount": 362,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            3,
+            0,
+            0,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:12Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "3150",
+          "3151",
+          "3152",
+          "3153",
+          "3154",
+          "3155"
+        ]
+      },
+      "response": {
+        "queryCount": 369,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            1,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:13Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "31[0]54",
+          "31[0]55"
+        ]
+      },
+      "response": {
+        "queryCount": 372,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:14Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "315[0]400010134001013124021"
+        ]
+      },
+      "response": {
+        "queryCount": 374,
+        "results": [
+          [
+            0,
+            1,
+            3,
+            3,
+            0,
+            0,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:15Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12020",
+          "12021",
+          "12022",
+          "12023",
+          "12024",
+          "12025"
+        ]
+      },
+      "response": {
+        "queryCount": 381,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:16Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120[2]20"
+        ]
+      },
+      "response": {
+        "queryCount": 383,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:17Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1202[3]001013124021000101340"
+        ]
+      },
+      "response": {
+        "queryCount": 385,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:18Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12030",
+          "12031",
+          "12032",
+          "12033",
+          "12034",
+          "12035"
+        ]
+      },
+      "response": {
+        "queryCount": 392,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:19Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120[2]31",
+          "120[2]32",
+          "120[2]33"
+        ]
+      },
+      "response": {
+        "queryCount": 396,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:20Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1203[0]10101312402100010134020"
+        ]
+      },
+      "response": {
+        "queryCount": 398,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:20Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12050",
+          "12051",
+          "12052",
+          "12053",
+          "12054",
+          "12055"
+        ]
+      },
+      "response": {
+        "queryCount": 405,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:21Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120[2]51",
+          "120[2]52",
+          "120[2]53"
+        ]
+      },
+      "response": {
+        "queryCount": 409,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:23Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1205[0]10101312402100010134020"
+        ]
+      },
+      "response": {
+        "queryCount": 411,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            3,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            1
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:23Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13100",
+          "13101",
+          "13102",
+          "13103",
+          "13104",
+          "13105"
+        ]
+      },
+      "response": {
+        "queryCount": 418,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:24Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "131[0]01"
+        ]
+      },
+      "response": {
+        "queryCount": 420,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:25Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1310[0]11010134021000101340203"
+        ]
+      },
+      "response": {
+        "queryCount": 422,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            2,
+            0,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:26Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13140",
+          "13141",
+          "13142",
+          "13143",
+          "13144",
+          "13145"
+        ]
+      },
+      "response": {
+        "queryCount": 429,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:27Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "131[0]44",
+          "131[0]45"
+        ]
+      },
+      "response": {
+        "queryCount": 432,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:28Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1314[0]40001013402100010134021"
+        ]
+      },
+      "response": {
+        "queryCount": 434,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            0,
+            0,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:29Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "13150",
+          "13151",
+          "13152",
+          "13153",
+          "13154",
+          "13155"
+        ]
+      },
+      "response": {
+        "queryCount": 441,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:30Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "131[0]54",
+          "131[0]55"
+        ]
+      },
+      "response": {
+        "queryCount": 444,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            3,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:31Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1315[0]40001013402100010134021"
+        ]
+      },
+      "response": {
+        "queryCount": 446,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            3,
+            3,
+            0,
+            0,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2,
+            0
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:32Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20220",
+          "20221",
+          "20222",
+          "20223",
+          "20224",
+          "20225"
+        ]
+      },
+      "response": {
+        "queryCount": 453,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:33Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "202[3]22",
+          "202[3]23",
+          "202[3]24",
+          "202[3]25"
+        ]
+      },
+      "response": {
+        "queryCount": 458,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:34Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2022[3]20010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 460,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:35Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20230",
+          "20231",
+          "20232",
+          "20233",
+          "20234",
+          "20235"
+        ]
+      },
+      "response": {
+        "queryCount": 467,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:36Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "202[3]32",
+          "202[3]33",
+          "202[3]34",
+          "202[3]35"
+        ]
+      },
+      "response": {
+        "queryCount": 472,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:37Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2023[3]30010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 474,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            3,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:38Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20240",
+          "20241",
+          "20242",
+          "20243",
+          "20244",
+          "20245"
+        ]
+      },
+      "response": {
+        "queryCount": 481,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:39Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "202[3]42",
+          "202[3]43",
+          "202[3]44",
+          "202[3]45"
+        ]
+      },
+      "response": {
+        "queryCount": 486,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:40Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2024[3]30010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 488,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            3,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:41Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "20250",
+          "20251",
+          "20252",
+          "20253",
+          "20254",
+          "20255"
+        ]
+      },
+      "response": {
+        "queryCount": 495,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:42Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "202[3]52",
+          "202[3]53",
+          "202[3]54",
+          "202[3]55"
+        ]
+      },
+      "response": {
+        "queryCount": 500,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:42Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "2025[3]20010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 502,
+        "results": [
+          [
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:43Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120220",
+          "120221",
+          "120222",
+          "120223",
+          "120224",
+          "120225"
+        ]
+      },
+      "response": {
+        "queryCount": 509,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:44Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1202[3]22",
+          "1202[3]23",
+          "1202[3]24",
+          "1202[3]25"
+        ]
+      },
+      "response": {
+        "queryCount": 514,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:45Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12022[3]20010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 516,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:46Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "120250",
+          "120251",
+          "120252",
+          "120253",
+          "120254",
+          "120255"
+        ]
+      },
+      "response": {
+        "queryCount": 523,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            1
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:47Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "1202[3]52",
+          "1202[3]53",
+          "1202[3]54",
+          "1202[3]55"
+        ]
+      },
+      "response": {
+        "queryCount": 528,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            3,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "explore",
+      "timestamp": "2025-09-07T12:00:48Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "plans": [
+          "12025[3]20010131240210001013402"
+        ]
+      },
+      "response": {
+        "queryCount": 530,
+        "results": [
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            3,
+            3,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            3,
+            1,
+            0,
+            1,
+            2,
+            3,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            1,
+            0,
+            1,
+            3
+          ]
+        ]
+      },
+      "status": 200
+    },
+    {
+      "endpoint": "guess",
+      "timestamp": "2025-09-07T12:00:49Z",
+      "request": {
+        "id": "garasubo@gmail.com BkjWU0ht4WZV8LMyo42voQ",
+        "map": {
+          "connections": [
+            {
+              "from": {
+                "door": 0,
+                "room": 0
+              },
+              "to": {
+                "door": 0,
+                "room": 0
+              }
+            },
+            {
+              "from": {
+                "door": 1,
+                "room": 0
+              },
+              "to": {
+                "door": 1,
+                "room": 1
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 0
+              },
+              "to": {
+                "door": 5,
+                "room": 2
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 0
+              },
+              "to": {
+                "door": 0,
+                "room": 3
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 0
+              },
+              "to": {
+                "door": 4,
+                "room": 1
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 0
+              },
+              "to": {
+                "door": 5,
+                "room": 3
+              }
+            },
+            {
+              "from": {
+                "door": 0,
+                "room": 1
+              },
+              "to": {
+                "door": 0,
+                "room": 1
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 1
+              },
+              "to": {
+                "door": 5,
+                "room": 4
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 1
+              },
+              "to": {
+                "door": 0,
+                "room": 5
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 1
+              },
+              "to": {
+                "door": 5,
+                "room": 5
+              }
+            },
+            {
+              "from": {
+                "door": 0,
+                "room": 2
+              },
+              "to": {
+                "door": 0,
+                "room": 6
+              }
+            },
+            {
+              "from": {
+                "door": 1,
+                "room": 2
+              },
+              "to": {
+                "door": 4,
+                "room": 5
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 2
+              },
+              "to": {
+                "door": 2,
+                "room": 4
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 2
+              },
+              "to": {
+                "door": 3,
+                "room": 4
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 2
+              },
+              "to": {
+                "door": 1,
+                "room": 6
+              }
+            },
+            {
+              "from": {
+                "door": 1,
+                "room": 3
+              },
+              "to": {
+                "door": 2,
+                "room": 7
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 3
+              },
+              "to": {
+                "door": 2,
+                "room": 3
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 3
+              },
+              "to": {
+                "door": 4,
+                "room": 6
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 3
+              },
+              "to": {
+                "door": 1,
+                "room": 4
+              }
+            },
+            {
+              "from": {
+                "door": 0,
+                "room": 4
+              },
+              "to": {
+                "door": 0,
+                "room": 8
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 4
+              },
+              "to": {
+                "door": 1,
+                "room": 8
+              }
+            },
+            {
+              "from": {
+                "door": 1,
+                "room": 5
+              },
+              "to": {
+                "door": 2,
+                "room": 9
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 5
+              },
+              "to": {
+                "door": 2,
+                "room": 5
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 5
+              },
+              "to": {
+                "door": 4,
+                "room": 8
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 6
+              },
+              "to": {
+                "door": 0,
+                "room": 10
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 6
+              },
+              "to": {
+                "door": 1,
+                "room": 7
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 6
+              },
+              "to": {
+                "door": 3,
+                "room": 7
+              }
+            },
+            {
+              "from": {
+                "door": 0,
+                "room": 7
+              },
+              "to": {
+                "door": 1,
+                "room": 10
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 7
+              },
+              "to": {
+                "door": 4,
+                "room": 7
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 7
+              },
+              "to": {
+                "door": 5,
+                "room": 7
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 8
+              },
+              "to": {
+                "door": 0,
+                "room": 11
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 8
+              },
+              "to": {
+                "door": 1,
+                "room": 9
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 8
+              },
+              "to": {
+                "door": 3,
+                "room": 9
+              }
+            },
+            {
+              "from": {
+                "door": 0,
+                "room": 9
+              },
+              "to": {
+                "door": 1,
+                "room": 11
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 9
+              },
+              "to": {
+                "door": 4,
+                "room": 9
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 9
+              },
+              "to": {
+                "door": 5,
+                "room": 9
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 10
+              },
+              "to": {
+                "door": 2,
+                "room": 10
+              }
+            },
+            {
+              "from": {
+                "door": 3,
+                "room": 10
+              },
+              "to": {
+                "door": 3,
+                "room": 11
+              }
+            },
+            {
+              "from": {
+                "door": 4,
+                "room": 10
+              },
+              "to": {
+                "door": 4,
+                "room": 11
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 10
+              },
+              "to": {
+                "door": 5,
+                "room": 10
+              }
+            },
+            {
+              "from": {
+                "door": 2,
+                "room": 11
+              },
+              "to": {
+                "door": 2,
+                "room": 11
+              }
+            },
+            {
+              "from": {
+                "door": 5,
+                "room": 11
+              },
+              "to": {
+                "door": 5,
+                "room": 11
+              }
+            }
+          ],
+          "rooms": [
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            1,
+            3,
+            1,
+            3,
+            2,
+            2
+          ],
+          "startingRoom": 0
+        }
+      },
+      "response": {
+        "correct": true
+      },
+      "status": 200
+    }
+  ]
+}
