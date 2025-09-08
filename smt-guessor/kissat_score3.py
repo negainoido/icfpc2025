@@ -30,27 +30,31 @@ D = 6
 def normalize_stage1_plan(plan: str) -> List[int]:
     return [int(ch) for ch in plan]
 
+
 def normalize_stage2_plan(plan: str) -> tuple[List[int], List[int]]:
     doors = []
-    overwrites = []    
+    overwrites = []
     curr = 0
     while curr < len(plan):
         doors.append(int(plan[curr]))
         curr += 1
-        if curr < len(plan) and plan[curr] == '[':
+        if curr < len(plan) and plan[curr] == "[":
             curr += 1
             overwrites.append(int(plan[curr]))
             curr += 1
-            assert curr < len(plan) and plan[curr] == ']', f"Invalid overwrite syntax in plan at position {curr}: missing ']'"
+            assert curr < len(plan) and plan[curr] == "]", (
+                f"Invalid overwrite syntax in plan at position {curr}: missing ']'"
+            )
             curr += 1
         else:
             raise RuntimeError("We always overwrite: missing '['")
     return doors, overwrites
 
 
-def normalize_stage2_result(result: list[int], plan: tuple[List[int], List[int]]) -> List[int]:
+def normalize_stage2_result(
+    result: list[int], plan: tuple[List[int], List[int]]
+) -> List[int]:
     doors, overwrites = plan
-
 
     normalized_result = [result[0]]
     curr = 1
@@ -59,7 +63,9 @@ def normalize_stage2_result(result: list[int], plan: tuple[List[int], List[int]]
         curr += 1
         assert overwrites[i] is not None
         curr += 1
-    assert curr == len(result), f"Result length {len(result)} does not match expected length {curr} from plan"
+    assert curr == len(result), (
+        f"Result length {len(result)} does not match expected length {curr} from plan"
+    )
     return normalized_result
 
 
@@ -86,7 +92,7 @@ def build_stage1_cnf(
             T = min(prefix_steps, len(plan))
         if len(r) < T + 1:
             raise ValueError(
-                f"results[{idx}] too short for requested prefix: need {T+1}, got {len(r)}"
+                f"results[{idx}] too short for requested prefix: need {T + 1}, got {len(r)}"
             )
         used_plans.append(plan[:T])
         used_results.append(r[: T + 1])
@@ -114,13 +120,15 @@ def build_stage1_cnf(
     def trace_location_assign_var(tid: int, timestamp: int, rid: int) -> int:
         x_keys.add((tid, timestamp, rid))
         return pool.id(("T", tid, timestamp, rid))
-    
+
     # ---------------- (1) Label constraints ----------------
 
     # For all room, exactly one label in {0, 1, 2, 3}
     for rid in range(N):
         lits = [label_assign_var(rid, bits) for bits in range(4)]
-        enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
+        enc = CardEnc.equals(
+            lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter
+        )
         cnf.extend(enc.clauses)
 
     # For the starting room, fix the label to each plan's first observation
@@ -132,16 +140,18 @@ def build_stage1_cnf(
     if base > 0:
         for bits in range(4):
             lits = [label_assign_var(rid, bits) for rid in range(N)]
-            enc = CardEnc.atleast(lits=lits, bound=base, vpool=pool, encoding=EncType.seqcounter)
+            enc = CardEnc.atleast(
+                lits=lits, bound=base, vpool=pool, encoding=EncType.seqcounter
+            )
             cnf.extend(enc.clauses)
-
 
     # print the number of variables and clauses created for label constraints
     if progress:
-        print(f"[kissat] Label constraints: vars={pool.top}, clauses={len(cnf.clauses)}")
+        print(
+            f"[kissat] Label constraints: vars={pool.top}, clauses={len(cnf.clauses)}"
+        )
     num_label_vars = pool.top
     num_label_clauses = len(cnf.clauses)
-
 
     # ---------------- (2) Port matching constraints ----------------
     # Port matching constraints: for each port p, exactly one partner q
@@ -154,13 +164,16 @@ def build_stage1_cnf(
 
     for from_pid in range(P):
         vars_list = [port_matching_var_dict[(from_pid, q)] for q in range(P)]
-        enc = CardEnc.equals(lits=vars_list, bound=1, vpool=pool, encoding=EncType.seqcounter)
+        enc = CardEnc.equals(
+            lits=vars_list, bound=1, vpool=pool, encoding=EncType.seqcounter
+        )
         cnf.extend(enc.clauses)
 
     # print the number of variables and clauses created for port matching constraints
     if progress:
-        print(f"[kissat] Port matching constraints: vars={pool.top - num_label_vars}, clauses={len(cnf.clauses) - num_label_clauses}")
-
+        print(
+            f"[kissat] Port matching constraints: vars={pool.top - num_label_vars}, clauses={len(cnf.clauses) - num_label_clauses}"
+        )
 
     # ---------------- (3) Trace constraints ----------------
 
@@ -179,17 +192,17 @@ def build_stage1_cnf(
             # (¬M ∨ U1 ∨ ... ∨ U6)
             cnf.append([-m] + u_literals)
 
-
     # Location variables per plan/time/room
     X: List[List[List[int]]] = []
     for trace_id, (plan, obs) in enumerate(zip(used_plans, used_results)):
-
         T = len(plan)
         x_plan: List[List[int]] = []
         for t in range(T + 1):
             x_t = [trace_location_assign_var(trace_id, t, rid) for rid in range(N)]
             # exactly one via PySAT encoder
-            enc = CardEnc.equals(lits=x_t, bound=1, vpool=pool, encoding=EncType.seqcounter)
+            enc = CardEnc.equals(
+                lits=x_t, bound=1, vpool=pool, encoding=EncType.seqcounter
+            )
             cnf.extend(enc.clauses)
             x_plan.append(x_t)
         X.append(x_plan)
@@ -197,9 +210,13 @@ def build_stage1_cnf(
         # label consistency: x[t,k] -> (Label[k] == obs[t])
         for t in range(T + 1):
             for rid in range(N):
-                assert obs[t] in (0, 1, 2, 3), f"Invalid observation {obs[t]} at plan {trace_id}, time {t}"
+                assert obs[t] in (
+                    0,
+                    1,
+                    2,
+                    3,
+                ), f"Invalid observation {obs[t]} at plan {trace_id}, time {t}"
                 cnf.append([-x_plan[t][rid], label_assign_var(rid, obs[t])])
-
 
         # starting room
         cnf.append([x_plan[0][STARTING_ROOM_ID]])
@@ -215,9 +232,13 @@ def build_stage1_cnf(
                 from_pid = D * from_rid + door
                 for to_rid in range(N):
                     m = move_possibility_var(from_pid, to_rid)
-                    cnf.append([-X[trace_id][t][from_rid], -m, X[trace_id][t + 1][to_rid]])
-                    cnf.append([-X[trace_id][t][from_rid], -X[trace_id][t + 1][to_rid], m])
-                    
+                    cnf.append(
+                        [-X[trace_id][t][from_rid], -m, X[trace_id][t + 1][to_rid]]
+                    )
+                    cnf.append(
+                        [-X[trace_id][t][from_rid], -X[trace_id][t + 1][to_rid], m]
+                    )
+
         # Knowledge-based pruning: if the future identical action prefixes diverge in labels,
         # then positions immediately after t1 and t2 cannot be the same room.
         added = 0
@@ -248,10 +269,8 @@ def build_stage1_cnf(
         if progress and added:
             print(f"[kissat] added {added} pruning binary clauses for trace {trace_id}")
 
-
-
     # Ensure nv is at least the top variable id
-    cnf.nv = max(getattr(cnf, 'nv', 0) or 0, pool.top)
+    cnf.nv = max(getattr(cnf, "nv", 0) or 0, pool.top)
     meta = {
         "N": N,
         "D": D,
@@ -263,7 +282,9 @@ def build_stage1_cnf(
         "port_matching_keys": port_matching_keys,
     }
     if progress:
-        print(f"[kissat] CNF built: vars~{pool.top}, clauses={len(cnf.clauses)}, U={len(port_matching_keys)}, M={len(m_keys)}, X={len(x_keys)}")
+        print(
+            f"[kissat] CNF built: vars~{pool.top}, clauses={len(cnf.clauses)}, U={len(port_matching_keys)}, M={len(m_keys)}, X={len(x_keys)}"
+        )
     return cnf, meta
 
 
@@ -326,7 +347,8 @@ def solve_with_kissat(
         assign[var] = val
     return status, assign
 
-def move_assignment_var(n: int, c: int, d: int, c2: int, pool: IDPool) -> int:
+
+def stage2_move_assignment_var(n: int, c: int, d: int, c2: int, pool: IDPool) -> int:
     assert 0 <= n
     assert 0 <= d < D
     return pool.id(("M", n, c, d, c2))
@@ -361,23 +383,23 @@ def build_stage2_cnf(
     制約
      * sum_{c’} M (n, c, d’, c’) == 1
      * sum_{c} X(t, c) == 1
-     * X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’)) 
-       * n(t): tステップ後にいるノード (G1の中のノードなので2の結果から定まる) 
+     * X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’))
+       * n(t): tステップ後にいるノード (G1の中のノードなので2の結果から定まる)
        * d(t): tステップ目であけるドア
      * X(0, 0) == 1
      * 2つ目のプランから得られる同一性に関する制約
        * 準備
-         * t 回目の移動後に観測されたラベルを L(t) とする (t = 0, …, T) 
-         * t 回目の移動のあとに上書きしたラベルを U(t) とする (t = 0, …, T) 
+         * t 回目の移動後に観測されたラベルを L(t) とする (t = 0, …, T)
+         * t 回目の移動のあとに上書きしたラベルを U(t) とする (t = 0, …, T)
          メモ: U(t) 2つめのランダムウォークにおいてランダム決まっています
-       * 各 t に対して t’ < t でかつ n(t’) == n(t) ∧ U(t’) == L(t) となる最大の t’ を見つける 
+       * 各 t に対して t’ < t でかつ n(t’) == n(t) ∧ U(t’) == L(t) となる最大の t’ を見つける
        * （異なり条件）t’ < t’’ < t でかつ n(t’’) == n(t) となる各 t’’ に対して
-         * X (t, c) != X(t’’, c) 
+         * X (t, c) != X(t’’, c)
        *（同一条件）
          * 準備
            * t 回目の移動直後における各ノード n のC個のコピーにかかれている 2-bit ラベル l のカウントを Count (t, n, l) と書く。
          * C (t’, n (t), U(t’)) == 0 であれば、ステップ t に観測された L(t) はステップ  t’ に書き込まれた U(t’) (t’の定義から L(t)) であることが分かるので
-           * X(t, c) == X(t’, c) 
+           * X(t, c) == X(t’, c)
 
     """
     T = len(plan[0])
@@ -402,7 +424,9 @@ def build_stage2_cnf(
                 next_room = c["from"]["room"]
                 break
         if next_room is None:
-            raise RuntimeError(f"No connection from room {curr_room} via door {door} at time {t}")
+            raise RuntimeError(
+                f"No connection from room {curr_room} via door {door} at time {t}"
+            )
         n_at_t.append(next_room)
         d_at_t.append(door)
         curr_room = next_room
@@ -431,32 +455,49 @@ def build_stage2_cnf(
     pool = IDPool()
     cnf = SatCNF()
 
-
     # 制約を追加
     # \sum_{c’} M (n, c, d’, c’) == 1
     for n in range(len(stage1_rooms)):
         for c in range(C):
             for d in range(D):
-                lits = [move_assignment_var(n, c, d, c2, pool) for c2 in range(C)]
-                enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
+                lits = [
+                    stage2_move_assignment_var(n, c, d, c2, pool) for c2 in range(C)
+                ]
+                enc = CardEnc.equals(
+                    lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter
+                )
                 cnf.extend(enc.clauses)
 
     # \sum_{c} X(t, c) == 1
     for t in range(T + 1):
         lits = [stage2_trace_location_assign_var(t, c, pool) for c in range(C)]
-        enc = CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter)
+        enc = CardEnc.equals(
+            lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter
+        )
         cnf.extend(enc.clauses)
 
     # X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’))
     for t in range(T):
-        n = n_at_t[t] # tステップ後にいるノード
-        d = d_at_t[t + 1] # tステップ目であけるドア。インデックスがずれていることに注意
+        n = n_at_t[t]  # tステップ後にいるノード
+        d = d_at_t[t + 1]  # tステップ目であけるドア。インデックスがずれていることに注意
         for c in range(C):
             curr_var = stage2_trace_location_assign_var(t, c, pool)
             for c2 in range(C):
                 next_var = stage2_trace_location_assign_var(t + 1, c2, pool)
-                cnf.append([-curr_var, -move_assignment_var(n, c, d, c2, pool), next_var])
-                cnf.append([-curr_var, -next_var, move_assignment_var(n, c, d, c2, pool)])
+                cnf.append(
+                    [
+                        -curr_var,
+                        -stage2_move_assignment_var(n, c, d, c2, pool),
+                        next_var,
+                    ]
+                )
+                cnf.append(
+                    [
+                        -curr_var,
+                        -next_var,
+                        stage2_move_assignment_var(n, c, d, c2, pool),
+                    ]
+                )
 
     # X(0, 0) == 1
     cnf.append([stage2_trace_location_assign_var(0, 0, pool)])
@@ -491,11 +532,12 @@ def build_stage2_cnf(
         assert 0 <= curr_label <= 3, f"Invalid current label {curr_label} at time {t}"
         assert 0 <= next_label <= 3, f"Invalid next label {next_label} at time {t}"
         if curr_label != next_label:
-            assert curr_count[n][curr_label] > 0, f"Cannot change label {curr_label} to {next_label} at time {t} for node {n}: no such label left. 多分 Stage1 の解が間違っている"
+            assert curr_count[n][curr_label] > 0, (
+                f"Cannot change label {curr_label} to {next_label} at time {t} for node {n}: no such label left. 多分 Stage1 の解が間違っている"
+            )
             curr_count[n][curr_label] -= 1
             curr_count[n][next_label] += 1
         label_counts.append(curr_count)
-
 
     # 2つ目のプランから得られる同一性に関する制約
     for t in range(1, T + 1):
@@ -515,16 +557,31 @@ def build_stage2_cnf(
         for t_double_prime in range(t_prime + 1, t):
             if n_at_t[t_double_prime] == n_t:
                 for c in range(C):
-                    cnf.append([-stage2_trace_location_assign_var(t, c, pool), -stage2_trace_location_assign_var(t_double_prime, c, pool)])
+                    cnf.append(
+                        [
+                            -stage2_trace_location_assign_var(t, c, pool),
+                            -stage2_trace_location_assign_var(t_double_prime, c, pool),
+                        ]
+                    )
 
-        #（同一条件）
+        # （同一条件）
         # C (t’, n (t), U(t’)) == 0 であれば、ステップ t に観測された L(t) はステップ  t’ に書き込まれた U(t’) (t’の定義から L(t)) であることが分かるので X(t, c) == X(t’, c)
         count = label_counts[t_prime][n_t][l_t]
         assert count >= 1
         if count == 1:
             for c in range(C):
-                cnf.append([-stage2_trace_location_assign_var(t, c, pool), stage2_trace_location_assign_var(t_prime, c, pool)])
-                cnf.append([-stage2_trace_location_assign_var(t_prime, c, pool), stage2_trace_location_assign_var(t, c, pool)])
+                cnf.append(
+                    [
+                        -stage2_trace_location_assign_var(t, c, pool),
+                        stage2_trace_location_assign_var(t_prime, c, pool),
+                    ]
+                )
+                cnf.append(
+                    [
+                        -stage2_trace_location_assign_var(t_prime, c, pool),
+                        stage2_trace_location_assign_var(t, c, pool),
+                    ]
+                )
 
     return cnf, {
         "pool": pool,
@@ -533,7 +590,9 @@ def build_stage2_cnf(
     }
 
 
-def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str, any]:
+def extract_stage1_solution(
+    meta: Dict[str, any], assign: Dict[int, bool]
+) -> Dict[str, any]:
     N = meta["N"]
     D = meta["D"]
     starting_room = meta["starting_room"]
@@ -551,10 +610,9 @@ def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Di
         assert val is not None, f"Room {k} has no label assigned"
         rooms.append(val)
 
-
     # decode connections
     connections: List[Dict[str, Dict[str, int]]] = []
-    for (i, j) in port_matching_keys:
+    for i, j in port_matching_keys:
         if i <= j and assign.get(pool.id(("P", i, j)), False):
             ri, di = divmod(i, D)
             rj, dj = divmod(j, D)
@@ -564,7 +622,14 @@ def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Di
                     "to": {"room": rj, "door": dj},
                 }
             )
-    connections.sort(key=lambda e: (e["from"]["room"], e["from"]["door"], e["to"]["room"], e["to"]["door"]))
+    connections.sort(
+        key=lambda e: (
+            e["from"]["room"],
+            e["from"]["door"],
+            e["to"]["room"],
+            e["to"]["door"],
+        )
+    )
     return {
         "status": 1 if connections else 0,
         "rooms": rooms,
@@ -573,7 +638,68 @@ def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Di
     }
 
 
-def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, out: Dict[str, any], progress: bool = True) -> Tuple[bool, List[str]]:
+def extract_stage2_solution(
+    stage1_rooms: List[int],
+    stage1_connections: List[Dict[str, Dict[str, int]]],
+    meta: Dict[str, any],
+    assign: Dict[int, bool],
+    C: int,
+) -> Dict[str, any]:
+    pool: IDPool = meta["pool"]
+
+
+    stage2_rooms = []
+    for from_room in stage1_rooms:
+        for _ in range(C):
+            stage2_rooms.append(from_room)
+
+    stage1_mapping = dict()
+    for connection in stage1_connections:
+        fr = connection["from"]["room"]
+        to = connection["to"]["room"]
+        door_fr = connection["from"]["door"]
+        door_to = connection["to"]["door"]
+        stage1_mapping[(fr, door_fr)] = (to, door_to)
+        stage1_mapping[(to, door_to)] = (fr, door_fr)
+
+    stage2_connections = []
+    for from_room in range(len(stage2_rooms)):
+        from_base_room = from_room // C
+        c = from_room % C
+
+        for from_door in range(D):
+            next_base_room, next_door = stage1_mapping[(from_base_room, from_door)]
+
+            for c2 in range(C):
+                var = stage2_move_assignment_var(from_base_room, c, from_door, c2, pool)
+                if assign[var]:
+                    next_room = next_base_room * C + c2
+                    from_port = D * from_room + from_door
+                    to_port = D * next_room + next_door
+
+                    if from_port <= to_port:
+                        stage2_connections.append(
+                            {
+                                "from": {"room": from_room, "door": from_door},
+                                "to": {"room": next_base_room, "door": next_door},
+                            }
+                        )
+
+    return {
+        "status": 1 if stage2_connections else 0,
+        "rooms": stage2_rooms,
+        "startingRoom": STARTING_ROOM_ID,
+        "connections": stage2_connections,
+    }
+
+
+def verify_stage1_solution(
+    plans: List[List[int]],
+    results: List[List[int]],
+    N: int,
+    out: Dict[str, any],
+    progress: bool = True,
+) -> Tuple[bool, List[str]]:
     D = 6
     P = N * D
     errs: List[str] = []
@@ -582,9 +708,9 @@ def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, ou
     match = [-1] * P
     for c in out.get("connections", []):
         ri = int(c["from"]["room"])
-        di = int(c["from"]["door"]) 
+        di = int(c["from"]["door"])
         rj = int(c["to"]["room"])
-        dj = int(c["to"]["door"]) 
+        dj = int(c["to"]["door"])
         p = ri * D + di
         q = rj * D + dj
         if not (0 <= p < P and 0 <= q < P):
@@ -615,7 +741,9 @@ def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, ou
             errs.append(f"plan {idx}: starting room out of range: {cur}")
             continue
         if labels and (labels[cur] != int(obs[0])):
-            errs.append(f"plan {idx} step 0: label mismatch at room {cur}: expected {obs[0]}, got {labels[cur]}")
+            errs.append(
+                f"plan {idx} step 0: label mismatch at room {cur}: expected {obs[0]}, got {labels[cur]}"
+            )
         # steps
         for t, a in enumerate(plan):
             if not (0 <= a < D):
@@ -623,7 +751,9 @@ def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, ou
                 break
             p = cur * D + a
             if match[p] == -1:
-                errs.append(f"plan {idx} step {t}: port {p} (room {cur}, door {a}) has no match")
+                errs.append(
+                    f"plan {idx} step {t}: port {p} (room {cur}, door {a}) has no match"
+                )
                 break
             q = match[p]
             nxt = q // D
@@ -631,7 +761,7 @@ def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, ou
             expected = int(obs[t + 1])
             if labels and (labels[cur] != expected):
                 errs.append(
-                    f"plan {idx} step {t+1}: label mismatch at room {cur}: expected {expected}, got {labels[cur]}"
+                    f"plan {idx} step {t + 1}: label mismatch at room {cur}: expected {expected}, got {labels[cur]}"
                 )
 
     ok = len(errs) == 0
@@ -648,11 +778,24 @@ def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, ou
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ædificium SAT solver via Kissat")
     parser.add_argument("--input", "-i", type=str, help="Input JSON (stdin if omitted)")
-    parser.add_argument("--output", "-o", type=str, help="Output JSON (stdout if omitted)")
-    parser.add_argument("--time", type=float, default=600.0, help="Time limit in seconds")
-    parser.add_argument("--seed", type=int, default=None, help="Random seed passed to Kissat (--seed)")
-    parser.add_argument("--prefix-steps", type=int, default=None, help="Use only the first K steps of each plan when building CNF")
-    parser.add_argument("--progress", "-p", action="store_true", help="Print progress logs")
+    parser.add_argument(
+        "--output", "-o", type=str, help="Output JSON (stdout if omitted)"
+    )
+    parser.add_argument(
+        "--time", type=float, default=600.0, help="Time limit in seconds"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random seed passed to Kissat (--seed)"
+    )
+    parser.add_argument(
+        "--prefix-steps",
+        type=int,
+        default=None,
+        help="Use only the first K steps of each plan when building CNF",
+    )
+    parser.add_argument(
+        "--progress", "-p", action="store_true", help="Print progress logs"
+    )
     args = parser.parse_args()
 
     if args.input:
@@ -662,7 +805,6 @@ def main() -> None:
         data = json.load(sys.stdin)
 
     assert len(data["plans"]) == 2
-
 
     print("[Stage1]: Find the underlying structure…")
     stage1_plan = normalize_stage1_plan(data["plans"][0])
@@ -675,8 +817,16 @@ def main() -> None:
     if args.progress:
         print(f"[kissat, Stage1] Building CNF… N={N}, time={args.time}s")
     if args.progress and args.prefix_steps is not None:
-        print(f"[kissat, Stage1] Using only the first {args.prefix_steps} steps of each plan")
-    cnf, meta = build_stage1_cnf([stage1_plan], [stage1_result], stage1_N, progress=args.progress, prefix_steps=args.prefix_steps)
+        print(
+            f"[kissat, Stage1] Using only the first {args.prefix_steps} steps of each plan"
+        )
+    cnf, meta = build_stage1_cnf(
+        [stage1_plan],
+        [stage1_result],
+        stage1_N,
+        progress=args.progress,
+        prefix_steps=args.prefix_steps,
+    )
     if args.progress:
         print("[kissat, Stage1] Solving…")
     status, assign = solve_with_kissat(
@@ -694,8 +844,12 @@ def main() -> None:
         out = extract_stage1_solution(meta, assign)
         # Post-verify against FULL plans/results (not truncated by --prefix-steps)
         if args.progress and args.prefix_steps is not None:
-            print("[verify] Using full plans/results for verification (ignoring prefix truncation).")
-        ok, errs = verify_solution([stage1_plan], [stage1_result], stage1_N, out, progress=args.progress)
+            print(
+                "[verify] Using full plans/results for verification (ignoring prefix truncation)."
+            )
+        ok, errs = verify_stage1_solution(
+            [stage1_plan], [stage1_result], stage1_N, out, progress=args.progress
+        )
         out["verified"] = bool(ok)
         if not ok:
             out["verifyErrors"] = errs
@@ -705,7 +859,14 @@ def main() -> None:
     stage1_connections = out["connections"]
     stage2_plan = normalize_stage2_plan(data["plans"][1])
     stage2_result = normalize_stage2_result(data["results"][1], stage2_plan)
-    cnf, meta = build_stage2_cnf(stage1_rooms, stage1_connections, stage2_plan, stage2_result, C=C, progress=args.progress)
+    cnf, meta = build_stage2_cnf(
+        stage1_rooms,
+        stage1_connections,
+        stage2_plan,
+        stage2_result,
+        C=C,
+        progress=args.progress,
+    )
     status, assign = solve_with_kissat(
         cnf,
         time_limit_s=args.time,
@@ -718,23 +879,15 @@ def main() -> None:
         out = {"status": 0, "error": f"Kissat returned {status} in Stage 2"}
     else:
         # extract copy assignments
-        pool: IDPool = meta["pool"]
-        T = meta["T"]
-        C = meta["C"]
-        copy_assign: List[int] = []
-        for t in range(T + 1):
-            val = None
-            for c in range(C):
-                var = stage2_trace_location_assign_var(t, c, pool)
-                if assign.get(var, False):
-                    val = c
-                    break
-            assert val is not None, f"Step {t} has no copy assigned"
-            copy_assign.append(val)
-        out["copyAssignments"] = copy_assign
-        out["status"] = 1
-    
-
+        out = extract_stage2_solution(
+            stage1_rooms, stage1_connections, meta, assign, C=C
+        )
+        ok, errs = verify_stage2_solution(
+            stage2_plan, stage2_result, N, out, progress=args.progress
+        )
+        out["verified"] = bool(ok)
+        if not ok:
+            out["verifyErrors"] = errs
 
     if args.output:
         with open(args.output, "w") as f:
