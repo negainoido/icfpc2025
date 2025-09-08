@@ -116,7 +116,8 @@ class Graph:
         merged = [False for _ in range(len(labels))]
 
         for _ in range(len(labels)):
-            # while not all(merged):
+            if all(merged):
+                break
             next_path = []
             checking_label = {}
             for i, label in enumerate(labels[:-1]):
