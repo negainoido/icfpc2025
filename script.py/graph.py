@@ -115,16 +115,14 @@ class Graph:
         uf = UnionFind(len(labels))
         merged = [False for _ in range(len(labels))]
 
-        for _ in range(len(labels)):
-            if all(merged):
-                break
+        while not all(merged):
             next_path = []
             checking_label = {}
             for i, label in enumerate(labels[:-1]):
                 if merged[i] or label in checking_label:
                     next_path.append((path[i], None))
                     continue
-
+                merged[i] = True
                 checking_label[label] = i
                 next_path.append((path[i], (label + 1) % 4))
 
@@ -145,7 +143,7 @@ class Graph:
 
                 next_label_idx += 1
 
-        assert all(merged), merged
+        assert all(merged), f"labels: {labels}, merged: {merged}, path: {path}"
 
         uf_to_node = {}
         for i, p in enumerate(path):
