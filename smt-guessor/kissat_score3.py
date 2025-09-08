@@ -11,6 +11,7 @@ Usage: python -m smt-guessor.kissat --input in.json --output out.json [--time 60
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import subprocess
@@ -358,8 +359,8 @@ def build_stage2_cnf(
      * M (n, c, d’, c’): G1のノードnのコピーcからドアd’を開けたときにコピーc’に遷移する
      * X (t, c) tステップ後にc個目のコピーにいる
     制約
-     * \sum_{c’} M (n, c, d’, c’) == 1
-     * \sum_{c} X(t, c) == 1
+     * sum_{c’} M (n, c, d’, c’) == 1
+     * sum_{c} X(t, c) == 1
      * X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’)) 
        * n(t): tステップ後にいるノード (G1の中のノードなので2の結果から定まる) 
        * d(t): tステップ目であけるドア
@@ -380,12 +381,15 @@ def build_stage2_cnf(
 
     """
     T = len(plan[0])
+    assert len(result) == T + 1
 
     # Compute n(t) and d(t) for each t in advance
     n_at_t: List[int] = []
     d_at_t: List[int] = []
     curr_room = 0
+
     n_at_t.append(curr_room)
+    d_at_t.append(-1)  # dummy for t=0
     for t in range(T):
         door = plan[0][t]
         assert 0 <= door < D, f"Invalid action {door} at time {t}"
@@ -403,6 +407,9 @@ def build_stage2_cnf(
         d_at_t.append(door)
         curr_room = next_room
 
+    assert len(n_at_t) == T + 1
+    assert len(d_at_t) == T + 1
+
     # Compute L(t) and U(t) for each t in advance
     doors, overwrites = plan
     obs = result
@@ -416,6 +423,9 @@ def build_stage2_cnf(
             U_at_t.append(-1)
         else:
             U_at_t.append(overwrites[t - 1])
+
+    assert len(L_at_t) == T + 1
+    assert len(U_at_t) == T + 1
 
     # Construct CNF
     pool = IDPool()
@@ -439,8 +449,8 @@ def build_stage2_cnf(
 
     # X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’))
     for t in range(T):
-        n = n_at_t[t]
-        d = d_at_t[t]
+        n = n_at_t[t] # tステップ後にいるノード
+        d = d_at_t[t + 1] # tステップ目であけるドア。インデックスがずれていることに注意
         for c in range(C):
             curr_var = stage2_trace_location_assign_var(t, c, pool)
             for c2 in range(C):
@@ -451,26 +461,75 @@ def build_stage2_cnf(
     # X(0, 0) == 1
     cnf.append([stage2_trace_location_assign_var(0, 0, pool)])
 
+    # 各時刻における各ノードの各ラベルのカウント Count(t, n, l) を計算する
+    # label_counts[t][n][l] = (tステップ後にノードnのコピーにラベルlがいくつあるか)
+    label_counts = []
+    initial_label_count = []
+    print(L_at_t)
+    for n in range(len(stage1_rooms)):
+        room_label = stage1_rooms[n]
+        count = [0, 0, 0, 0]
+        count[room_label] = C
+        initial_label_count.append(count)
+    print(initial_label_count)
+    label_counts.append(initial_label_count)
+    print(plan, result)
+
+    for t in range(1, T + 1):
+        n = n_at_t[t]
+        prev_count = label_counts[t - 1]
+        curr_count = copy.deepcopy(prev_count)
+
+        # 書き換え直前のラベル
+        curr_label = L_at_t[t]
+
+        # 書き換え直後のラベル
+        next_label = U_at_t[t]
+
+        print(n, curr_label, next_label, curr_count)
+
+        assert 0 <= curr_label <= 3, f"Invalid current label {curr_label} at time {t}"
+        assert 0 <= next_label <= 3, f"Invalid next label {next_label} at time {t}"
+        if curr_label != next_label:
+            assert curr_count[n][curr_label] > 0, f"Cannot change label {curr_label} to {next_label} at time {t} for node {n}: no such label left"
+            curr_count[n][curr_label] -= 1
+            curr_count[n][next_label] += 1
+        label_counts.append(curr_count)
+
+
     # 2つ目のプランから得られる同一性に関する制約
     for t in range(1, T + 1):
-        # find largest t' < t such that n(t') == n(t) and U(t') == L(t)
+        n_t = n_at_t[t]
+        l_t = L_at_t[t]
+
+        # t’ < t でかつ n(t’) == n(t) ∧ U(t’) == L(t) となる最大の t’ を見つける
         t_prime = -1
         for tp in range(t - 1, -1, -1):
-            if n_at_t[tp] == n_at_t[t] and U_at_t[tp] == L_at_t[t]:
+            if n_at_t[tp] == n_t and U_at_t[tp] == l_t:
                 t_prime = tp
                 break
         if t_prime == -1:
             continue
 
-        # (異なり条件) t' < t'' < t でかつ n(t'') == n(t) となる各 t'' に対して X(t, c) != X(t'', c)
-        for t2 in range(t_prime + 1, t):
-            if n_at_t[t2] != n_at_t[t]:
-                continue
+        # （異なり条件）t’ < t’’ < t でかつ n(t’’) == n(t) となる各 t’’ に対して X (t, c) != X(t’’, c)
+        for t_double_prime in range(t_prime + 1, t):
+            if n_at_t[t_double_prime] == n_t:
+                for c in range(C):
+                    cnf.append([-stage2_trace_location_assign_var(t, c, pool), -stage2_trace_location_assign_var(t_double_prime, c, pool)])
+
+        #（同一条件）
+        # C (t’, n (t), U(t’)) == 0 であれば、ステップ t に観測された L(t) はステップ  t’ に書き込まれた U(t’) (t’の定義から L(t)) であることが分かるので X(t, c) == X(t’, c)
+        count = label_counts[t_prime][n_t][l_t]
+        if count == 0:
             for c in range(C):
-                cnf.append([-stage2_trace_location_assign_var(t, c, pool), -stage2_trace_location_assign_var(t2, c, pool)])
+                cnf.append([-stage2_trace_location_assign_var(t, c, pool), stage2_trace_location_assign_var(t_prime, c, pool)])
+                cnf.append([-stage2_trace_location_assign_var(t_prime, c, pool), stage2_trace_location_assign_var(t, c, pool)])
 
-
-    raise NotImplementedError("Not implemented yet")
+    return cnf, {
+        "pool": pool,
+        "T": T,
+        "C": C,
+    }
 
 
 def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str, any]:
@@ -645,6 +704,7 @@ def main() -> None:
     stage1_connections = out["connections"]
     stage2_plan = normalize_stage2_plan(data["plans"][1])
     stage2_result = normalize_stage2_result(data["results"][1], stage2_plan)
+    print(stage2_result)
     cnf, meta = build_stage2_cnf(stage1_rooms, stage1_connections, stage2_plan, stage2_result, C=C, progress=args.progress)
 
 
