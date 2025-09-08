@@ -465,15 +465,15 @@ def build_stage2_cnf(
     # label_counts[t][n][l] = (tステップ後にノードnのコピーにラベルlがいくつあるか)
     label_counts = []
     initial_label_count = []
-    print(L_at_t)
+    # print(L_at_t)
     for n in range(len(stage1_rooms)):
         room_label = stage1_rooms[n]
         count = [0, 0, 0, 0]
         count[room_label] = C
         initial_label_count.append(count)
-    print(initial_label_count)
+    # print(initial_label_count)
     label_counts.append(initial_label_count)
-    print(plan, result)
+    # print(plan, result)
 
     for t in range(1, T + 1):
         n = n_at_t[t]
@@ -486,12 +486,12 @@ def build_stage2_cnf(
         # 書き換え直後のラベル
         next_label = U_at_t[t]
 
-        print(n, curr_label, next_label, curr_count)
+        # print(n, curr_label, next_label, curr_count)
 
         assert 0 <= curr_label <= 3, f"Invalid current label {curr_label} at time {t}"
         assert 0 <= next_label <= 3, f"Invalid next label {next_label} at time {t}"
         if curr_label != next_label:
-            assert curr_count[n][curr_label] > 0, f"Cannot change label {curr_label} to {next_label} at time {t} for node {n}: no such label left"
+            assert curr_count[n][curr_label] > 0, f"Cannot change label {curr_label} to {next_label} at time {t} for node {n}: no such label left. 多分 Stage1 の解が間違っている"
             curr_count[n][curr_label] -= 1
             curr_count[n][next_label] += 1
         label_counts.append(curr_count)
@@ -520,7 +520,8 @@ def build_stage2_cnf(
         #（同一条件）
         # C (t’, n (t), U(t’)) == 0 であれば、ステップ t に観測された L(t) はステップ  t’ に書き込まれた U(t’) (t’の定義から L(t)) であることが分かるので X(t, c) == X(t’, c)
         count = label_counts[t_prime][n_t][l_t]
-        if count == 0:
+        assert count >= 1
+        if count == 1:
             for c in range(C):
                 cnf.append([-stage2_trace_location_assign_var(t, c, pool), stage2_trace_location_assign_var(t_prime, c, pool)])
                 cnf.append([-stage2_trace_location_assign_var(t_prime, c, pool), stage2_trace_location_assign_var(t, c, pool)])
@@ -672,12 +673,12 @@ def main() -> None:
     stage1_N = N // C
 
     if args.progress:
-        print(f"[kissat] Building CNF… N={N}, time={args.time}s")
+        print(f"[kissat, Stage1] Building CNF… N={N}, time={args.time}s")
     if args.progress and args.prefix_steps is not None:
-        print(f"[kissat] Using only the first {args.prefix_steps} steps of each plan")
+        print(f"[kissat, Stage1] Using only the first {args.prefix_steps} steps of each plan")
     cnf, meta = build_stage1_cnf([stage1_plan], [stage1_result], stage1_N, progress=args.progress, prefix_steps=args.prefix_steps)
     if args.progress:
-        print("[kissat] Solving…")
+        print("[kissat, Stage1] Solving…")
     status, assign = solve_with_kissat(
         cnf,
         time_limit_s=args.time,
@@ -685,7 +686,7 @@ def main() -> None:
         seed=args.seed,
     )
     if args.progress:
-        print(f"[kissat] Solve status: {status}")
+        print(f"[kissat, Stage1] Solve status: {status}")
 
     if status != "SAT":
         out = {"status": 0, "error": f"Kissat returned {status}"}
@@ -699,13 +700,40 @@ def main() -> None:
         if not ok:
             out["verifyErrors"] = errs
 
-    print("[Stage2]: Assign copy ID to each room…")
+    print("[kissat, Stage2]: Assign copy ID to each room…")
     stage1_rooms = out["rooms"]
     stage1_connections = out["connections"]
     stage2_plan = normalize_stage2_plan(data["plans"][1])
     stage2_result = normalize_stage2_result(data["results"][1], stage2_plan)
-    print(stage2_result)
     cnf, meta = build_stage2_cnf(stage1_rooms, stage1_connections, stage2_plan, stage2_result, C=C, progress=args.progress)
+    status, assign = solve_with_kissat(
+        cnf,
+        time_limit_s=args.time,
+        progress=args.progress,
+        seed=args.seed,
+    )
+    if args.progress:
+        print(f"[kissat, Stage2] Solve status: {status}")
+    if status != "SAT":
+        out = {"status": 0, "error": f"Kissat returned {status} in Stage 2"}
+    else:
+        # extract copy assignments
+        pool: IDPool = meta["pool"]
+        T = meta["T"]
+        C = meta["C"]
+        copy_assign: List[int] = []
+        for t in range(T + 1):
+            val = None
+            for c in range(C):
+                var = stage2_trace_location_assign_var(t, c, pool)
+                if assign.get(var, False):
+                    val = c
+                    break
+            assert val is not None, f"Step {t} has no copy assigned"
+            copy_assign.append(val)
+        out["copyAssignments"] = copy_assign
+        out["status"] = 1
+    
 
 
     if args.output:
