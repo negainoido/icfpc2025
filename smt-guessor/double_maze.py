@@ -115,9 +115,10 @@ def _rev_port(connections: List[dict], u: int, door: int) -> tuple[int, int]:
 
 def _build_explore_plans(N: int, seed: Optional[int] = None) -> List[str]:
     rng = random.Random(seed)
-    L = max(1, int(N * 2))
+    L = max(1, int(N * 6))
+    print(f"Generating {L} exploration plans")
     plans: List[str] = []
-    for _ in range(10):
+    for _ in range(2):
         seq = [rng.randint(0, 5) for _ in range(L)]
         plans.append(_normalize_plan(seq))
     return plans
@@ -255,12 +256,18 @@ def solve_double_maze(
     is_vanilla = True
     # door_info[(room, door)] = True/False (vanilla/cross)
     door_info: Dict[Tuple[int, int], bool] = {}
+    before_first_color = True
     for token, obs in zip(tokens, res[1:]):
         # 現在の部屋
         room = rooms_seq[idx]
         # tokenを実行した結果obsが得られた
         if token.startswith("["):
+            before_first_color = False
             vis.add(room)
+            continue
+        # 最初の色指定までの移動は無視
+        if before_first_color:
+            idx += 1
             continue
         # 移動したパターン
         door = int(token)
