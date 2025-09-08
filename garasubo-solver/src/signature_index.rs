@@ -41,7 +41,7 @@ pub struct BuildParams {
 impl Default for BuildParams {
     fn default() -> Self {
         Self {
-            bucket_cap: Some(128),   // 例：各署名キーにつき最大 50 件まで保持
+            bucket_cap: Some(128), // 例：各署名キーにつき最大 50 件まで保持
             enable_mix: true,
             seed: 0x5EED_C0DE_1234_ABCD,
         }
@@ -127,7 +127,13 @@ pub fn build_signature_index(
         }
     }
 
-    Ok(SigIndex { f1, b1, f2, b2, mix })
+    Ok(SigIndex {
+        f1,
+        b1,
+        f2,
+        b2,
+        mix,
+    })
 }
 
 //-----------------------------
@@ -168,11 +174,11 @@ fn pack3(y0: u8, d0: u8, y1: u8) -> u64 {
 fn pack5(y0: u8, d0: u8, y1: u8, d1: u8, y2: u8) -> u64 {
     const LM: u64 = (1 << 2) - 1;
     const DM: u64 = (1 << 3) - 1;
-    let a = (y0 as u64) & LM;               // +0..1
-    let b = ((d0 as u64) & DM) << 2;        // +2..4
-    let c = ((y1 as u64) & LM) << 5;        // +5..6
-    let d = ((d1 as u64) & DM) << 7;        // +7..9
-    let e = ((y2 as u64) & LM) << 10;       // +10..11
+    let a = (y0 as u64) & LM; // +0..1
+    let b = ((d0 as u64) & DM) << 2; // +2..4
+    let c = ((y1 as u64) & LM) << 5; // +5..6
+    let d = ((d1 as u64) & DM) << 7; // +7..9
+    let e = ((y2 as u64) & LM) << 10; // +10..11
     a | b | c | d | e // 12 ビット使用
 }
 
@@ -200,7 +206,11 @@ struct XorShift64 {
 }
 impl XorShift64 {
     fn new(seed: u64) -> Self {
-        let s = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+        let s = if seed == 0 {
+            0x9E37_79B9_7F4A_7C15
+        } else {
+            seed
+        };
         Self { state: s }
     }
     #[inline]

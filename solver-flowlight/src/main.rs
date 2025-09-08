@@ -348,15 +348,21 @@ fn score_saed(st: &State, plan: &[usize], results: &[u8]) -> usize {
         let mut next = vec![INF; N];
         for v in 0..N {
             let base = ins[v];
-            if base >= INF { continue; }
+            if base >= INF {
+                continue;
+            }
             let label_cost = if labels[v] == results[j] { 0 } else { 1 };
             // 削除
             let del_cost = base + label_cost + 1;
-            if del_cost < next[v] { next[v] = del_cost; }
+            if del_cost < next[v] {
+                next[v] = del_cost;
+            }
             // 一致
             let to = st.neighbors[v][plan[j]].0;
             let mv_cost = base + label_cost;
-            if mv_cost < next[to] { next[to] = mv_cost; }
+            if mv_cost < next[to] {
+                next[to] = mv_cost;
+            }
         }
         cur = next;
     }
@@ -364,10 +370,14 @@ fn score_saed(st: &State, plan: &[usize], results: &[u8]) -> usize {
     let mut best = INF;
     for v in 0..N {
         let base = ins[v];
-        if base >= INF { continue; }
+        if base >= INF {
+            continue;
+        }
         let label_cost = if labels[v] == results[l] { 0 } else { 1 };
         let total = base + label_cost;
-        if total < best { best = total; }
+        if total < best {
+            best = total;
+        }
     }
     best
 }

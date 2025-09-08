@@ -1,4 +1,7 @@
-use crate::models::{ApiError, ApiLog, ExploreUpstreamResponse, GuessUpstreamResponse, SelectUpstreamRequest, SelectUpstreamResponse, Session, SessionWithProblem, SessionWithProblemName};
+use crate::models::{
+    ApiError, ApiLog, ExploreUpstreamResponse, GuessUpstreamResponse, SelectUpstreamRequest,
+    SelectUpstreamResponse, Session, SessionWithProblem, SessionWithProblemName,
+};
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool, Row};
 use std::env;
 use tower_http::follow_redirect::policy::PolicyExt;
@@ -421,11 +424,14 @@ pub async fn get_all_sessions_with_problems(
                     .map(|r| r.query_count)
                     .ok()
             });
-            let guess_result = row.guess_response_body.and_then(|json_str| {
-                serde_json::from_str::<GuessUpstreamResponse>(&json_str)
-                    .map(|r| r.correct)
-                    .ok()
-            }).unwrap_or(false);
+            let guess_result = row
+                .guess_response_body
+                .and_then(|json_str| {
+                    serde_json::from_str::<GuessUpstreamResponse>(&json_str)
+                        .map(|r| r.correct)
+                        .ok()
+                })
+                .unwrap_or(false);
 
             (session, problem_name, guess_result.then(|| score).flatten())
         })

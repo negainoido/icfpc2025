@@ -83,8 +83,8 @@ impl ApiClient {
         request_builder: reqwest::RequestBuilder,
     ) -> anyhow::Result<T> {
         let mut retry_count = 0;
-        const MAX_RETRIES: usize = 3;
-        const BASE_DELAY: Duration = Duration::from_millis(100);
+        const MAX_RETRIES: usize = 5;
+        const BASE_DELAY: Duration = Duration::from_millis(400);
 
         loop {
             let response = request_builder
@@ -97,9 +97,13 @@ impl ApiClient {
             let status = response.status();
 
             if status.is_success() {
-                let text = response.text().await.context("Failed to read response text")?;
-                let result = serde_json::from_str(&text)
-                    .with_context(|| format!("Failed to parse response JSON. Original text: {}", text))?;
+                let text = response
+                    .text()
+                    .await
+                    .context("Failed to read response text")?;
+                let result = serde_json::from_str(&text).with_context(|| {
+                    format!("Failed to parse response JSON. Original text: {}", text)
+                })?;
                 return Ok(result);
             } else if status.is_server_error() && retry_count < MAX_RETRIES {
                 retry_count += 1;

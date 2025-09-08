@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -133,14 +133,17 @@ struct Instance {
 
 #[derive(Clone)]
 struct Model {
-    match_to: Vec<usize>,   // μ: involution on 0..6N-1, μ[μ[p]]==p
+    match_to: Vec<usize>, // μ: involution on 0..6N-1, μ[μ[p]]==p
 }
 
 fn check_involution(m: &Model) -> bool {
     let n = m.match_to.len();
     for p in 0..n {
         let q = m.match_to[p];
-        if q >= n { eprintln!("involution fail: p={} q(out)={}", p, q); return false; }
+        if q >= n {
+            eprintln!("involution fail: p={} q(out)={}", p, q);
+            return false;
+        }
         let r = m.match_to[q];
         if r != p {
             eprintln!("involution fail: p={} q={} r={}", p, q, r);
@@ -157,8 +160,12 @@ struct Energy {
     total: i32,
 }
 
-fn to_port(q: Room, c: Door) -> PortIdx { PortIdx(q * 6 + c as usize) }
-fn from_port(p: PortIdx) -> (Room, Door) { (p.0 / 6, (p.0 % 6) as u8) }
+fn to_port(q: Room, c: Door) -> PortIdx {
+    PortIdx(q * 6 + c as usize)
+}
+fn from_port(p: PortIdx) -> (Room, Door) {
+    (p.0 / 6, (p.0 % 6) as u8)
+}
 
 fn normalize_plans(plans: &[String]) -> Result<Vec<Vec<Door>>> {
     let mut out = Vec::with_capacity(plans.len());
@@ -167,14 +174,20 @@ fn normalize_plans(plans: &[String]) -> Result<Vec<Vec<Door>>> {
     let mut has_1_6 = false;
     for s in plans {
         for ch in s.chars() {
-            if ch >= '0' && ch <= '5' { has_0_5 = true; }
-            else if ch >= '1' && ch <= '6' { has_1_6 = true; }
-            else if ch == '[' || ch == ']' { /* graffiti unsupported in MVP; ignore in detection */ }
-            else { return Err(anyhow!("invalid plan character: {}", ch)); }
+            if ch >= '0' && ch <= '5' {
+                has_0_5 = true;
+            } else if ch >= '1' && ch <= '6' {
+                has_1_6 = true;
+            } else if ch == '[' || ch == ']' { /* graffiti unsupported in MVP; ignore in detection */
+            } else {
+                return Err(anyhow!("invalid plan character: {}", ch));
+            }
         }
     }
     if has_0_5 && has_1_6 {
-        return Err(anyhow!("mixed 0..5 and 1..6 digits in plans are not supported"));
+        return Err(anyhow!(
+            "mixed 0..5 and 1..6 digits in plans are not supported"
+        ));
     }
     let dec = if has_1_6 { 1 } else { 0 };
     for s in plans {
@@ -182,8 +195,12 @@ fn normalize_plans(plans: &[String]) -> Result<Vec<Vec<Door>>> {
         let mut in_bracket = false;
         for ch in s.chars() {
             match ch {
-                '[' => { in_bracket = true; },
-                ']' => { in_bracket = false; },
+                '[' => {
+                    in_bracket = true;
+                }
+                ']' => {
+                    in_bracket = false;
+                }
                 '0'..='9' => {
                     if in_bracket {
                         // graffiti write; MVP ignores these actions for modeling
@@ -191,7 +208,9 @@ fn normalize_plans(plans: &[String]) -> Result<Vec<Vec<Door>>> {
                     }
                     let d = ch as u8 - b'0';
                     let d = d.saturating_sub(dec);
-                    if d > 5 { return Err(anyhow!("door out of range after normalization")); }
+                    if d > 5 {
+                        return Err(anyhow!("door out of range after normalization"));
+                    }
                     v.push(d);
                 }
                 _ => {}
@@ -202,10 +221,21 @@ fn normalize_plans(plans: &[String]) -> Result<Vec<Vec<Door>>> {
     Ok(out)
 }
 
-fn validate_instance(n: usize, s0: usize, plans: &[Vec<Door>], results: &[Vec<Label>]) -> Result<()> {
-    if n == 0 { return Err(anyhow!("N must be >= 1")); }
-    if s0 >= n { return Err(anyhow!("startingRoom out of range")); }
-    if plans.len() != results.len() { return Err(anyhow!("plans/results length mismatch")); }
+fn validate_instance(
+    n: usize,
+    s0: usize,
+    plans: &[Vec<Door>],
+    results: &[Vec<Label>],
+) -> Result<()> {
+    if n == 0 {
+        return Err(anyhow!("N must be >= 1"));
+    }
+    if s0 >= n {
+        return Err(anyhow!("startingRoom out of range"));
+    }
+    if plans.len() != results.len() {
+        return Err(anyhow!("plans/results length mismatch"));
+    }
     for (k, (p, r)) in plans.iter().zip(results.iter()).enumerate() {
         if r.len() != p.len() + 1 {
             return Err(anyhow!("results[{}].len() must be plan.len()+1", k));
@@ -231,7 +261,9 @@ fn build_initial(inst: &Instance, _rng: &mut StdRng) -> Model {
                 return Some(c);
             }
         }
-        if free[q] == 0 { return None; }
+        if free[q] == 0 {
+            return None;
+        }
         for c in 0u8..6u8 {
             if (free[q] & (1u8 << c)) != 0 {
                 free[q] &= !(1u8 << c);
@@ -242,7 +274,8 @@ fn build_initial(inst: &Instance, _rng: &mut StdRng) -> Model {
     }
 
     fn connect(match_to: &mut [usize], p1: PortIdx, p2: PortIdx) {
-        let i = p1.0; let j = p2.0;
+        let i = p1.0;
+        let j = p2.0;
         match_to[i] = j;
         match_to[j] = i;
     }
@@ -267,11 +300,17 @@ fn build_initial(inst: &Instance, _rng: &mut StdRng) -> Model {
             }
             // choose any destination room with a free port
             let mut q_to: Option<usize> = None;
-            for cand in 0..n { if free[cand] != 0 { q_to = Some(cand); break; } }
+            for cand in 0..n {
+                if free[cand] != 0 {
+                    q_to = Some(cand);
+                    break;
+                }
+            }
             if let Some(q2) = q_to {
                 // pick destination port, prefer opposite
                 let pref = ((a as u8 + 3) % 6) as u8;
-                let c2 = take_port(&mut free, q2, Some(pref)).or_else(|| take_port(&mut free, q2, None));
+                let c2 =
+                    take_port(&mut free, q2, Some(pref)).or_else(|| take_port(&mut free, q2, None));
                 if let Some(c2) = c2 {
                     // consume from-port now
                     let _ = take_port(&mut free, q, Some(a));
@@ -337,20 +376,36 @@ fn infer_labels(inst: &Instance, match_to: &[usize]) -> Vec<Label> {
     let base = (n / 4) as i32;
     let rem = (n % 4) as usize;
     let mut remain = [0i32; 4];
-    for l in 0..4usize { remain[l] = base + if l < rem { 1 } else { 0 }; }
+    for l in 0..4usize {
+        remain[l] = base + if l < rem { 1 } else { 0 };
+    }
 
     // helper to assign label if not set
     let mut set_label = |q: usize, want: Label| {
-        if labels[q].is_some() { return; }
+        if labels[q].is_some() {
+            return;
+        }
         let wl = want as usize;
-        if remain[wl] > 0 { labels[q] = Some(want); remain[wl] -= 1; return; }
+        if remain[wl] > 0 {
+            labels[q] = Some(want);
+            remain[wl] -= 1;
+            return;
+        }
         // pick any other label with remaining quota
         for l in 0..4usize {
-            if l == wl { continue; }
-            if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; return; }
+            if l == wl {
+                continue;
+            }
+            if remain[l] > 0 {
+                labels[q] = Some(l as u8);
+                remain[l] -= 1;
+                return;
+            }
         }
         // as a last resort (shouldn't happen), assign the first label
-        if labels[q].is_none() { labels[q] = Some(0); }
+        if labels[q].is_none() {
+            labels[q] = Some(0);
+        }
     };
 
     // Traverse all plans and assign greedily
@@ -365,9 +420,15 @@ fn infer_labels(inst: &Instance, match_to: &[usize]) -> Vec<Label> {
     for q in 0..n {
         if labels[q].is_none() {
             for l in 0..4usize {
-                if remain[l] > 0 { labels[q] = Some(l as u8); remain[l] -= 1; break; }
+                if remain[l] > 0 {
+                    labels[q] = Some(l as u8);
+                    remain[l] -= 1;
+                    break;
+                }
             }
-            if labels[q].is_none() { labels[q] = Some(0); }
+            if labels[q].is_none() {
+                labels[q] = Some(0);
+            }
         }
     }
 
@@ -381,29 +442,47 @@ fn energy(inst: &Instance, m: &Model, _lambda_bal: f32) -> Energy {
     for (plan, expect) in inst.plans.iter().zip(inst.results.iter()) {
         let path = trace_rooms(&m.match_to, inst.s0, plan);
         for (room, &e) in path.into_iter().zip(expect.iter()) {
-            if labels[room] != e { obs += 1; }
+            if labels[room] != e {
+                obs += 1;
+            }
         }
     }
-    Energy { obs, balance: 0, total: obs }
+    Energy {
+        obs,
+        balance: 0,
+        total: obs,
+    }
 }
 
 fn two_opt(m: &mut Model, p1: usize, p2: usize) {
-    if p1 == p2 { return; }
-    let a = p1; let b = m.match_to[p1];
-    let c = p2; let d = m.match_to[p2];
+    if p1 == p2 {
+        return;
+    }
+    let a = p1;
+    let b = m.match_to[p1];
+    let c = p2;
+    let d = m.match_to[p2];
     // choose randomly pattern A or B outside; caller will handle randomness; we'll implement A here and B by swapping args
     // Here we implement A: a<->c, b<->d
-    m.match_to[a] = c; m.match_to[c] = a;
-    m.match_to[b] = d; m.match_to[d] = b;
+    m.match_to[a] = c;
+    m.match_to[c] = a;
+    m.match_to[b] = d;
+    m.match_to[d] = b;
 }
 
 fn two_opt_b(m: &mut Model, p1: usize, p2: usize) {
-    if p1 == p2 { return; }
-    let a = p1; let b = m.match_to[p1];
-    let c = p2; let d = m.match_to[p2];
+    if p1 == p2 {
+        return;
+    }
+    let a = p1;
+    let b = m.match_to[p1];
+    let c = p2;
+    let d = m.match_to[p2];
     // pattern B: a<->d, b<->c
-    m.match_to[a] = d; m.match_to[d] = a;
-    m.match_to[b] = c; m.match_to[c] = b;
+    m.match_to[a] = d;
+    m.match_to[d] = a;
+    m.match_to[b] = c;
+    m.match_to[c] = b;
 }
 
 // removed unused swap_labels helper
@@ -452,7 +531,9 @@ fn try_two_opt(
     let n_ports = inst.n * 6;
     let p1 = rng.gen_range(0..n_ports);
     let mut p2 = rng.gen_range(0..n_ports);
-    if p2 == p1 { p2 = (p2 + 1) % n_ports; }
+    if p2 == p1 {
+        p2 = (p2 + 1) % n_ports;
+    }
 
     let a = p1;
     let b = model.match_to[a];
@@ -466,17 +547,28 @@ fn try_two_opt(
 
     #[cfg(debug_assertions)]
     {
-        debug_assert!(check_involution(model), "pre two_opt: involution broken before move");
+        debug_assert!(
+            check_involution(model),
+            "pre two_opt: involution broken before move"
+        );
     }
 
     let old_a = b;
     let old_c = d;
     let pattern_b: bool = rng.gen_bool(0.5);
-    if pattern_b { two_opt_b(model, a, c); } else { two_opt(model, a, c); }
+    if pattern_b {
+        two_opt_b(model, a, c);
+    } else {
+        two_opt(model, a, c);
+    }
 
     #[cfg(debug_assertions)]
     {
-        debug_assert!(check_involution(model), "post two_opt apply: involution broken (pattern_b={})", pattern_b);
+        debug_assert!(
+            check_involution(model),
+            "post two_opt apply: involution broken (pattern_b={})",
+            pattern_b
+        );
     }
     let new_e = energy(inst, model, lambda_bal);
     let d_total = new_e.total - cur.total;
@@ -487,9 +579,20 @@ fn try_two_opt(
             pattern_b, a, old_a, c, old_c, d_total, t, accept, cur.total, new_e.total
         );
     }
-    if let Some(w) = ws { w.record("two_opt", d_total, accept); }
+    if let Some(w) = ws {
+        w.record("two_opt", d_total, accept);
+    }
     if accept {
-        update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+        update_after_accept(
+            new_e,
+            cur,
+            best,
+            best_model,
+            model,
+            last_best_iter,
+            k,
+            since_log_accepts,
+        );
     } else {
         // revert
         model.match_to[a] = old_a;
@@ -499,7 +602,10 @@ fn try_two_opt(
 
         #[cfg(debug_assertions)]
         {
-            debug_assert!(check_involution(model), "post two_opt revert: involution broken");
+            debug_assert!(
+                check_involution(model),
+                "post two_opt revert: involution broken"
+            );
         }
     }
     true
@@ -526,20 +632,30 @@ fn try_loopmove(
         for _try in 0..16 {
             let a = rng.gen_range(0..n_ports);
             let b = model.match_to[a];
-            if a == b { continue; }
+            if a == b {
+                continue;
+            }
             let c = rng.gen_range(0..n_ports);
             let d = model.match_to[c];
-            if c == d { continue; }
-            if a == c || a == d || b == c || b == d { continue; }
+            if c == d {
+                continue;
+            }
+            if a == c || a == d || b == c || b == d {
+                continue;
+            }
             #[cfg(debug_assertions)]
-            { debug_assert!(check_involution(model)); }
+            {
+                debug_assert!(check_involution(model));
+            }
             // (a-b),(c-d) -> (a-a),(c-c),(b-d)
             model.match_to[a] = a;
             model.match_to[b] = d;
             model.match_to[d] = b;
             model.match_to[c] = c;
             #[cfg(debug_assertions)]
-            { debug_assert!(check_involution(model)); }
+            {
+                debug_assert!(check_involution(model));
+            }
             let new_e = energy(inst, model, lambda_bal);
             let d_total = new_e.total - cur.total;
             let accept = should_accept(d_total, t, rng);
@@ -549,9 +665,20 @@ fn try_loopmove(
                     a, b, c, d, d_total, t, accept, cur.total, new_e.total
                 );
             }
-            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
+            if let Some(w) = ws {
+                w.record("loopmove", d_total, accept);
+            }
             if accept {
-                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+                update_after_accept(
+                    new_e,
+                    cur,
+                    best,
+                    best_model,
+                    model,
+                    last_best_iter,
+                    k,
+                    since_log_accepts,
+                );
             } else {
                 // revert
                 model.match_to[a] = b;
@@ -565,21 +692,31 @@ fn try_loopmove(
     } else {
         for _try in 0..16 {
             let a = rng.gen_range(0..n_ports);
-            if model.match_to[a] != a { continue; }
+            if model.match_to[a] != a {
+                continue;
+            }
             let c = rng.gen_range(0..n_ports);
-            if c == a || model.match_to[c] != c { continue; }
+            if c == a || model.match_to[c] != c {
+                continue;
+            }
             let b = rng.gen_range(0..n_ports);
             let d = model.match_to[b];
-            if b == d || b == a || b == c || d == a || d == c { continue; }
+            if b == d || b == a || b == c || d == a || d == c {
+                continue;
+            }
             #[cfg(debug_assertions)]
-            { debug_assert!(check_involution(model)); }
+            {
+                debug_assert!(check_involution(model));
+            }
             // (a-a),(c-c),(b-d) -> (a-b),(c-d)
             model.match_to[a] = b;
             model.match_to[b] = a;
             model.match_to[c] = d;
             model.match_to[d] = c;
             #[cfg(debug_assertions)]
-            { debug_assert!(check_involution(model)); }
+            {
+                debug_assert!(check_involution(model));
+            }
             let new_e = energy(inst, model, lambda_bal);
             let d_total = new_e.total - cur.total;
             let accept = should_accept(d_total, t, rng);
@@ -589,9 +726,20 @@ fn try_loopmove(
                     a, c, b, d, d_total, t, accept, cur.total, new_e.total
                 );
             }
-            if let Some(w) = ws { w.record("loopmove", d_total, accept); }
+            if let Some(w) = ws {
+                w.record("loopmove", d_total, accept);
+            }
             if accept {
-                update_after_accept(new_e, cur, best, best_model, model, last_best_iter, k, since_log_accepts);
+                update_after_accept(
+                    new_e,
+                    cur,
+                    best,
+                    best_model,
+                    model,
+                    last_best_iter,
+                    k,
+                    since_log_accepts,
+                );
             } else {
                 // revert
                 model.match_to[a] = a;
@@ -651,37 +799,61 @@ fn anneal(
         );
     }
     for k in 0..iters {
-        if let Some(limit) = time_limit { if start_t.elapsed() >= limit { 
-            if let Some(lg) = jsonl.as_mut() {
-                if let Some(ws) = ws_opt.as_ref() {
-                    if ws.total_prop > 0 {
-                        let mut ws_tmp = ws.clone();
-                        let elapsed_ms = start_t.elapsed().as_millis();
-                        lg.tick(k, t, cur.total, best.total, elapsed_ms, &ws_tmp);
-                        lg.hist(k, t, &ws_tmp);
+        if let Some(limit) = time_limit {
+            if start_t.elapsed() >= limit {
+                if let Some(lg) = jsonl.as_mut() {
+                    if let Some(ws) = ws_opt.as_ref() {
+                        if ws.total_prop > 0 {
+                            let mut ws_tmp = ws.clone();
+                            let elapsed_ms = start_t.elapsed().as_millis();
+                            lg.tick(k, t, cur.total, best.total, elapsed_ms, &ws_tmp);
+                            lg.hist(k, t, &ws_tmp);
+                        }
                     }
+                    let elapsed_ms = start_t.elapsed().as_millis();
+                    lg.stop("time_budget", k, t, cur.total, best.total, elapsed_ms);
                 }
-                let elapsed_ms = start_t.elapsed().as_millis();
-                lg.stop("time_budget", k, t, cur.total, best.total, elapsed_ms);
+                break;
             }
-            break; 
-        } }
+        }
         let mv: f32 = rng.r#gen();
         let p_loopmove = p_loopmove.clamp(0.0, 1.0);
         let applied = if mv >= p_loopmove {
             try_two_opt(
-                inst, model, rng, t, verbose, lambda_bal, k,
-                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
-                ws_opt.as_mut()
+                inst,
+                model,
+                rng,
+                t,
+                verbose,
+                lambda_bal,
+                k,
+                &mut cur,
+                &mut best,
+                &mut best_model,
+                &mut last_best_iter,
+                &mut since_log_accepts,
+                ws_opt.as_mut(),
             )
         } else {
             try_loopmove(
-                inst, model, rng, t, verbose, lambda_bal, k,
-                &mut cur, &mut best, &mut best_model, &mut last_best_iter, &mut since_log_accepts,
-                ws_opt.as_mut()
+                inst,
+                model,
+                rng,
+                t,
+                verbose,
+                lambda_bal,
+                k,
+                &mut cur,
+                &mut best,
+                &mut best_model,
+                &mut last_best_iter,
+                &mut since_log_accepts,
+                ws_opt.as_mut(),
             )
         };
-        if !applied { continue; }
+        if !applied {
+            continue;
+        }
         // JSONL: emit tick+hist per window proposals
         if let (Some(lg), Some(ws)) = (jsonl.as_mut(), ws_opt.as_mut()) {
             if ws.total_prop >= lg.window {
@@ -693,7 +865,9 @@ fn anneal(
         }
         since_log_moves += 1;
         t *= alpha;
-        if t < tmin { t = tmin; }
+        if t < tmin {
+            t = tmin;
+        }
         // Early stop if we reached perfect total energy
         if best.total == 0 {
             // Save an additional snapshot following the same naming rule as other snapshots
@@ -720,7 +894,14 @@ fn anneal(
                     }
                 }
                 let elapsed_ms = start_t.elapsed().as_millis();
-                lg.stop("reached_optimum", k + 1, t, cur.total, best.total, elapsed_ms);
+                lg.stop(
+                    "reached_optimum",
+                    k + 1,
+                    t,
+                    cur.total,
+                    best.total,
+                    elapsed_ms,
+                );
             }
             break;
         }
@@ -741,7 +922,9 @@ fn anneal(
             if verbose > 0 && every > 0 && (k + 1) % every == 0 {
                 let acc_rate = if since_log_moves > 0 {
                     since_log_accepts as f32 / since_log_moves as f32
-                } else { 0.0 };
+                } else {
+                    0.0
+                };
                 eprintln!(
                     "anneal: it={}/{} T={:.4} curE={} (obs={},bal={}) bestE={} acc={:.2} elapsed={:.2}s",
                     k + 1,
@@ -777,7 +960,10 @@ fn anneal(
     if verbose > 0 {
         eprintln!(
             "anneal: done bestE={} (obs={}, bal={}) elapsed={:.2}s",
-            best.total, best.obs, best.balance, start_t.elapsed().as_secs_f32()
+            best.total,
+            best.obs,
+            best.balance,
+            start_t.elapsed().as_secs_f32()
         );
     }
     if let Some(lg) = jsonl.as_mut() {
@@ -801,15 +987,27 @@ fn emit_output(inst: &Instance, model: &Model, s0: Room) -> OutputMap {
     let mut conns: Vec<Connection> = Vec::new();
     for p in 0..(n * 6) {
         let q = model.match_to[p];
-        if p > q { continue; } // each undirected edge once
+        if p > q {
+            continue;
+        } // each undirected edge once
         let (rq, dc) = from_port(PortIdx(p));
         let (rq2, dc2) = from_port(PortIdx(q));
         conns.push(Connection {
-            from: PortRef { room: rq, door: dc as usize },
-            to: PortRef { room: rq2, door: dc2 as usize },
+            from: PortRef {
+                room: rq,
+                door: dc as usize,
+            },
+            to: PortRef {
+                room: rq2,
+                door: dc2 as usize,
+            },
         });
     }
-    OutputMap { rooms: labels, starting_room: s0, connections: conns }
+    OutputMap {
+        rooms: labels,
+        starting_room: s0,
+        connections: conns,
+    }
 }
 
 fn finalize_match_to(model: &mut Model) {
@@ -826,7 +1024,9 @@ fn finalize_match_to(model: &mut Model) {
         if r != p {
             // Break inconsistent pair by turning both endpoints into self-loops
             model.match_to[p] = p;
-            if q < n_ports { model.match_to[q] = q; }
+            if q < n_ports {
+                model.match_to[q] = q;
+            }
         }
     }
 }
@@ -842,7 +1042,11 @@ fn derive_save_path(base: &Path, iter: usize) -> PathBuf {
 fn write_output_path(inst: &Instance, model: &Model, s0: usize, path: &Path) -> Result<()> {
     let out = emit_output(inst, model, s0);
     let serialized = serde_json::to_string_pretty(&out)?;
-    if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { fs::create_dir_all(parent)?; } }
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
     fs::write(path, serialized)?;
     Ok(())
 }
@@ -850,7 +1054,11 @@ fn write_output_path(inst: &Instance, model: &Model, s0: usize, path: &Path) -> 
 // --- Minimal JSONL logging -------------------------------------------------
 
 #[derive(Default, Clone)]
-struct NeighborAgg { prop: usize, acc: usize, sum_de: i64 }
+struct NeighborAgg {
+    prop: usize,
+    acc: usize,
+    sum_de: i64,
+}
 
 #[derive(Clone)]
 struct WindowStats {
@@ -887,7 +1095,9 @@ impl WindowStats {
     fn bin_index(&self, de: f64) -> usize {
         let n = self.edges.len();
         for i in 0..(n - 1) {
-            if de <= self.edges[i + 1] { return i; }
+            if de <= self.edges[i + 1] {
+                return i;
+            }
         }
         n - 2
     }
@@ -896,10 +1106,18 @@ impl WindowStats {
         let de_f = de as f64;
         let idx = self.bin_index(de_f);
         self.hist_prop[idx] += 1;
-        if accepted { self.total_acc += 1; self.hist_acc[idx] += 1; }
-        let agg = match kind { "two_opt" => &mut self.two_opt, _ => &mut self.loopmove };
+        if accepted {
+            self.total_acc += 1;
+            self.hist_acc[idx] += 1;
+        }
+        let agg = match kind {
+            "two_opt" => &mut self.two_opt,
+            _ => &mut self.loopmove,
+        };
         agg.prop += 1;
-        if accepted { agg.acc += 1; }
+        if accepted {
+            agg.acc += 1;
+        }
         agg.sum_de += de as i64;
     }
 }
@@ -913,21 +1131,27 @@ struct JsonlLogger {
 fn iso8601_utc_now() -> String {
     // Simple UTC formatter: YYYY-MM-DDTHH:MM:SS.mmmZ
     let now = std::time::SystemTime::now();
-    let dur = now.duration_since(std::time::UNIX_EPOCH).unwrap_or(Duration::from_secs(0));
+    let dur = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0));
     let secs = dur.as_secs() as i64;
     let millis = (dur.subsec_millis()) as u32;
     // civil_from_days algorithm to convert days to date in proleptic Gregorian calendar
     let days = secs.div_euclid(86_400);
     let sod = secs.rem_euclid(86_400) as i64;
     let mut z = days + 719468; // shift to civil origin
-    let era = if z >= 0 { z / 146097 } else { (z - 146096) / 146097 };
-    let doe = z - era * 146097;                          // [0, 146096]
+    let era = if z >= 0 {
+        z / 146097
+    } else {
+        (z - 146096) / 146097
+    };
+    let doe = z - era * 146097; // [0, 146096]
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; // [0, 399]
     let mut y = (yoe as i64) + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);   // [0, 365]
-    let mp = (5 * doy + 2) / 153;                        // [0, 11]
-    let d = doy - (153 * mp + 2) / 5 + 1;                // [1, 31]
-    let m = mp + if mp < 10 { 3 } else { -9 };           // [1, 12]
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = doy - (153 * mp + 2) / 5 + 1; // [1, 31]
+    let m = mp + if mp < 10 { 3 } else { -9 }; // [1, 12]
     y += if m <= 2 { 1 } else { 0 };
     let year = y;
     let month = m as i64;
@@ -942,9 +1166,17 @@ fn iso8601_utc_now() -> String {
 }
 
 impl JsonlLogger {
-    fn new(file: File, window: usize, edges: Vec<f64>) -> Self { Self { file, window, edges } }
+    fn new(file: File, window: usize, edges: Vec<f64>) -> Self {
+        Self {
+            file,
+            window,
+            edges,
+        }
+    }
     fn write_line(&mut self, v: &serde_json::Value) {
-        if let Ok(s) = serde_json::to_string(v) { let _ = writeln!(self.file, "{}", s); }
+        if let Ok(s) = serde_json::to_string(v) {
+            let _ = writeln!(self.file, "{}", s);
+        }
     }
     fn run_start(&mut self, iters: usize, t0: f32, tmin: f32, seed: Option<u64>) {
         let v = serde_json::json!({
@@ -958,7 +1190,15 @@ impl JsonlLogger {
         });
         self.write_line(&v);
     }
-    fn tick(&mut self, it: usize, t: f32, cur_e: i32, best_e: i32, elapsed_ms: u128, ws: &WindowStats) {
+    fn tick(
+        &mut self,
+        it: usize,
+        t: f32,
+        cur_e: i32,
+        best_e: i32,
+        elapsed_ms: u128,
+        ws: &WindowStats,
+    ) {
         let mut neighbor_stats = Vec::new();
         if ws.two_opt.prop > 0 {
             neighbor_stats.push(serde_json::json!({
@@ -1011,14 +1251,25 @@ impl JsonlLogger {
 }
 
 const DEFAULT_HIST_EDGES: [f64; 9] = [
-    -1_000_000_000.0, -10.0, -5.0, -1.0, 0.0, 1.0, 5.0, 10.0, 1_000_000_000.0
+    -1_000_000_000.0,
+    -10.0,
+    -5.0,
+    -1.0,
+    0.0,
+    1.0,
+    5.0,
+    10.0,
+    1_000_000_000.0,
 ];
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     if args.verbose > 0 {
-        eprintln!("solver-autotaker: starting (seed={:?}, iters={}, lambda_bal={})", args.seed, args.iters, args.lambda_bal);
+        eprintln!(
+            "solver-autotaker: starting (seed={:?}, iters={}, lambda_bal={})",
+            args.seed, args.iters, args.lambda_bal
+        );
     }
     // Read input JSON
     let mut input_json = String::new();
@@ -1029,17 +1280,25 @@ async fn main() -> Result<()> {
             .with_context(|| format!("failed to read input file: {}", &args.input))?;
     }
 
-    let raw: InputProblem = serde_json::from_str(&input_json).context("failed to parse input JSON")?;
+    let raw: InputProblem =
+        serde_json::from_str(&input_json).context("failed to parse input JSON")?;
 
     // Normalize and validate
     let plans = normalize_plans(&raw.plans)?;
     validate_instance(raw.n, raw.starting_room, &plans, &raw.results)?;
-    let inst = Instance { plans, results: raw.results.clone(), n: raw.n, s0: raw.starting_room };
+    let inst = Instance {
+        plans,
+        results: raw.results.clone(),
+        n: raw.n,
+        s0: raw.starting_room,
+    };
 
     // RNG
     let seed = args.seed.unwrap_or_else(|| {
         // derive some entropy from time
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
         (t.as_nanos() as u64) ^ 0x9E3779B97F4A7C15u64
     });
     let mut rng = StdRng::seed_from_u64(seed);
@@ -1049,24 +1308,36 @@ async fn main() -> Result<()> {
     finalize_match_to(&mut model);
 
     // Save initial solution as iter 0 if output is a file
-    let save_base = if args.output != "-" { Some(Path::new(&args.output)) } else { None };
+    let save_base = if args.output != "-" {
+        Some(Path::new(&args.output))
+    } else {
+        None
+    };
     if let Some(base) = save_base {
         let p0 = derive_save_path(base, 0);
         write_output_path(&inst, &model, inst.s0 as usize, &p0)?;
-        if args.verbose > 0 { eprintln!("saved {} (initial)", p0.display()); }
+        if args.verbose > 0 {
+            eprintln!("saved {} (initial)", p0.display());
+        }
     }
 
     let time_limit = args.time_limit.map(|s| Duration::from_secs_f32(s));
-    let log_every = if args.verbose > 0 { args.log_every.or(Some(10_000)) } else { None };
+    let log_every = if args.verbose > 0 {
+        args.log_every.or(Some(10_000))
+    } else {
+        None
+    };
 
     // JSONL logger (optional)
     let mut jsonl_logger_opt: Option<JsonlLogger> = if let Some(path) = &args.jsonl_log {
-        let f = File::create(path)
-            .with_context(|| format!("failed to create jsonl log: {}", path))?;
+        let f =
+            File::create(path).with_context(|| format!("failed to create jsonl log: {}", path))?;
         // Decide window: prefer explicit jsonl_window, else CLI log_every, else fallback 100000
         let eff_window = args.jsonl_window.or(args.log_every).unwrap_or(100_000);
         Some(JsonlLogger::new(f, eff_window, DEFAULT_HIST_EDGES.to_vec()))
-    } else { None };
+    } else {
+        None
+    };
 
     // Multi-start annealing (restarts)
     let restarts = args.restarts.max(1);
@@ -1108,7 +1379,10 @@ async fn main() -> Result<()> {
         );
         finalize_match_to(&mut m);
         if args.verbose > 0 {
-            eprintln!("energy: obs={}, balance={}, total={}", best_e.obs, best_e.balance, best_e.total);
+            eprintln!(
+                "energy: obs={}, balance={}, total={}",
+                best_e.obs, best_e.balance, best_e.total
+            );
         }
         if best_e.total < best_overall_e.total {
             best_overall_e = best_e;

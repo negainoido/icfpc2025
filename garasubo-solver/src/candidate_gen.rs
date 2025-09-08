@@ -18,9 +18,9 @@ use crate::signature_index::SigIndex;
 pub struct CandParams {
     /// 署名ごとの基礎重み
     pub w_f1: f64, // S_f1: (Y[t], W[t], Y[t+1])
-    pub w_b1: f64, // S_b1: (Y[t-1], W[t-1], Y[t])
-    pub w_f2: f64, // S_f2: (Y[t], W[t], Y[t+1], W[t+1], Y[t+2])
-    pub w_b2: f64, // S_b2: (Y[t-2], W[t-2], Y[t-1], W[t-1], Y[t])
+    pub w_b1: f64,  // S_b1: (Y[t-1], W[t-1], Y[t])
+    pub w_f2: f64,  // S_f2: (Y[t], W[t], Y[t+1], W[t+1], Y[t+2])
+    pub w_b2: f64,  // S_b2: (Y[t-2], W[t-2], Y[t-1], W[t-1], Y[t])
     pub w_mix: f64, // S_mix: (Y[t-1], W[t-1], Y[t], W[t], Y[t+1])
 
     /// IDF: weight *= ln(1 + idf_scale * (Universe / bucket_size))^idf_power
@@ -87,12 +87,7 @@ pub struct CandStats {
 }
 
 /// メイン API：候補生成
-pub fn build_candidates(
-    w: &[u8],
-    y: &[u8],
-    idx: &SigIndex,
-    params: CandParams,
-) -> CandidateList {
+pub fn build_candidates(w: &[u8], y: &[u8], idx: &SigIndex, params: CandParams) -> CandidateList {
     let l = w.len();
     let n_nodes = y.len(); // = L+1
 
@@ -106,35 +101,67 @@ pub fn build_candidates(
     if params.w_f1 > 0.0 {
         let universe = l.max(1);
         total_pairs_before_dedupe += accumulate_from_map(
-            &idx.f1, y, params.w_f1, universe, &mut agg, SigKind::F1, params);
+            &idx.f1,
+            y,
+            params.w_f1,
+            universe,
+            &mut agg,
+            SigKind::F1,
+            params,
+        );
     }
     if params.w_b1 > 0.0 {
         let universe = l.max(1);
         total_pairs_before_dedupe += accumulate_from_map(
-            &idx.b1, y, params.w_b1, universe, &mut agg, SigKind::B1, params);
+            &idx.b1,
+            y,
+            params.w_b1,
+            universe,
+            &mut agg,
+            SigKind::B1,
+            params,
+        );
     }
     if params.w_f2 > 0.0 && l >= 2 {
         let universe = (l - 1).max(1);
         total_pairs_before_dedupe += accumulate_from_map(
-            &idx.f2, y, params.w_f2, universe, &mut agg, SigKind::F2, params);
+            &idx.f2,
+            y,
+            params.w_f2,
+            universe,
+            &mut agg,
+            SigKind::F2,
+            params,
+        );
     }
     if params.w_b2 > 0.0 && l >= 2 {
         let universe = (l - 1).max(1);
         total_pairs_before_dedupe += accumulate_from_map(
-            &idx.b2, y, params.w_b2, universe, &mut agg, SigKind::B2, params);
+            &idx.b2,
+            y,
+            params.w_b2,
+            universe,
+            &mut agg,
+            SigKind::B2,
+            params,
+        );
     }
     if params.w_mix > 0.0 {
         if let Some(m) = idx.mix.as_ref() {
             let universe = l.saturating_sub(1).max(1);
-            total_pairs_before_dedupe += accumulate_from_map(
-                m, y, params.w_mix, universe, &mut agg, SigKind::Mix, params);
+            total_pairs_before_dedupe +=
+                accumulate_from_map(m, y, params.w_mix, universe, &mut agg, SigKind::Mix, params);
         }
     }
 
     // ---- HashMap → Vec に変換
-    let mut list: Vec<Candidate> = agg.into_iter()
+    let mut list: Vec<Candidate> = agg
+        .into_iter()
         .map(|(k, acc)| Candidate {
-            a: k.a, b: k.b, score: acc.score, hits: acc.hits,
+            a: k.a,
+            b: k.b,
+            score: acc.score,
+            hits: acc.hits,
         })
         .filter(|c| c.score >= params.min_score)
         .collect();
@@ -151,15 +178,15 @@ pub fn build_candidates(
     };
 
     // ---- スコア降順で安定ソート（スコア同点は (a,b) で決定）
-    list.sort_by(|x, y2| {
-        match y2.score.partial_cmp(&x.score).unwrap_or(Ordering::Equal) {
+    list.sort_by(
+        |x, y2| match y2.score.partial_cmp(&x.score).unwrap_or(Ordering::Equal) {
             Ordering::Equal => match x.a.cmp(&y2.a) {
                 Ordering::Equal => x.b.cmp(&y2.b),
                 o => o,
             },
             o => o,
-        }
-    });
+        },
+    );
 
     // ---- （任意）全体の上位 M 本だけ残す
     if let Some(m) = params.max_pairs {
@@ -184,7 +211,13 @@ pub fn build_candidates(
 // ============================ 内部実装 ============================
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum SigKind { F1, B1, F2, B2, Mix }
+pub(crate) enum SigKind {
+    F1,
+    B1,
+    F2,
+    B2,
+    Mix,
+}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Acc {
@@ -193,11 +226,18 @@ pub(crate) struct Acc {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct PairKey { a: u32, b: u32 }
+struct PairKey {
+    a: u32,
+    b: u32,
+}
 
 #[inline]
 pub(crate) fn pair_key(a: u32, b: u32) -> PairKey {
-    if a < b { PairKey { a, b } } else { PairKey { a: b, b: a } }
+    if a < b {
+        PairKey { a, b }
+    } else {
+        PairKey { a: b, b: a }
+    }
 }
 
 /// 1 つの署名マップからペアを生成して集約に加点
@@ -213,7 +253,9 @@ fn accumulate_from_map(
     let mut raw_pairs: u64 = 0;
     for (_key, times) in map.iter() {
         let m = times.len();
-        if m < 2 { continue; }
+        if m < 2 {
+            continue;
+        }
 
         // IDF 重み（希少な署名ほど強い）
         let idf = idf_factor(universe, m, params.idf_scale, params.idf_power);
@@ -222,11 +264,13 @@ fn accumulate_from_map(
         // 全組み合わせ（バケットは Phase A の cap 済み）
         for i in 0..m {
             let a = times[i] as usize;
-            for j in (i+1)..m {
+            for j in (i + 1)..m {
                 raw_pairs += 1;
                 let b = times[j] as usize;
                 // 同ラベルでなければスキップ（安全側のゲート）
-                if y[a] != y[b] { continue; }
+                if y[a] != y[b] {
+                    continue;
+                }
 
                 let k = pair_key(times[i], times[j]);
                 let entry = agg.entry(k).or_insert_with(Acc::default);
@@ -264,9 +308,14 @@ fn per_node_topk(n_nodes: u32, list: &[Candidate], k: usize) -> HashSet<PairKey>
     let mut keep: HashSet<PairKey> = HashSet::new();
     for u in 0..(n_nodes as usize) {
         let edges = &mut adj[u];
-        if edges.is_empty() { continue; }
-        edges.sort_by(|x, y| y.1.partial_cmp(&x.1).unwrap_or(Ordering::Equal)
-            .then_with(|| x.0.cmp(&y.0)));
+        if edges.is_empty() {
+            continue;
+        }
+        edges.sort_by(|x, y| {
+            y.1.partial_cmp(&x.1)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| x.0.cmp(&y.0))
+        });
         let cap = edges.len().min(k);
         for i in 0..cap {
             let v = edges[i].0;
@@ -286,11 +335,15 @@ mod tests {
     #[test]
     fn build_candidates_basic() {
         // 小さな例
-        let w = vec![0,1,2,3,4,5,0,1,2,3,4,5];
-        let y = vec![1,0,1,1,2,3,0,1,0,1,2,3,0]; // 長さ L+1
+        let w = vec![0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5];
+        let y = vec![1, 0, 1, 1, 2, 3, 0, 1, 0, 1, 2, 3, 0]; // 長さ L+1
         let idx = build_signature_index(&w, &y, SigBuildParams::default()).unwrap();
 
-        let params = CandParams { per_node_cap: Some(8), max_pairs: Some(500), ..Default::default() };
+        let params = CandParams {
+            per_node_cap: Some(8),
+            max_pairs: Some(500),
+            ..Default::default()
+        };
         let out = build_candidates(&w, &y, &idx, params);
 
         assert!(!out.list.is_empty());

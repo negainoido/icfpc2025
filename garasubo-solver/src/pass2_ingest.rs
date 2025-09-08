@@ -6,29 +6,29 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::candidate_gen::{Candidate, CandidateList};
 use crate::candidate_gen::Hits;
+use crate::candidate_gen::{Candidate, CandidateList};
+use crate::pass2_scheduler::{PlanOutput, RpTaskPlan, WatchEntry, WatchKind};
 use crate::phase_c::{run_phase_c, MergeResult};
-use crate::pass2_scheduler::{PlanOutput, WatchEntry, WatchKind, RpTaskPlan};
 
 /// 取り込み評価サマリ
 #[derive(Debug, Clone)]
 pub struct Pass2Eval {
     // ID
-    pub id_confirmed: Vec<usize>,      // plan_out.id_tasks のインデックス
-    pub id_refuted: Vec<usize>,        // 期待色と不一致（別室確証）
-    pub id_inconclusive: Vec<usize>,   // 参照不能など
+    pub id_confirmed: Vec<usize>,    // plan_out.id_tasks のインデックス
+    pub id_refuted: Vec<usize>,      // 期待色と不一致（別室確証）
+    pub id_inconclusive: Vec<usize>, // 参照不能など
 
     // RP
-    pub rp_hit: HashMap<usize, u8>,    // rp_index -> j_hit
-    pub rp_inconclusive: Vec<usize>,   // 参照不能 or すべて不一致
+    pub rp_hit: HashMap<usize, u8>,  // rp_index -> j_hit
+    pub rp_inconclusive: Vec<usize>, // 参照不能 or すべて不一致
 }
 
 /// 取り込みの総合結果
 #[derive(Debug, Clone)]
 pub struct IngestOutcome {
     pub eval: Pass2Eval,
-    pub merged: MergeResult,           // 再クラスタ後（RP 反映済み）の最終結果
+    pub merged: MergeResult, // 再クラスタ後（RP 反映済み）の最終結果
 }
 
 /// ラベル列（'0'..'3'）を Vec<u8> に変換
@@ -52,7 +52,7 @@ pub fn evaluate_pass2(plan: &PlanOutput, y2: &[u8]) -> Pass2Eval {
     let mut id_refuted = Vec::new();
     let mut id_inconclusive = Vec::new();
 
-    let mut rp_hit: HashMap<usize, u8> = HashMap::new();  // rp_index -> j
+    let mut rp_hit: HashMap<usize, u8> = HashMap::new(); // rp_index -> j
     let mut rp_checked_any: HashSet<usize> = HashSet::new();
     let mut rp_inconclusive = Vec::new();
 
@@ -75,7 +75,9 @@ pub fn evaluate_pass2(plan: &PlanOutput, y2: &[u8]) -> Pass2Eval {
         let obs = y2[w.pos];
         match &w.kind {
             WatchKind::IdCheck { id_index, .. } => {
-                if id_seen_pos.contains(id_index) { continue; } // ID は 1 つの Watch で判断
+                if id_seen_pos.contains(id_index) {
+                    continue;
+                } // ID は 1 つの Watch で判断
                 if obs == w.expect_color {
                     id_confirmed.push(*id_index);
                 } else {
@@ -127,7 +129,9 @@ fn augment_candidates_with_forced_merges(
         if let Some(task) = plan.id_tasks.get(id_idx) {
             let ca = task.cluster_a;
             let cb = task.cluster_b;
-            if ca == cb { continue; }
+            if ca == cb {
+                continue;
+            }
 
             // Pass1 の代表時刻を取って時刻ペア化
             let ta = pass1_merge.cluster_representatives[ca];
@@ -137,7 +141,13 @@ fn augment_candidates_with_forced_merges(
                 a: ta as u32,
                 b: tb as u32,
                 score: BIG,
-                hits: Hits { f1: 0, b1: 0, f2: 0, b2: 0, mix: 0 },
+                hits: Hits {
+                    f1: 0,
+                    b1: 0,
+                    f2: 0,
+                    b2: 0,
+                    mix: 0,
+                },
             });
         }
     }
@@ -161,8 +171,8 @@ fn rerun_phase_c_with_forced_merges(
 /// Step4: RP ヒットを最終 δ に反映（Ct の j_hit を Cf に向ける）
 /// ※ cluster ID は再クラスタ後に変化しているので、Pass1 の代表時刻を介して mapping する
 fn apply_rp_hits_to_delta(
-    res: &mut MergeResult,          // 再クラスタ後
-    pass1_merge: &MergeResult,      // 代表時刻の取得元
+    res: &mut MergeResult,     // 再クラスタ後
+    pass1_merge: &MergeResult, // 代表時刻の取得元
     plan: &PlanOutput,
     eval: &Pass2Eval,
 ) {
@@ -198,7 +208,8 @@ pub fn apply_pass2_and_recluster(
     let eval = evaluate_pass2(plan, y2);
 
     // 確証マージを候補へ注入
-    let augmented = augment_candidates_with_forced_merges(base_candidates, pass1_merge, plan, &eval);
+    let augmented =
+        augment_candidates_with_forced_merges(base_candidates, pass1_merge, plan, &eval);
 
     // 再クラスタ
     let mut merged = rerun_phase_c_with_forced_merges(w, y1, &augmented, target_n);
@@ -214,16 +225,16 @@ pub fn apply_pass2_and_recluster(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signature_index::{build_signature_index, BuildParams as SigParams};
     use crate::candidate_gen::{build_candidates, CandParams};
-    use crate::phase_c::run_phase_c;
     use crate::pass2_scheduler::{build_pass2_plan, SchedulerParams};
+    use crate::phase_c::run_phase_c;
+    use crate::signature_index::{build_signature_index, BuildParams as SigParams};
 
     #[test]
     fn pipeline_demo() {
         // 仮の小規模データ
-        let w = vec![0,1,2,3,4,5, 0,1,2,3,4,5];
-        let y1 = vec![1,0,1,1,2,3,0, 1,0,1,1,2,3]; // L+1
+        let w = vec![0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5];
+        let y1 = vec![1, 0, 1, 1, 2, 3, 0, 1, 0, 1, 1, 2, 3]; // L+1
 
         let n = 6usize;
 
@@ -245,8 +256,7 @@ mod tests {
             }
         }
 
-        let outcome = apply_pass2_and_recluster(
-            &w, &y1, &pass1, &cands, &plan_out, &y2, n);
+        let outcome = apply_pass2_and_recluster(&w, &y1, &pass1, &cands, &plan_out, &y2, n);
 
         // 何らかのマージが確証されていれば cluster_count は小さくなるはず
         assert!(outcome.merged.cluster_count <= pass1.cluster_count);
