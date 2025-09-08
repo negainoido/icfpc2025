@@ -7,15 +7,33 @@ from typing import Any, Dict, List
 import requests
 import schedule
 
-API_URL = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/leaderboard/global"
+API_URL = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/leaderboard"
 RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
 
+PROBLEMS = [
+    "primus",
+    "secundus",
+    "tertius",
+    "quartus",
+    "quintus",
+    "aleph",
+    "beth",
+    "gimel",
+    "daleth",
+    "he",
+    "vau",
+    "zain",
+    "hhet",
+    "teth",
+    "iod",
+]
 
-def fetch_leaderboard() -> List[Dict[str, Any]]:
-    """Fetch leaderboard data from API"""
+
+def fetch_leaderboard(problem_name: str = "global") -> List[Dict[str, Any]]:
+    """Fetch leaderboard data"""
     try:
-        response = requests.get(API_URL, timeout=30)
+        response = requests.get(f"{API_URL}/{problem_name}", timeout=30)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -23,28 +41,33 @@ def fetch_leaderboard() -> List[Dict[str, Any]]:
         return []
 
 
-def save_leaderboard_data(data: List[Dict[str, Any]]) -> None:
+def save_data(name: str, data: List[Dict[str, Any]], timestamp: str) -> None:
     """Save leaderboard data to timestamped JSON file"""
     if not data:
         return
 
-    timestamp = datetime.now().strftime("%m%d_%H%M")
-    filename = RESULTS_DIR / f"{timestamp}.json"
+    problem_dir = RESULTS_DIR / name
+    problem_dir.mkdir(exist_ok=True)
+    filename = problem_dir / f"{timestamp}.json"
 
+    print("Saving data to", filename)
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
-
-    print(f"Saved leaderboard data to {filename}")
 
 
 def fetch_and_save():
     """Fetch leaderboard data and save it"""
-    print(f"Fetching leaderboard data at {datetime.now()}")
+    timestamp = datetime.now().strftime("%m%d_%H%M")
+    print(f"Fetching leaderboard data at {timestamp}")
+
     data = fetch_leaderboard()
     if data:
-        save_leaderboard_data(data)
-    else:
-        print("Failed to fetch leaderboard data")
+        save_data("global", data, timestamp)
+
+    for problem_name in PROBLEMS:
+        data = fetch_leaderboard(problem_name)
+        if data:
+            save_data(problem_name, data, timestamp)
 
 
 def wait_for_next_10min_mark():
@@ -72,6 +95,7 @@ def wait_for_next_10min_mark():
 
 def main():
     print("Starting leaderboard monitor...")
+    fetch_and_save()
 
     print("Scheduled to run every 10 minutes. Press Ctrl+C to stop.")
     wait_for_next_10min_mark()
