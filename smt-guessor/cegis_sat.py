@@ -14,17 +14,11 @@ import argparse
 import json
 from pathlib import Path
 import shutil
-from typing import Dict, List, Optional, Set, Tuple
-
-
-def have_python_sat() -> bool:
-    try:
-        from pysat.formula import CNF as _CNF  # type: ignore
-        from pysat.card import CardEnc as _CardEnc  # type: ignore
-        from pysat.solvers import Solver as _Solver  # type: ignore
-        return True
-    except Exception:
-        return False
+from typing import Any, Dict, List, Optional, Set, Tuple, TypedDict
+from pysat.formula import CNF as SatCNF
+from pysat.formula import IDPool
+from pysat.card import CardEnc, EncType
+from pysat.solvers import Solver  # type: ignore
 
 
 STARTING_ROOM_ID = 0
@@ -34,7 +28,21 @@ def normalize_plan(plan: str) -> List[int]:
     return [int(ch) for ch in plan]
 
 
-def load_problem(path: str) -> Dict[str, object]:
+class Problem(TypedDict):
+    plans: List[List[int]]  # normalized plans
+    results: List[List[int]]
+    N: int
+    s0: int
+
+
+class Solution(TypedDict):
+    status: int  # 1=feasible, 0=infeasible
+    rooms: List[int]
+    startingRoom: int
+    connections: List[Dict[str, Dict[str, int]]]
+
+
+def load_problem(path: str) -> Problem:
     with open(path, "r") as f:
         data = json.load(f)
     plans = [normalize_plan(p) for p in data["plans"]]
@@ -42,6 +50,15 @@ def load_problem(path: str) -> Dict[str, object]:
     N = int(data["N"])  # rooms
     s0 = int(data.get("startingRoom", STARTING_ROOM_ID))
     return {"plans": plans, "results": results, "N": N, "s0": s0}
+
+
+# bits has label val (0..3)
+def label2bits(val: int) -> Tuple[bool, bool]:
+    return bool((val & 2) >> 1), bool(val & 1)
+
+
+def bits2label(b0: bool, b1: bool) -> int:
+    return (b0 << 1) | b1
 
 
 def build_cnf_prefix(
@@ -68,11 +85,7 @@ def build_cnf_prefix(
         T_used.append(K)
 
     P = D * N
-    if not have_python_sat():
-        raise RuntimeError("python-sat (PySAT) is required to build CNF")
-    from pysat.formula import CNF as SatCNF  # type: ignore
-    from pysat.formula import IDPool  # type: ignore
-    from pysat.card import CardEnc, EncType  # type: ignore
+
     cnf = SatCNF()
     pool = IDPool()
 
@@ -81,36 +94,62 @@ def build_cnf_prefix(
     loc_keys: Set[Tuple[int, int, int]] = set()
 
     # Variable helpers
-    def v_label(rid: int, lab: int) -> int:
-        return pool.id(("L", rid, lab))
+    # L[r]: 部屋rのラベルを２ビットで返す。
+    def v_label(rid: int) -> tuple[int, int]:
+        return pool.id(("L", rid, 0)), pool.id(("L", rid, 1))
 
+    # Lp[p]: ポートpのラベルを2ビットで返す。
+    def v_port_label(pid: int) -> tuple[int, int]:
+        return pool.id(("Lp", pid, 0)), pool.id(("Lp", pid, 1))
+
+    # P[p, q]: ポートpがqと繋がっている (p < q)
     def v_port(p: int, q: int) -> int:
         # symmetric variable id for pair (p,q)
         a, b = (p, q) if p <= q else (q, p)
         port_keys.add((a, b))
         return pool.id(("P", a, b))
 
+    # M[p, g]: ポートpから部屋gに移動可能
     def v_move(p: int, g: int) -> int:
         move_keys.add((p, g))
         return pool.id(("M", p, g))
 
+    # X[t, k, r]: trace tの時刻kに部屋rにいる
     def v_loc(tid: int, k: int, rid: int) -> int:
         loc_keys.add((tid, k, rid))
         return pool.id(("X", tid, k, rid))
 
-    # (1) Labels: each room has exactly one of 0..3
-    for r in range(N):
-        lits = [v_label(r, lab) for lab in range(4)]
-        cnf.extend(CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter).clauses)
-
-    # Starting room label must match the first observation in every used trace
-    for rs in used_results:
-        cnf.append([v_label(STARTING_ROOM_ID, int(rs[0]))])
+    # (1) Room Labels: ラベルは均等に分布する。
+    q, r = divmod(N, 4)
+    o = int(used_results[0][0]) if used_results else 0
+    regular = 4 * q
+    for i in range(regular, N):
+        lab = (o + i) % 4
+        bits = label2bits(lab)
+        v0, v1 = v_label(i)
+        cnf.append([v0 if bits[0] else -v0])
+        cnf.append([v1 if bits[1] else -v1])
 
     # (2) Perfect matching on ports using symmetric variables
     for p in range(P):
         row = [v_port(p, q) for q in range(P)]
-        cnf.extend(CardEnc.equals(lits=row, bound=1, vpool=pool, encoding=EncType.seqcounter).clauses)
+        cnf.extend(
+            CardEnc.equals(
+                lits=row, bound=1, vpool=pool, encoding=EncType.seqcounter
+            ).clauses
+        )
+
+    # (2a) Lp[p] はリンク先の部屋のラベルと一致する
+    # つまり、M[p, g] -> Lp[p] == L[g]
+    for p in range(P):
+        for g in range(N):
+            m = v_move(p, g)
+            v0p, v1p = v_port_label(p)
+            v0g, v1g = v_label(g)
+            cnf.append([-m, v0p, -v0g])
+            cnf.append([-m, v1p, -v1g])
+            cnf.append([-m, -v0p, v0g])
+            cnf.append([-m, -v1p, v1g])
 
     # (3) Movement possibility M[p,g] linked to OR_d P[p, D*g + d]
     for p in range(P):
@@ -133,7 +172,11 @@ def build_cnf_prefix(
         X_t: List[List[int]] = []
         for k in range(K + 1):
             lits = [v_loc(tid, k, r) for r in range(N)]
-            cnf.extend(CardEnc.equals(lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter).clauses)
+            cnf.extend(
+                CardEnc.equals(
+                    lits=lits, bound=1, vpool=pool, encoding=EncType.seqcounter
+                ).clauses
+            )
             X_t.append(lits)
 
         # start location fixed
@@ -143,7 +186,17 @@ def build_cnf_prefix(
         for k in range(K + 1):
             obs = int(rs[k])
             for r in range(N):
-                cnf.append([-v_loc(tid, k, r), v_label(r, obs)])
+                # X[t,k,r] -> L[r] == obs
+                obs_bits = label2bits(obs)
+                v0, v1 = v_label(r)
+                if obs_bits[0]:
+                    cnf.append([-v_loc(tid, k, r), v0])
+                else:
+                    cnf.append([-v_loc(tid, k, r), -v0])
+                if obs_bits[1]:
+                    cnf.append([-v_loc(tid, k, r), v1])
+                else:
+                    cnf.append([-v_loc(tid, k, r), -v1])
 
         # transitions across K steps
         for k in range(K):
@@ -169,12 +222,12 @@ def build_cnf_prefix(
     return cnf, meta
 
 
-def solve_with_pysat(cnf: "SatCNF", time_limit_s: Optional[float] = None) -> Tuple[str, Dict[int, bool]]:
+def solve_with_pysat(
+    cnf: "SatCNF", time_limit_s: Optional[float] = None
+) -> Tuple[str, Dict[int, bool]]:
     """Solve CNF using an in-process PySAT solver. Returns (status, assignment)."""
     # Prefer a modern solver if available, otherwise fallback to default
-    if not have_python_sat():
-        raise RuntimeError("python-sat not available")
-    from pysat.solvers import Solver  # type: ignore
+
     solver_names = ["cadical153", "glucose4", "glucose3", "minisat22", None]
     last_err: Optional[Exception] = None
     for name in solver_names:
@@ -191,7 +244,7 @@ def solve_with_pysat(cnf: "SatCNF", time_limit_s: Optional[float] = None) -> Tup
                     if lit == 0:
                         continue
                     var = abs(lit)
-                    assign[var] = (lit > 0)
+                    assign[var] = lit > 0
                 return "SAT", assign
         except Exception as e:  # try next backend
             last_err = e
@@ -203,15 +256,21 @@ def have_kissat_binary() -> bool:
     return shutil.which("kissat") is not None
 
 
-def solve_with_kissat_external(cnf: "SatCNF", time_limit_s: Optional[float] = None, progress: bool = False, seed: Optional[int] = None) -> Tuple[str, Dict[int, bool]]:
+def solve_with_kissat_external(
+    cnf: "SatCNF",
+    time_limit_s: Optional[float] = None,
+    progress: bool = False,
+    seed: Optional[int] = None,
+) -> Tuple[str, Dict[int, bool]]:
     """Use local kissat.py wrapper to solve via external Kissat binary."""
-    if not have_python_sat():
-        raise RuntimeError("python-sat not available to build CNF for Kissat")
     import kissat as kissat_mod  # local module providing the wrapper
-    return kissat_mod.solve_with_kissat(cnf, time_limit_s=time_limit_s, progress=progress, seed=seed)
+
+    return kissat_mod.solve_with_kissat(
+        cnf, time_limit_s=time_limit_s, progress=progress, seed=seed
+    )
 
 
-def extract_solution(meta: Dict[str, object], assign: Dict[int, bool]) -> Dict[str, object]:
+def extract_solution(meta: Dict[str, object], assign: Dict[int, bool]) -> Solution:
     N = int(meta["N"])  # type: ignore[index]
     D = int(meta["D"])  # type: ignore[index]
     pool: IDPool = meta["pool"]  # type: ignore[index]
@@ -221,12 +280,9 @@ def extract_solution(meta: Dict[str, object], assign: Dict[int, bool]) -> Dict[s
     rooms: List[int] = []
     for r in range(N):
         lab_val = None
-        for lab in range(4):
-            if assign.get(pool.id(("L", r, lab)), False):
-                lab_val = lab
-                break
-        if lab_val is None:
-            lab_val = 0
+        b0 = assign.get(pool.id(("L", r, 0)), False)
+        b1 = assign.get(pool.id(("L", r, 1)), False)
+        lab_val = bits2label(b0, b1)
         rooms.append(int(lab_val))
 
     # connections
@@ -242,7 +298,14 @@ def extract_solution(meta: Dict[str, object], assign: Dict[int, bool]) -> Dict[s
                     "to": {"room": int(rj), "door": int(dj)},
                 }
             )
-    connections.sort(key=lambda e: (e["from"]["room"], e["from"]["door"], e["to"]["room"], e["to"]["door"]))
+    connections.sort(
+        key=lambda e: (
+            e["from"]["room"],
+            e["from"]["door"],
+            e["to"]["room"],
+            e["to"]["door"],
+        )
+    )
     return {
         "status": 1 if connections else 0,
         "rooms": rooms,
@@ -251,7 +314,9 @@ def extract_solution(meta: Dict[str, object], assign: Dict[int, bool]) -> Dict[s
     }
 
 
-def verify_solution(plans: List[List[int]], results: List[List[int]], N: int, out: Dict[str, object]) -> Tuple[bool, List[str]]:
+def verify_solution(
+    plans: List[List[int]], results: List[List[int]], N: int, out: Solution
+) -> Tuple[bool, List[str]]:
     D = 6
     P = N * D
     errs: List[str] = []
@@ -310,7 +375,7 @@ def cegis_sat(
     time_limit_s: Optional[float] = None,
     verbose: bool = True,
     backend: str = "auto",  # auto|kissat|pysat
-) -> Tuple[Optional[Dict[str, object]], Dict[str, object]]:
+) -> Tuple[Optional[Solution], Dict[str, object]]:
     # initialize per-trace prefixes
     prefixes = [min(init_prefix, len(pl)) for pl in plans]
 
@@ -321,20 +386,28 @@ def cegis_sat(
                 chosen = "kissat"
             else:
                 chosen = "pysat"
+        if chosen not in ("kissat", "pysat"):
+            raise ValueError(f"unknown backend: {chosen}")
 
-        if chosen in ("kissat", "pysat"):
-            cnf, meta = build_cnf_prefix(plans, results, N, prefixes)
-            if chosen == "kissat":
-                status, assign = solve_with_kissat_external(cnf, time_limit_s=time_limit_s, progress=verbose)
-                if verbose:
-                    print(f"[iter {it}] kissat status: {status}, prefix={prefixes}")
-            else:
-                status, assign = solve_with_pysat(cnf, time_limit_s=time_limit_s)
-                if verbose:
-                    print(f"[iter {it}] pysat status: {status}, prefix={prefixes}")
-            if status != "SAT":
-                return None, {"status": status, "iter": it, "prefix": prefixes, "backend": chosen}
-            out = extract_solution(meta, assign)
+        cnf, meta = build_cnf_prefix(plans, results, N, prefixes)
+        if chosen == "kissat":
+            status, assign = solve_with_kissat_external(
+                cnf, time_limit_s=time_limit_s, progress=verbose
+            )
+            if verbose:
+                print(f"[iter {it}] kissat status: {status}, prefix={prefixes}")
+        else:
+            status, assign = solve_with_pysat(cnf, time_limit_s=time_limit_s)
+            if verbose:
+                print(f"[iter {it}] pysat status: {status}, prefix={prefixes}")
+        if status != "SAT":
+            return None, {
+                "status": status,
+                "iter": it,
+                "prefix": prefixes,
+                "backend": chosen,
+            }
+        out = extract_solution(meta, assign)
         ok, errs = verify_solution(plans, results, N, out)
         if ok:
             return out, {"status": "FEASIBLE", "iter": it, "prefix": prefixes}
@@ -385,7 +458,9 @@ def cegis_sat(
                 prefixes[tid] = max(old, i_star)
                 updated = True
                 if verbose:
-                    print(f"  -> counterexample on trace {tid} at i*={i_star}, prefix={prefixes[tid]}")
+                    print(
+                        f"  -> counterexample on trace {tid} at i*={i_star}, prefix={prefixes[tid]}"
+                    )
 
         if not updated:
             # Should not happen if verify failed, but guard anyway
@@ -396,12 +471,23 @@ def cegis_sat(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="CEGIS (PySAT) solver")
-    parser.add_argument("--input", "-i", type=str, required=True, help="Input trace JSON path")
-    parser.add_argument("--output", "-o", type=str, required=True, help="Output map JSON path")
+    parser.add_argument(
+        "--input", "-i", type=str, required=True, help="Input trace JSON path"
+    )
+    parser.add_argument(
+        "--output", "-o", type=str, required=True, help="Output map JSON path"
+    )
     parser.add_argument("--iters", type=int, default=30, help="Max CEGIS iterations")
-    parser.add_argument("--init-prefix", type=int, default=10, help="Initial prefix length per trace")
+    parser.add_argument(
+        "--init-prefix", type=int, default=10, help="Initial prefix length per trace"
+    )
     parser.add_argument("--quiet", action="store_true", help="Reduce logging output")
-    parser.add_argument("--backend", choices=["auto", "kissat", "pysat"], default="auto", help="SAT backend to use")
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "kissat", "pysat"],
+        default="auto",
+        help="SAT backend to use",
+    )
     args = parser.parse_args()
 
     prob = load_problem(args.input)
