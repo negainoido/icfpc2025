@@ -29,7 +29,7 @@ D = 6
 def normalize_stage1_plan(plan: str) -> List[int]:
     return [int(ch) for ch in plan]
 
-def normalize_stage2_plan(plan: str) -> tuple[List[int], List[Optional[int]]]:
+def normalize_stage2_plan(plan: str) -> tuple[List[int], List[int]]:
     doors = []
     overwrites = []    
     curr = 0
@@ -43,11 +43,11 @@ def normalize_stage2_plan(plan: str) -> tuple[List[int], List[Optional[int]]]:
             assert curr < len(plan) and plan[curr] == ']', f"Invalid overwrite syntax in plan at position {curr}: missing ']'"
             curr += 1
         else:
-            overwrites.append(None)
+            raise RuntimeError("We always overwrite: missing '['")
     return doors, overwrites
 
 
-def normalize_stage2_result(result: list[int], plan: tuple[List[int], List[Optional[int]]]) -> List[int]:
+def normalize_stage2_result(result: list[int], plan: tuple[List[int], List[int]]) -> List[int]:
     doors, overwrites = plan
 
 
@@ -56,8 +56,8 @@ def normalize_stage2_result(result: list[int], plan: tuple[List[int], List[Optio
     for i in range(len(doors)):
         normalized_result.append(result[curr])
         curr += 1
-        if overwrites[i] is not None:
-            curr += 1
+        assert overwrites[i] is not None
+        curr += 1
     assert curr == len(result), f"Result length {len(result)} does not match expected length {curr} from plan"
     return normalized_result
 
@@ -329,12 +329,47 @@ def solve_with_kissat(
 def build_stage2_cnf(
     stage1_rooms: List[int],
     stage1_connections: List[Dict[str, Dict[str, int]]],
-    plan: tuple[list[int], list[int | None]],
+    plan: tuple[list[int], list[int]],
     result: list[int],
     C: int,
     progress: bool = False,
 ) -> tuple[SatCNF, dict[str, any]]:
-    ...
+    """
+    Stage 1で得られたグラフから真のグラフを構成する。
+    真のグラフはStage1のグラフの各ノードをC個にコピーしたもの。
+    各辺についてコピーしたグラフの対応する辺とランダムに交差させる。
+
+    下記の解法を実装する。
+    * plan ではランダムウォークとランダムなラベル書き換えを行っており、移動と書き換えのリストのペアとなっている
+    * この結果を元にSATとして定式化する。
+    * 論理式は Stage1 と同様に PySAT の CNF 形式で構築する
+
+    変数
+     * M (n, c, d’, c’): G1のノードnのコピーcからドアd’を開けたときにコピーc’に遷移する
+     * X (t, c) tステップ後にc個目のコピーにいる
+    制約
+     * \sum_{c’} M (n, c, d’, c’) == 1
+     * \sum_{c} X(t, c) == 1
+     * X(t, c) -> (X(t + 1, c’) == M (n(t), c, d(t), c’)) 
+       * n(t): tステップ後にいるノード (G1の中のノードなので2の結果から定まる) 
+       * d(t): tステップ目であけるドア
+     * X(0, 0) == 1
+     * 2つ目のプランから得られる同一性に関する制約
+       * 準備
+         * t 回目の移動後に観測されたラベルを L(t) とする (t = 0, …, T) 
+         * t 回目の移動のあとに上書きしたラベルを U(t) とする (t = 0, …, T) 
+         メモ: U(t) 2つめのランダムウォークにおいてランダム決まっています
+       * 各 t に対して t’ < t でかつ n(t’) == n(t) ∧ U(t’) == L(t) となる最大の t’ を見つける 
+       * （異なり条件）t’ < t’’ < t でかつ n(t’’) == n(t) となる各 t’’ に対して
+         * X (t, c) != X(t’’, c) 
+       *（同一条件）
+         * 準備
+           * t 回目の移動直後における各ノード n のC個のコピーにかかれている 2-bit ラベル l のカウントを Count (t, n, l) と書く。
+         * C (t’, n (t), U(t’)) == 0 であれば、ステップ t に観測された L(t) はステップ  t’ に書き込まれた U(t’) (t’の定義から L(t)) であることが分かるので
+           * X(t, c) == X(t’, c) 
+
+    """
+    pass
 
 
 def extract_stage1_solution(meta: Dict[str, any], assign: Dict[int, bool]) -> Dict[str, any]:
