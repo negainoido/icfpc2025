@@ -25,6 +25,8 @@ PROBLEM_SIZES = {
     "iod": 90,
 }
 
+LIGHTNING_PROBLEMS = {"probatio", "primus", "secundus", "tertius", "quartus", "quintus"}
+
 
 @click.group()
 def cli():
@@ -73,7 +75,15 @@ def solve(problem_name: str):
     N = PROBLEM_SIZES[problem_name]
     click.echo(f"問題サイズ: {N}")
 
-    graph = Graph(N)
+    graph = Graph(
+        N, plan_limit_multiplier=18 if problem_name in LIGHTNING_PROBLEMS else 6
+    )
+    graph.solve_random_walk()
+    print("finish random walk")
+    while graph.check_one_edge():
+        pass
+
+    print(api.api.guess(graph.get_map_data()))
 
 
 if __name__ == "__main__":
