@@ -297,53 +297,53 @@ def build_cnf_prefix(
     # tuple = (l_from, d_from, d_to, l_to)
     # 要件:
     #  ∃q.  L[q]==l  ∧  Lp[q,d_to]==l_to  ∧  (∨_d Lp[q,d]==l_from)
-    def lit_eq_lp_guarded(p, label):
-        """ガード付きに使う z 変数（片方向）： z -> (Lp[p] == label)"""
-        z = pool.id(("EQ_LP_G", p, label))
-        a0, a1 = v_port_label(p)
-        b0, b1 = label2bits(label)
-        # 片方向のみ
-        cnf.append([-z, a0 if b0 else -a0])
-        cnf.append([-z, a1 if b1 else -a1])
-        return z
+    # def lit_eq_lp_guarded(p, label):
+    #     """ガード付きに使う z 変数（片方向）： z -> (Lp[p] == label)"""
+    #     z = pool.id(("EQ_LP_G", p, label))
+    #     a0, a1 = v_port_label(p)
+    #     b0, b1 = label2bits(label)
+    #     # 片方向のみ
+    #     cnf.append([-z, a0 if b0 else -a0])
+    #     cnf.append([-z, a1 if b1 else -a1])
+    #     return z
 
-    def lit_eq_l_guarded(r, label):
-        """ガード付きに使う z 変数（片方向）： z -> (L[r] == label)"""
-        z = pool.id(("EQ_L_G", r, label))
-        v0, v1 = v_label(r)
-        b0, b1 = label2bits(label)
-        cnf.append([-z, v0 if b0 else -v0])
-        cnf.append([-z, v1 if b1 else -v1])
-        return z
+    # def lit_eq_l_guarded(r, label):
+    #     """ガード付きに使う z 変数（片方向）： z -> (L[r] == label)"""
+    #     z = pool.id(("EQ_L_G", r, label))
+    #     v0, v1 = v_label(r)
+    #     b0, b1 = label2bits(label)
+    #     cnf.append([-z, v0 if b0 else -v0])
+    #     cnf.append([-z, v1 if b1 else -v1])
+    #     return z
 
-    for l in range(4):
-        tuples = list(local_window[l])
-        for idx, (l_from, d_from, d_to, l_to) in enumerate(tuples):
-            # ∃q: セレクタ W[idx,q]
-            Wq = []
-            for q in range(N):
-                w = pool.id(("W", "lw", l, idx, q))
-                Wq.append(w)
+    # for l in range(4):
+    #     tuples = list(local_window[l])
+    #     for idx, (l_from, d_from, d_to, l_to) in enumerate(tuples):
+    #         # ∃q: セレクタ W[idx,q]
+    #         Wq = []
+    #         for q in range(N):
+    #             w = pool.id(("W", "lw", l, idx, q))
+    #             Wq.append(w)
 
-                # (1) w -> L[q] == l
-                zL = lit_eq_l_guarded(q, l)
-                cnf.append([-w, zL])
+    #             # (1) w -> L[q] == l
+    #             zL = lit_eq_l_guarded(q, l)
+    #             cnf.append([-w, zL])
 
-                # (2) w -> Lp[q, d_to] == l_to
-                p_to = q * D + d_to
-                z_to = lit_eq_lp_guarded(p_to, l_to)
-                cnf.append([-w, z_to])
+    #             # (2) w -> Lp[q, d_to] == l_to
+    #             p_to = q * D + d_to
+    #             z_to = lit_eq_lp_guarded(p_to, l_to)
+    #             cnf.append([-w, z_to])
 
-                # (3) w -> ∨_d (Lp[q,d] == l_from)
-                or_lits = []
-                base = q * D
-                for d in range(D):
-                    z_from_d = lit_eq_lp_guarded(base + d, l_from)
-                    or_lits.append(z_from_d)
-                cnf.append([-w] + or_lits)
+    #             # (3) w -> ∨_d (Lp[q,d] == l_from)
+    #             or_lits = []
+    #             base = q * D
+    #             for d in range(D):
+    #                 z_from_d = lit_eq_lp_guarded(base + d, l_from)
+    #                 or_lits.append(z_from_d)
+    #             cnf.append([-w] + or_lits)
 
-            # 存在：∨_q W[idx,q]
-            cnf.append(Wq)
+    #         # 存在：∨_q W[idx,q]
+    #         cnf.append(Wq)
 
     # (7) Symmetry breaking for port labels
     # 各ラベルlについて、ラベルlの部屋1 < r1 < r2に対して
@@ -561,7 +561,7 @@ def cegis_sat(
     backend: str = "auto",  # auto|kissat|pysat
 ) -> Tuple[Optional[Solution], Dict[str, object]]:
     # initialize per-trace prefixes
-    prefixes = [min(init_prefix, len(pl)) for pl in plans]
+    prefixes = [max(20, len(pl)) for pl in plans]
     prefixes[0] = len(plans[0])  # always use full first trace
 
     for it in range(max_iters):
