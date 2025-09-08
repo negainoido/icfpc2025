@@ -1,7 +1,7 @@
-use std::cmp::Ordering;
 use clap::Parser;
 use garasubo_solver::api::ApiClient;
 use garasubo_solver::session_manager::SessionManager;
+use std::cmp::Ordering;
 use tokio::signal;
 
 #[derive(Parser)]
@@ -34,7 +34,10 @@ struct UF {
 }
 impl UF {
     fn new() -> Self {
-        Self { p: Vec::new(), sz: Vec::new() }
+        Self {
+            p: Vec::new(),
+            sz: Vec::new(),
+        }
     }
     fn add(&mut self) -> usize {
         let id = self.p.len();
@@ -55,8 +58,12 @@ impl UF {
     fn unite(&mut self, a: usize, b: usize) -> usize {
         let mut a = self.find(a);
         let mut b = self.find(b);
-        if a == b { return a; }
-        if self.sz[a] < self.sz[b] { std::mem::swap(&mut a, &mut b); }
+        if a == b {
+            return a;
+        }
+        if self.sz[a] < self.sz[b] {
+            std::mem::swap(&mut a, &mut b);
+        }
         self.p[b] = a;
         self.sz[a] += self.sz[b];
         a
@@ -179,15 +186,23 @@ impl FingerprintSolver {
         }
     }
 
-    fn rep_of(&mut self, x: usize) -> usize { self.uf.find(x) }
+    fn rep_of(&mut self, x: usize) -> usize {
+        self.uf.find(x)
+    }
 
     fn rep_count(&mut self) -> usize {
-        (0..self.states.len()).filter(|&i| self.uf.find(i) == i).count()
+        (0..self.states.len())
+            .filter(|&i| self.uf.find(i) == i)
+            .count()
     }
 
     fn ensure_rep_slot(&mut self, r: usize) {
-        self.rep_trans.entry(r).or_insert([None, None, None, None, None, None]);
-        self.rep_access.entry(r).or_insert_with(|| self.states[r].access.clone());
+        self.rep_trans
+            .entry(r)
+            .or_insert([None, None, None, None, None, None]);
+        self.rep_access
+            .entry(r)
+            .or_insert_with(|| self.states[r].access.clone());
         if let Some(lbl) = self.states[r].label {
             self.rep_label.entry(r).or_insert(lbl);
         }
@@ -206,7 +221,9 @@ impl FingerprintSolver {
     fn union_merge(&mut self, a: usize, b: usize) -> usize {
         let ra = self.uf.find(a);
         let rb = self.uf.find(b);
-        if ra == rb { return ra; }
+        if ra == rb {
+            return ra;
+        }
         let r = self.uf.unite(ra, rb);
         let o = if r == ra { rb } else { ra };
 
@@ -215,7 +232,9 @@ impl FingerprintSolver {
         let lb = self.rep_label.get(&rb).copied().or(self.states[rb].label);
         let lbl = match (la, lb) {
             (Some(x), Some(y)) => {
-                if x != y { panic!("label conflict on union: {} vs {}", x, y); }
+                if x != y {
+                    panic!("label conflict on union: {} vs {}", x, y);
+                }
                 x
             }
             (Some(x), None) => x,
@@ -230,8 +249,16 @@ impl FingerprintSolver {
         }
 
         // アクセス語：辞書順で最小を代表に
-        let acc_r = self.rep_access.get(&ra).cloned().unwrap_or_else(|| self.states[ra].access.clone());
-        let acc_o = self.rep_access.get(&rb).cloned().unwrap_or_else(|| self.states[rb].access.clone());
+        let acc_r = self
+            .rep_access
+            .get(&ra)
+            .cloned()
+            .unwrap_or_else(|| self.states[ra].access.clone());
+        let acc_o = self
+            .rep_access
+            .get(&rb)
+            .cloned()
+            .unwrap_or_else(|| self.states[rb].access.clone());
         let best = match acc_r.cmp(&acc_o) {
             Ordering::Less | Ordering::Equal => acc_r,
             Ordering::Greater => acc_o,
@@ -281,7 +308,9 @@ impl FingerprintSolver {
 
     /// s の親への逆ポートが分かったらセット
     fn maybe_set_back_to_parent(&mut self, s: usize) {
-        if self.states[s].back_to_parent.is_some() { return; }
+        if self.states[s].back_to_parent.is_some() {
+            return;
+        }
         if let Some(p) = self.states[s].parent {
             let rp = self.uf.find(p);
             // s の遷移のどれかが親代表に向いていれば、それが逆ポート
@@ -300,7 +329,9 @@ impl FingerprintSolver {
     fn make_backword_to_start(&self, mut a: usize) -> Option<String> {
         let mut v: Vec<u8> = Vec::new();
         loop {
-            if a == 0 { break; }
+            if a == 0 {
+                break;
+            }
             let st = &self.states[a];
             let j = st.back_to_parent?;
             v.push(j);
@@ -314,8 +345,12 @@ impl FingerprintSolver {
     fn add_eq_candidate(&mut self, a: usize, b: usize) {
         let mut ra = self.uf.find(a);
         let mut rb = self.uf.find(b);
-        if ra == rb { return; }
-        if ra > rb { std::mem::swap(&mut ra, &mut rb); }
+        if ra == rb {
+            return;
+        }
+        if ra > rb {
+            std::mem::swap(&mut ra, &mut rb);
+        }
         self.eq_candidates.insert((ra, rb));
     }
 }
@@ -391,16 +426,21 @@ impl Solver for FingerprintSolver {
                 // a の逆経路が全部わかっているときだけ
                 if let Some(back) = self.make_backword_to_start(a) {
                     // mark は b の自然ラベル+1（自然ラベルが未確定ならスキップ）
-                    let lb = match self.rep_label.get(&b)
-                        .copied()
-                        .or(self.states[b].label)
-                    {
+                    let lb = match self.rep_label.get(&b).copied().or(self.states[b].label) {
                         Some(x) => x,
                         None => continue,
                     };
                     let mark: Label = (lb + 1) & 3;
-                    let acc_a = self.rep_access.get(&a).cloned().unwrap_or_else(|| self.states[a].access.clone());
-                    let acc_b = self.rep_access.get(&b).cloned().unwrap_or_else(|| self.states[b].access.clone());
+                    let acc_a = self
+                        .rep_access
+                        .get(&a)
+                        .cloned()
+                        .unwrap_or_else(|| self.states[a].access.clone());
+                    let acc_b = self
+                        .rep_access
+                        .get(&b)
+                        .cloned()
+                        .unwrap_or_else(|| self.states[b].access.clone());
                     let route = format!("{}[{}]{}{}", acc_a, (b'0' + mark) as char, back, acc_b);
                     self.pending.push(PendingPlan {
                         route,
@@ -448,7 +488,12 @@ impl Solver for FingerprintSolver {
                     let has_initial = match obs.len() {
                         l if l == ops_f => false,
                         l if l == ops_f + 1 => true,
-                        l => bail!("InitF: unexpected obs length {}, expected {} or {}", l, ops_f, ops_f + 1),
+                        l => bail!(
+                            "InitF: unexpected obs length {}, expected {} or {}",
+                            l,
+                            ops_f,
+                            ops_f + 1
+                        ),
                     };
                     // s0 の自然ラベル（あればセット）
                     if has_initial && self.states[0].label.is_none() {
@@ -499,8 +544,13 @@ impl Solver for FingerprintSolver {
                     self.set_port(from, dir as usize, to_id);
 
                     // “自分に戻る可能性”がありそう＝ラベルが同じなら Eq 候補（誤判定は EqCheck で回避）
-                    if let (Some(la), Some(lb)) = (self.rep_label.get(&from).copied().or(self.states[from].label),
-                                                   self.states[to_id].label) {
+                    if let (Some(la), Some(lb)) = (
+                        self.rep_label
+                            .get(&from)
+                            .copied()
+                            .or(self.states[from].label),
+                        self.states[to_id].label,
+                    ) {
                         if la == lb {
                             self.add_eq_candidate(from, to_id);
                         }
@@ -535,7 +585,9 @@ impl Solver for FingerprintSolver {
         for i in 0..self.uf.p.len() {
             // 経路圧縮無しの find
             let mut x = i;
-            while self.uf.p[x] != x { x = self.uf.p[x]; }
+            while self.uf.p[x] != x {
+                x = self.uf.p[x];
+            }
             parent[i] = x;
         }
         let mut reps: Vec<usize> = Vec::new();
@@ -550,7 +602,10 @@ impl Solver for FingerprintSolver {
 
         // 各代表の遷移が埋まっているか
         for &r in &reps {
-            let tr = self.rep_trans.get(&r).ok_or_else(|| anyhow!("rep {} has no trans", r))?;
+            let tr = self
+                .rep_trans
+                .get(&r)
+                .ok_or_else(|| anyhow!("rep {} has no trans", r))?;
             for d in 0..6usize {
                 if tr[d].is_none() {
                     bail!("rep {} door {} unresolved", r, d);
@@ -567,7 +622,9 @@ impl Solver for FingerprintSolver {
 
         let mut rooms: Vec<GuessRoom> = Vec::with_capacity(self.n);
         for &r in &reps {
-            let label = self.rep_label.get(&r)
+            let label = self
+                .rep_label
+                .get(&r)
                 .copied()
                 .or(self.states[r].label)
                 .ok_or_else(|| anyhow!("rep {} label unknown", r))?;
@@ -596,13 +653,17 @@ impl Solver for FingerprintSolver {
                         break;
                     }
                 }
-                let j = peer.ok_or_else(|| anyhow!("peer port not found for rep {} door {}", r, i))?;
+                let j =
+                    peer.ok_or_else(|| anyhow!("peer port not found for rep {} door {}", r, i))?;
                 rooms[rr].doors[i] = Some((tt, j as u8));
                 rooms[tt].doors[j] = Some((rr, i as u8));
             }
         }
 
-        Ok(GuessMap { rooms, starting_room: idmap[&self.uf.p[0]] })
+        Ok(GuessMap {
+            rooms,
+            starting_room: idmap[&self.uf.p[0]],
+        })
     }
 }
 
@@ -759,7 +820,10 @@ mod tests {
                 }
                 rooms.push(gr);
             }
-            GuessMap { rooms, starting_room: self.start }
+            GuessMap {
+                rooms,
+                starting_room: self.start,
+            }
         }
     }
 
@@ -779,7 +843,11 @@ mod tests {
         while let Some(g) = q.pop_front() {
             let w = map_g2w[g].unwrap();
             // label
-            assert_eq!(guess.rooms[g].label, world.rooms[w].label, "label mismatch g={} w={}", g, w);
+            assert_eq!(
+                guess.rooms[g].label, world.rooms[w].label,
+                "label mismatch g={} w={}",
+                g, w
+            );
             // doors
             for d in 0..6usize {
                 let (tg, jd_g) = guess.rooms[g].doors[d].expect("missing door in guess");
@@ -811,12 +879,25 @@ mod tests {
     }
 
     /// 共通ドライバ
-    fn run_until_done(mut solver: FingerprintSolver, world: &MockWorld, include_initial: bool) -> GuessMap {
+    fn run_until_done(
+        mut solver: FingerprintSolver,
+        world: &MockWorld,
+        include_initial: bool,
+    ) -> GuessMap {
         for iter in 0..100 {
             let plans = solver.next_explore_batch();
-            assert!(!plans.is_empty(), "iteration {} produced empty batch unexpectedly", iter + 1);
-            let results: Vec<Vec<Label>> = plans.iter().map(|p| world.run_plan(p, include_initial)).collect();
-            solver.apply_explore_results(&plans, &results).expect("apply failed");
+            assert!(
+                !plans.is_empty(),
+                "iteration {} produced empty batch unexpectedly",
+                iter + 1
+            );
+            let results: Vec<Vec<Label>> = plans
+                .iter()
+                .map(|p| world.run_plan(p, include_initial))
+                .collect();
+            solver
+                .apply_explore_results(&plans, &results)
+                .expect("apply failed");
             if let Ok(g) = solver.build_guess() {
                 return g;
             }
@@ -860,7 +941,9 @@ mod tests {
         // 1 回だけ実行
         let plans1 = solver.next_explore_batch();
         let res1: Vec<Vec<Label>> = plans1.iter().map(|p| world.run_plan(p, true)).collect();
-        solver.apply_explore_results(&plans1, &res1).expect("first apply failed");
+        solver
+            .apply_explore_results(&plans1, &res1)
+            .expect("first apply failed");
 
         // まだ完了していないはず
         assert!(solver.build_guess().is_err(), "should not be complete yet");

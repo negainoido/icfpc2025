@@ -107,7 +107,10 @@ impl ApiClient {
                 let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
                 eprintln!(
                     "Server error {}, retrying in {:?} (attempt {}/{})",
-                    status, delay, retry_count, MAX_RETRIES + 1
+                    status,
+                    delay,
+                    retry_count,
+                    MAX_RETRIES + 1
                 );
                 sleep(delay).await;
             } else {
@@ -145,7 +148,10 @@ impl ApiClient {
                 let delay = BASE_DELAY * (2_u32.pow(retry_count as u32 - 1));
                 eprintln!(
                     "Server error {}, retrying in {:?} (attempt {}/{})",
-                    status, delay, retry_count, MAX_RETRIES + 1
+                    status,
+                    delay,
+                    retry_count,
+                    MAX_RETRIES + 1
                 );
                 sleep(delay).await;
             } else {
@@ -184,9 +190,7 @@ impl ApiClient {
         };
         println!("{}", json!(request).to_string());
 
-        let request_builder = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request);
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
         self.send_request_with_retry(request_builder).await
     }
@@ -196,7 +200,8 @@ impl ApiClient {
 
         let request_builder = self.add_auth_headers(self.client.put(&url));
 
-        self.send_request_with_retry_no_response(request_builder).await
+        self.send_request_with_retry_no_response(request_builder)
+            .await
     }
 
     pub async fn explore(
@@ -211,9 +216,7 @@ impl ApiClient {
             plans: Vec::from(plans),
         };
 
-        let request_builder = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request);
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
         self.send_request_with_retry(request_builder).await
     }
@@ -230,9 +233,7 @@ impl ApiClient {
             map: guess_map,
         };
 
-        let request_builder = self
-            .add_auth_headers(self.client.post(&url))
-            .json(&request);
+        let request_builder = self.add_auth_headers(self.client.post(&url)).json(&request);
 
         self.send_request_with_retry(request_builder).await
     }

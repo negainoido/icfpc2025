@@ -1,4 +1,17 @@
 pub mod api;
 pub mod chatgpt_solver;
+pub mod cover_walk;
 pub mod session_manager;
 pub mod solver;
+pub mod union_find;
+pub mod signature_index;
+pub mod candidate_gen;
+pub mod phase_c;
+pub mod pass2_scheduler;
+pub mod pass2_ingest;
+pub mod finalize_map;
+pub mod pass3_unknown_explore;
+pub mod multi_run_pipeline;
+mod build_partial_map;
+pub mod pass2_id_double;
+pub mod rp_verify_batch;
